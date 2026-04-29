@@ -8,14 +8,15 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@xterm/xterm": "^5.5.0",
     "@xterm/addon-fit": "^0.10.0",
-    "@xterm/addon-web-links": "^0.11.0"
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/xterm": "^5.5.0"
   },
   "devDependencies": {
+    "@vitest/ui": "^2.0.0",
     "esbuild": "^0.24.0",
+    "happy-dom": "^20.9.0",
     "typescript": "^5.4.0",
-    "vitest": "^2.0.0",
-    "@vitest/ui": "^2.0.0"
+    "vitest": "^2.0.0"
   }
 }
