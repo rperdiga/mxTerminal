@@ -24,5 +24,23 @@
 
   <ItemGroup>
     <Content Include="manifest.json"><CopyToOutputDirectory>Always</CopyToOutputDirectory></Content>
+    <Content Include="wwwroot\**\*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
   </ItemGroup>
+
+  <Target Name="BuildUi" BeforeTargets="BeforeBuild"
+          Inputs="ui\src\**\*;ui\package.json;ui\esbuild.mjs;ui\index.html"
+          Outputs="wwwroot\terminal.bundle.js">
+    <Message Importance="high" Text="Installing UI dependencies (first build only)…" Condition="!Exists('ui\node_modules')" />
+    <Exec Command="npm install --prefix ui --silent" Condition="!Exists('ui\node_modules')" />
+    <Message Importance="high" Text="Bundling UI…" />
+    <Exec Command="node ui\esbuild.mjs" />
+  </Target>
+
+  <Target Name="DeployToMendix" AfterTargets="PostBuildEvent" Condition="'$(MendixDeployTarget)' != ''">
+    <Message Importance="high" Text="Deploying to $(MendixDeployTarget)\extensions\MxStudioProTerminal" />
+    <Exec Command="xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;$(MendixDeployTarget)\extensions\MxStudioProTerminal&quot;" />
+  </Target>
 </Project>
