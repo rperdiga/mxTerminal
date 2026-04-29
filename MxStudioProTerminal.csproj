@@ -17,7 +17,8 @@
   <ItemGroup>
     <PackageReference Include="Mendix.StudioPro.ExtensionsAPI" Version="11.6.2" />
     <PackageReference Include="Eto.Forms" Version="2.9.*" />
-    <PackageReference Include="Pty.Net" Version="0.1.16-pre" />
+    <PackageReference Include="Quick.PtyNet" Version="1.0.4" />
+    <PackageReference Include="Quick.PtyNet.WinPty" Version="1.0.2" />
     <PackageReference Include="System.Text.Json" Version="8.0.*" />
   </ItemGroup>
 
