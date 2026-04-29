@@ -159,7 +159,16 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     private void Post(string message, object data)
     {
         if (webView == null) return;
-        try { Application.Instance.Invoke(() => webView.PostMessage(message, data)); }
+        try
+        {
+            // Mendix's webView.PostMessage(message, data) emits the second arg's
+            // property names verbatim — no camelCase conversion. Our DTO records
+            // are PascalCase, but the JS side expects camelCase. Pre-serialize
+            // through System.Text.Json with web defaults so the JsonNode that
+            // Mendix forwards is already camelCase.
+            var node = JsonSerializer.SerializeToNode(data, Json);
+            Application.Instance.Invoke(() => webView.PostMessage(message, node!));
+        }
         catch (Exception ex) { log.Error($"PostMessage({message}) failed", ex); }
     }
 
