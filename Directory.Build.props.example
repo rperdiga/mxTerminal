@@ -1,0 +1,11 @@
+<!--
+  Copy this file to Directory.Build.props (gitignored) and set MendixDeployTarget
+  to the Mendix project where you want builds to deploy.
+
+  Example:  <MendixDeployTarget>C:\Mendix Projects\MyTestApp</MendixDeployTarget>
+-->
+<Project>
+  <PropertyGroup>
+    <MendixDeployTarget></MendixDeployTarget>
+  </PropertyGroup>
+</Project>

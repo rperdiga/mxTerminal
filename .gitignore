@@ -1,0 +1,21 @@
+# .NET build outputs
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# Test outputs
+TestResults/
+coverage.*
+
+# UI build artifacts
+ui/node_modules/
+wwwroot/
+
+# Per-developer build settings (each dev points at their own Mendix project)
+Directory.Build.props
+
+# IDE
+.idea/
+.vscode/
