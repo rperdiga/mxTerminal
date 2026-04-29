@@ -4,29 +4,37 @@ namespace MxStudioProTerminal;
 
 public sealed class TerminalSessionManager : IDisposable
 {
+    private const int CoalesceMillis = 16;
+
     private readonly IPtyFactory factory;
+    private readonly int ringBufferBytes;
     private readonly ConcurrentDictionary<string, SessionState> sessions = new();
     private bool disposed;
 
-    public event Action<string, byte[]>? Output;     // (tabId, bytes)  — populated in Task 9
-    public event Action<string, int?>? Exited;       // (tabId, exitCode)
+    public event Action<string, byte[]>? Output;
+    public event Action<string, int?>? Exited;
 
-    public TerminalSessionManager(IPtyFactory factory)
+    public TerminalSessionManager(IPtyFactory factory, int ringBufferBytes = 4 * 1024 * 1024)
     {
         this.factory = factory;
+        this.ringBufferBytes = ringBufferBytes;
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
     }
 
-    public async Task<string> CreateSessionAsync(string shellPath, string[] args, string cwd, int cols, int rows, CancellationToken ct = default)
+    public async Task<string> CreateSessionAsync(
+        string shellPath, string[] args, string cwd, int cols, int rows, CancellationToken ct = default)
     {
         if (disposed) throw new ObjectDisposedException(nameof(TerminalSessionManager));
 
         var env = BuildEnvironment();
         var pty = await factory.SpawnAsync(shellPath, args, cwd, cols, rows, env, ct);
         var tabId = Guid.NewGuid().ToString("N");
-        var state = new SessionState(tabId, shellPath, cwd, pty);
+        var state = new SessionState(tabId, shellPath, cwd, pty, new RingBuffer(ringBufferBytes));
+        state.AttachTimer(_ => FlushPending(state));
         pty.Exited += (_, code) => OnPtyExited(tabId, code);
+
         sessions[tabId] = state;
+        _ = Task.Run(() => ReadLoopAsync(state, state.Cts.Token));
         return tabId;
     }
 
@@ -34,6 +42,12 @@ public sealed class TerminalSessionManager : IDisposable
         sessions.Values.Select(s => new SessionInfo(
             s.TabId, TitleFor(s.ShellPath), s.ShellPath, s.Cwd, s.Pty.ExitCode is null
         )).ToList();
+
+    public byte[] SnapshotBuffer(string tabId)
+    {
+        if (!sessions.TryGetValue(tabId, out var s)) return Array.Empty<byte>();
+        lock (s.Gate) return s.Ring.Snapshot();
+    }
 
     public void Write(string tabId, byte[] data)
     {
@@ -45,13 +59,16 @@ public sealed class TerminalSessionManager : IDisposable
     public void Resize(string tabId, int cols, int rows)
     {
         if (sessions.TryGetValue(tabId, out var s))
-            try { s.Pty.Resize(cols, rows); } catch { /* best-effort */ }
+            try { s.Pty.Resize(cols, rows); } catch { }
     }
 
     public void Close(string tabId)
     {
         if (sessions.TryRemove(tabId, out var s))
+        {
+            s.Cts.Cancel();
             s.Pty.Dispose();
+        }
     }
 
     public void DisposeAll()
@@ -72,30 +89,107 @@ public sealed class TerminalSessionManager : IDisposable
 
     private void OnPtyExited(string tabId, int? code)
     {
-        if (sessions.TryRemove(tabId, out _))
+        if (sessions.TryRemove(tabId, out var s))
+        {
+            s.Cts.Cancel();
             Exited?.Invoke(tabId, code);
+        }
+    }
+
+    private async Task ReadLoopAsync(SessionState s, CancellationToken ct)
+    {
+        var buffer = new byte[8192];
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                int n;
+                try { n = await s.Pty.ReadAsync(buffer, ct); }
+                catch (OperationCanceledException) { break; }
+                catch { break; }
+
+                if (n <= 0) break;
+
+                var chunk = new byte[n];
+                Array.Copy(buffer, chunk, n);
+
+                lock (s.Gate)
+                {
+                    s.Ring.Write(chunk);
+                    s.Pending.Add(chunk);
+                    EnsureCoalesceTimerArmed_NoLock(s);
+                }
+            }
+        }
+        finally
+        {
+            // Final flush
+            FlushPending(s);
+        }
+    }
+
+    private void EnsureCoalesceTimerArmed_NoLock(SessionState s)
+    {
+        if (s.TimerArmed) return;
+        s.TimerArmed = true;
+        s.Timer.Change(CoalesceMillis, Timeout.Infinite);
+    }
+
+    private void FlushPending(SessionState s)
+    {
+        byte[] toEmit;
+        lock (s.Gate)
+        {
+            s.TimerArmed = false;
+            if (s.Pending.Count == 0) return;
+            var total = s.Pending.Sum(c => c.Length);
+            toEmit = new byte[total];
+            var offset = 0;
+            foreach (var chunk in s.Pending)
+            {
+                Array.Copy(chunk, 0, toEmit, offset, chunk.Length);
+                offset += chunk.Length;
+            }
+            s.Pending.Clear();
+        }
+        Output?.Invoke(s.TabId, toEmit);
     }
 
     private static string TitleFor(string shellPath) =>
         Path.GetFileNameWithoutExtension(shellPath);
 
-    private static IDictionary<string,string> BuildEnvironment()
+    private static IDictionary<string, string> BuildEnvironment()
     {
         var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (System.Collections.DictionaryEntry e in Environment.GetEnvironmentVariables())
             env[(string)e.Key] = (string)(e.Value ?? "");
-
-        // Strip Claude-Code session vars to avoid "nested session" errors
         env.Remove("CLAUDECODE");
         env.Remove("CLAUDE_CODE_ENTRY_POINT");
         env.Remove("CLAUDE_CODE_PARENT_SESSION_ID");
-
-        // Set terminal hints
         env["COLORTERM"] = "truecolor";
         env["TERM"] = "xterm-256color";
         env["MCP_TIMEOUT"] = "15000";
         return env;
     }
 
-    private sealed record SessionState(string TabId, string ShellPath, string Cwd, IPtySession Pty);
+    private sealed class SessionState
+    {
+        public string TabId { get; }
+        public string ShellPath { get; }
+        public string Cwd { get; }
+        public IPtySession Pty { get; }
+        public RingBuffer Ring { get; }
+        public List<byte[]> Pending { get; } = new();
+        public bool TimerArmed { get; set; }
+        public Timer Timer { get; private set; } = null!;
+        public CancellationTokenSource Cts { get; } = new();
+        public object Gate { get; } = new();
+
+        public SessionState(string tabId, string shellPath, string cwd, IPtySession pty, RingBuffer ring)
+        {
+            TabId = tabId; ShellPath = shellPath; Cwd = cwd; Pty = pty; Ring = ring;
+        }
+
+        public void AttachTimer(TimerCallback cb) => Timer = new Timer(cb);
+    }
 }
