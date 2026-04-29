@@ -1,9 +1,41 @@
 using Pty.Net;
+using System.Reflection;
+using System.Runtime.InteropServices;
 
 namespace MxStudioProTerminal;
 
 public sealed class PtyNetFactory : IPtyFactory
 {
+    static PtyNetFactory()
+    {
+        // Studio Pro loads our DLL via MEF, so .NET's automatic resolution of
+        // runtimes/<rid>/native/ entries from deps.json doesn't fire — Pty.Net's
+        // [DllImport("winpty.dll")] hits a DllNotFoundException because the
+        // default Win32 search path doesn't include our extension folder.
+        // Install a manual resolver that loads winpty.dll from next to this
+        // assembly (we copy it there in MxStudioProTerminal.csproj).
+        NativeLibrary.SetDllImportResolver(typeof(PtyProvider).Assembly, (libName, asm, searchPath) =>
+        {
+            if (!libName.Equals("winpty.dll", StringComparison.OrdinalIgnoreCase))
+                return IntPtr.Zero;
+
+            var here = Path.GetDirectoryName(typeof(PtyNetFactory).Assembly.Location);
+            if (string.IsNullOrEmpty(here)) return IntPtr.Zero;
+
+            // Try the flattened copy first, then the runtimes/<rid>/native/ layout.
+            string[] candidates =
+            {
+                Path.Combine(here, "winpty.dll"),
+                Path.Combine(here, "runtimes", "win-x64", "native", "winpty.dll"),
+            };
+            foreach (var path in candidates)
+                if (File.Exists(path) && NativeLibrary.TryLoad(path, out var handle))
+                    return handle;
+
+            return IntPtr.Zero;
+        });
+    }
+
     public async Task<IPtySession> SpawnAsync(
         string shellPath, string[] args, string cwd, int cols, int rows,
         IDictionary<string, string> environment, CancellationToken ct)

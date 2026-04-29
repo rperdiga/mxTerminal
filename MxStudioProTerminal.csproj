@@ -28,6 +28,18 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>
+    <!--
+      Quick.PtyNet.WinPty ships its native binaries under runtimes/win-x64/native/.
+      .NET's auto-resolver for runtimes/<rid>/native/ doesn't fire when our DLL is
+      loaded via MEF inside Studio Pro's host process, so P/Invoke can't find
+      winpty.dll. Flatten them into the output root where the default loader
+      search path will pick them up.
+    -->
+    <Content Include="$(NuGetPackageRoot)quick.ptynet.winpty\1.0.2\runtimes\win-x64\native\*">
+      <Link>%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
   </ItemGroup>
 
   <Target Name="BuildUi" BeforeTargets="BeforeBuild"
