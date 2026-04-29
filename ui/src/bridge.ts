@@ -33,6 +33,10 @@ export class Bridge {
 
   constructor() {
     (window as any).chrome.webview.addEventListener("message", this.bound);
+    // Mendix WebView host queues C# → JS messages until it sees this magic
+    // string. Without it, IWebView.PostMessage calls from C# are buffered
+    // and never delivered. Send it as soon as the listener is wired.
+    this.send("MessageListenerRegistered");
   }
 
   dispose() {
