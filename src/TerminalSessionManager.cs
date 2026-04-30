@@ -10,6 +10,8 @@ public sealed class TerminalSessionManager : IDisposable
     private readonly int ringBufferBytes;
     private readonly ConcurrentDictionary<string, SessionState> sessions = new();
     private bool disposed;
+    private StudioProActionServer? actionServer;
+    private readonly object actionServerGate = new();
 
     public event Action<string, byte[]>? Output;
     public event Action<string, int?>? Exited;
@@ -106,11 +108,41 @@ public sealed class TerminalSessionManager : IDisposable
         return recycled;
     }
 
+    public int? CurrentActionServerPort
+    {
+        get { lock (actionServerGate) return actionServer?.Port; }
+    }
+
+    public void StartActionServer(int port, StudioProActions actions, Logger? log = null)
+    {
+        if (disposed) throw new ObjectDisposedException(nameof(TerminalSessionManager));
+        lock (actionServerGate)
+        {
+            // Always rebuild — the caller may have constructed a fresh `actions` with
+            // updated hotkey config that we can't detect from here. The cost is one
+            // TCP listener bind cycle, which is cheap.
+            actionServer?.Dispose();
+            var s = new StudioProActionServer(actions, port, log);
+            s.Start();
+            actionServer = s;
+        }
+    }
+
+    public void StopActionServer()
+    {
+        lock (actionServerGate)
+        {
+            actionServer?.Dispose();
+            actionServer = null;
+        }
+    }
+
     public void Dispose()
     {
         if (disposed) return;
         disposed = true;
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+        StopActionServer();
         DisposeAll();
     }
 
