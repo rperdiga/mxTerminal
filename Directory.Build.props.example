@@ -1,8 +1,13 @@
 <!--
   Copy this file to Directory.Build.props (gitignored) and set MendixDeployTarget
-  to the Mendix project where you want builds to deploy.
+  to the Mendix project(s) where you want builds to deploy. Each target gets
+  its own xcopy of the build output into <target>\extensions\Terminal\.
 
-  Example:  <MendixDeployTarget>C:\Mendix Projects\MyTestApp</MendixDeployTarget>
+  Single target:
+    <MendixDeployTarget>C:\Mendix Projects\MyTestApp</MendixDeployTarget>
+
+  Multiple targets (semicolon-separated):
+    <MendixDeployTarget>C:\Projects\AppOne;C:\Projects\AppTwo</MendixDeployTarget>
 -->
 <Project>
   <PropertyGroup>

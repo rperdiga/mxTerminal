@@ -51,8 +51,16 @@
     <Exec Command="node ui\esbuild.mjs" />
   </Target>
 
+  <!--
+    MendixDeployTarget is a semicolon-separated list of project roots. Each one
+    receives its own xcopy of $(TargetDir) into <target>\extensions\Terminal\.
+    Set in Directory.Build.props (per-developer, gitignored).
+  -->
   <Target Name="DeployToMendix" AfterTargets="PostBuildEvent" Condition="'$(MendixDeployTarget)' != ''">
-    <Message Importance="high" Text="Deploying to $(MendixDeployTarget)\extensions\Terminal" />
-    <Exec Command="xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;$(MendixDeployTarget)\extensions\Terminal&quot;" />
+    <ItemGroup>
+      <_MendixDeployTargets Include="$(MendixDeployTarget)" />
+    </ItemGroup>
+    <Message Importance="high" Text="Deploying to %(_MendixDeployTargets.Identity)\extensions\Terminal" />
+    <Exec Command="xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%(_MendixDeployTargets.Identity)\extensions\Terminal&quot;" />
   </Target>
 </Project>
