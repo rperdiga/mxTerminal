@@ -132,6 +132,17 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     catch (Exception ex) { log.Warn($"ShowDevTools failed: {ex.Message}"); }
                     break;
                 }
+
+                case "diag":
+                {
+                    try
+                    {
+                        var msg = e.Data?["msg"]?.ToString() ?? "(no msg)";
+                        log.Info($"JS: {msg}");
+                    }
+                    catch (Exception ex) { log.Warn($"diag failed: {ex.Message}"); }
+                    break;
+                }
             }
         }
         catch (Exception ex)

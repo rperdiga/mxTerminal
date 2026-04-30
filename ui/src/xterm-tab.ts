@@ -14,10 +14,17 @@ function ensureCssInjected() {
 }
 
 export interface XtermTabOptions {
+  /** Pre-attached host element. Must already be in the DOM with non-zero
+   *  dimensions when XtermTab is constructed; xterm.open() needs the host
+   *  to have a layout box so its RenderService can initialize. */
+  host: HTMLDivElement;
   scrollbackLines: number;
   theme: ThemeName;
   onInput: (bytes: Uint8Array) => void;
   onResize: (cols: number, rows: number) => void;
+  /** Diagnostic sink — writes to the C# log via the bridge. Avoids
+   *  DevTools-filter quirks for things we want logged regardless. */
+  diag?: (msg: string) => void;
 }
 
 export class XtermTab {
@@ -25,11 +32,12 @@ export class XtermTab {
   private term: Terminal;
   private fit: FitAddon;
   private docPasteHandler?: (ev: ClipboardEvent) => void;
+  private diag: (msg: string) => void;
 
   constructor(opts: XtermTabOptions) {
     ensureCssInjected();
-    this.host = document.createElement("div");
-    this.host.className = "terminal-host";
+    this.host = opts.host;
+    this.diag = opts.diag ?? (() => {});
 
     this.term = new Terminal({
       scrollback: opts.scrollbackLines,
@@ -46,32 +54,27 @@ export class XtermTab {
 
     // Paste interceptor — attached at document level with capture: true so
     // it runs BEFORE any other paste listener anywhere in the DOM (including
-    // xterm's own listener on the screen element, and any default browser
-    // text-insertion-into-textarea behaviour that fires an `input` event
-    // xterm interprets as a second data submission).
+    // xterm's own listener and any default browser text-insertion that
+    // fires an `input` event xterm interprets as a second submission).
     //
     // Only acts when the focused element is inside our host so we don't
-    // hijack pastes meant for other extensions sharing the WebView.
+    // hijack pastes meant for other UI sharing the WebView.
     this.docPasteHandler = (ev: ClipboardEvent) => {
       const focused = document.activeElement;
       if (!focused || !this.host.contains(focused)) return;
       ev.preventDefault();
       ev.stopImmediatePropagation();
       const text = ev.clipboardData?.getData("text/plain") ?? "";
-      console.warn("[terminal] paste intercepted, len=", text.length, "target=", (ev.target as Element)?.tagName);
+      this.diag(`paste intercepted len=${text.length} target=${(ev.target as Element)?.tagName}`);
       if (text) this.term.paste(text);
     };
     document.addEventListener("paste", this.docPasteHandler, /* capture */ true);
-    console.warn("[terminal] paste handler attached at document level");
+    this.diag("paste handler attached at document level");
 
     // Standard terminal-app keybindings:
     //   Ctrl+C → copy if text is selected; otherwise fall through (SIGINT)
     //   Ctrl+V → swallow the keydown so xterm doesn't translate it to a
-    //            literal ^V byte (0x16). PSReadLine maps ^V to its own
-    //            "PasteFromClipboard" action — combined with xterm's
-    //            native paste-event handler that ALSO sends the clipboard
-    //            text, you end up with two pastes. Letting only the
-    //            browser-fired paste event reach xterm produces one paste.
+    //            literal ^V byte (0x16) which would be a second paste path.
     this.term.attachCustomKeyEventHandler(e => {
       if (e.type !== "keydown") return true;
       if (!e.ctrlKey || e.altKey || e.metaKey) return true;
@@ -85,7 +88,7 @@ export class XtermTab {
         const sel = this.term.getSelection();
         if (sel && (sel.length > 0 || e.shiftKey)) {
           navigator.clipboard.writeText(sel).catch(err =>
-            console.warn("[terminal] clipboard.writeText failed:", err));
+            this.diag(`clipboard.writeText failed: ${err}`));
           return false; // consume — don't send ^C
         }
         // No selection (and not Ctrl+Shift+C): let xterm send SIGINT.
@@ -99,8 +102,7 @@ export class XtermTab {
     const enc = new TextEncoder();
     this.term.onData(s => {
       const bytes = enc.encode(s);
-      // DIAGNOSTIC — remove once paste duplication is resolved.
-      console.warn("[terminal] onData len=", bytes.length, "preview=", s.length > 32 ? s.slice(0, 32) + "..." + s.length : s);
+      this.diag(`onData len=${bytes.length} preview=${s.length > 32 ? s.slice(0, 32) + "..." : s}`);
       opts.onInput(bytes);
     });
     this.term.onResize(({ cols, rows }) => opts.onResize(cols, rows));

@@ -101,13 +101,22 @@ export class TabManager {
   }
 
   private attachExistingTab(tabId: string, title: string) {
+    // Create host element and attach to DOM FIRST so it has dimensions,
+    // THEN construct XtermTab which will call term.open() on a properly
+    // sized container. The reverse order triggers an xterm RenderService
+    // race because term.open() on a detached host gives zero dimensions.
+    const host = document.createElement("div");
+    host.className = "terminal-host active"; // start active so it's measurable
+    this.terminalsContainer.appendChild(host);
+
     const xterm = new XtermTab({
+      host,
       scrollbackLines: this.scrollbackLines,
       theme: this.theme,
       onInput: bytes => this.sendInputChunked(tabId, bytes),
       onResize: (cols, rows) => this.bridge.send("resize", { tabId, cols, rows }),
+      diag: msg => this.bridge.send("diag", { msg }),
     });
-    this.terminalsContainer.appendChild(xterm.host);
 
     const tabEl = document.createElement("div");
     tabEl.className = "tab";
