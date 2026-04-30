@@ -1,5 +1,6 @@
 import { Bridge, encodeBase64, decodeBase64 } from "./bridge.js";
 import { XtermTab } from "./xterm-tab.js";
+import { ThemeName } from "./theme.js";
 
 interface TabState {
   tabId: string;
@@ -12,6 +13,7 @@ export class TabManager {
   private tabs = new Map<string, TabState>();
   private activeTabId: string | null = null;
   private scrollbackLines = 10000;
+  private theme: ThemeName = "dark";
 
   constructor(
     private bridge: Bridge,
@@ -58,10 +60,17 @@ export class TabManager {
 
   setScrollbackLines(n: number) { this.scrollbackLines = n; }
 
+  setTheme(theme: ThemeName): void {
+    this.theme = theme;
+    // Live-update existing xterm instances.
+    for (const t of this.tabs.values()) t.xterm.setTheme(theme);
+  }
+
   newTab(): void {
     // Build a temporary xterm to measure cols/rows for the host viewport
     const probe = new XtermTab({
       scrollbackLines: 100,
+      theme: this.theme,
       onInput: () => {},
       onResize: () => {},
     });
@@ -79,6 +88,7 @@ export class TabManager {
   private attachExistingTab(tabId: string, title: string) {
     const xterm = new XtermTab({
       scrollbackLines: this.scrollbackLines,
+      theme: this.theme,
       onInput: bytes => this.bridge.send("input", { tabId, dataB64: encodeBase64(bytes) }),
       onResize: (cols, rows) => this.bridge.send("resize", { tabId, cols, rows }),
     });

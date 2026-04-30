@@ -19,4 +19,5 @@ public sealed record SaveSettingsPayload(
     string ShellPath,
     string[] Args,
     int? RingBufferKB = null,
-    int? XtermScrollbackLines = null);
+    int? XtermScrollbackLines = null,
+    string? Theme = null);

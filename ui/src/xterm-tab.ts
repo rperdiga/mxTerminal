@@ -2,6 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import xtermCss from "@xterm/xterm/css/xterm.css";
+import { ThemeName, XtermThemes } from "./theme.js";
 
 let cssInjected = false;
 function ensureCssInjected() {
@@ -14,6 +15,7 @@ function ensureCssInjected() {
 
 export interface XtermTabOptions {
   scrollbackLines: number;
+  theme: ThemeName;
   onInput: (bytes: Uint8Array) => void;
   onResize: (cols: number, rows: number) => void;
 }
@@ -32,7 +34,7 @@ export class XtermTab {
       scrollback: opts.scrollbackLines,
       fontFamily: "Cascadia Mono, Consolas, 'Courier New', monospace",
       fontSize: 13,
-      theme: { background: "#1e1e1e", foreground: "#d4d4d4" },
+      theme: XtermThemes[opts.theme],
       allowProposedApi: true,
       cursorBlink: true,
     });
@@ -54,6 +56,10 @@ export class XtermTab {
 
   writeBytes(bytes: Uint8Array): void {
     this.term.write(bytes);
+  }
+
+  setTheme(theme: ThemeName): void {
+    this.term.options.theme = XtermThemes[theme];
   }
 
   focus(): void { this.term.focus(); }

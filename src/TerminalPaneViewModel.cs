@@ -106,7 +106,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 {
                     var dir = GetProjectDir();
                     var s = dir != null ? TerminalSettings.Load(dir) : TerminalSettings.Defaults();
-                    Post("settings", new SettingsPayload(s.ShellPath, s.Args, s.RingBufferKB, s.XtermScrollbackLines));
+                    Post("settings", BuildSettingsPayload(s));
                     break;
                 }
 
@@ -122,9 +122,10 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                         Args = p.Args,
                         RingBufferKB = p.RingBufferKB ?? current.RingBufferKB,
                         XtermScrollbackLines = p.XtermScrollbackLines ?? current.XtermScrollbackLines,
+                        Theme = p.Theme ?? current.Theme,
                     };
                     updated.Save(dir);
-                    Post("settings", new SettingsPayload(updated.ShellPath, updated.Args, updated.RingBufferKB, updated.XtermScrollbackLines));
+                    Post("settings", BuildSettingsPayload(updated));
                     break;
                 }
             }
@@ -180,4 +181,14 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     }
 
     private string? GetProjectDir() => (getCurrentApp()?.Root as IProject)?.DirectoryPath;
+
+    private static SettingsPayload BuildSettingsPayload(TerminalSettings s) => new(
+        ShellPath: s.ShellPath,
+        Args: s.Args,
+        RingBufferKB: s.RingBufferKB,
+        XtermScrollbackLines: s.XtermScrollbackLines,
+        Theme: s.Theme,
+        AvailableShells: ShellDetector.Detect()
+            .Select(o => new ShellOptionPayload(o.Name, o.Path))
+            .ToList());
 }

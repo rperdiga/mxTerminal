@@ -7,12 +7,18 @@ function boot() {
   const tabsContainer = document.getElementById("tabs") as HTMLDivElement;
   const terminalsContainer = document.getElementById("terminals") as HTMLDivElement;
   const tabMgr = new TabManager(bridge, tabsContainer, terminalsContainer);
-  const settings = new SettingsModal(bridge, lines => tabMgr.setScrollbackLines(lines));
+  const settings = new SettingsModal(
+    bridge,
+    lines => tabMgr.setScrollbackLines(lines),
+    theme => tabMgr.setTheme(theme),
+  );
 
   document.getElementById("btn-new")!.addEventListener("click", () => tabMgr.newTab());
 
-  // Tell C# we're ready, then ask what tabs already exist
-  bridge.send("ready");
+  // Fetch settings first so the theme + scrollback are applied before any
+  // xterm instance is constructed (the C# `settings` reply triggers
+  // SettingsModal.populate which calls back into tabMgr.setTheme/setScrollbackLines).
+  bridge.send("openSettings");
   bridge.send("listTabs");
 
   // First-time use: if no tabs after a short delay, open one

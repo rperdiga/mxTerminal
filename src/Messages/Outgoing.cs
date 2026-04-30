@@ -19,10 +19,14 @@ public sealed record ExitPayload(string TabId, int? ExitCode = null, string? Sig
 
 public sealed record ReplayDataPayload(string TabId, string DataB64);
 
+public sealed record ShellOptionPayload(string Name, string Path);
+
 public sealed record SettingsPayload(
     string ShellPath,
     string[] Args,
     int RingBufferKB,
-    int XtermScrollbackLines);
+    int XtermScrollbackLines,
+    string Theme,
+    IReadOnlyList<ShellOptionPayload> AvailableShells);
 
 public sealed record ErrorPayload(string Message, string? Context = null);

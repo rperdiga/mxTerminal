@@ -4,32 +4,63 @@
   <meta charset="UTF-8">
   <title>Terminal</title>
   <style>
-    html, body { margin: 0; padding: 0; height: 100%; background: #1e1e1e; color: #d4d4d4; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+    /* ─── Theme variables ─── */
+    body.theme-dark {
+      --bg:           #1e1e1e;
+      --bg-strip:     #252526;
+      --bg-hover:     #2d2d30;
+      --border:       #3e3e42;
+      --fg:           #d4d4d4;
+      --fg-muted:     #888;
+      --accent:       #0e639c;
+      --modal-bg:     #252526;
+      --input-bg:     #1e1e1e;
+      --button-fg:    #fff;
+      --button-second:#3e3e42;
+      --overlay:      rgba(0,0,0,0.5);
+    }
+    body.theme-light {
+      --bg:           #ffffff;
+      --bg-strip:     #f3f3f3;
+      --bg-hover:     #e8e8e8;
+      --border:       #cccccc;
+      --fg:           #1f1f1f;
+      --fg-muted:     #666;
+      --accent:       #0e639c;
+      --modal-bg:     #f8f8f8;
+      --input-bg:     #ffffff;
+      --button-fg:    #fff;
+      --button-second:#cccccc;
+      --overlay:      rgba(0,0,0,0.35);
+    }
+
+    html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--fg); font-family: 'Segoe UI', sans-serif; overflow: hidden; }
     #app { display: flex; flex-direction: column; height: 100vh; }
-    #tab-strip { display: flex; align-items: center; background: #252526; border-bottom: 1px solid #3e3e42; flex-shrink: 0; min-height: 32px; }
-    .tab { padding: 6px 12px; cursor: pointer; border-right: 1px solid #3e3e42; display: flex; align-items: center; gap: 6px; white-space: nowrap; user-select: none; }
-    .tab.active { background: #1e1e1e; border-bottom: 2px solid #0e639c; }
+    #tab-strip { display: flex; align-items: center; background: var(--bg-strip); border-bottom: 1px solid var(--border); flex-shrink: 0; min-height: 32px; }
+    .tab { padding: 6px 12px; cursor: pointer; border-right: 1px solid var(--border); display: flex; align-items: center; gap: 6px; white-space: nowrap; user-select: none; }
+    .tab.active { background: var(--bg); border-bottom: 2px solid var(--accent); }
     .tab-title { font-size: 12px; }
-    .tab-close { color: #888; padding: 0 4px; border-radius: 2px; }
-    .tab-close:hover { background: #3e3e42; color: #fff; }
-    .tab-new, .tab-settings { padding: 6px 10px; cursor: pointer; color: #888; }
-    .tab-new:hover, .tab-settings:hover { color: #fff; background: #2d2d30; }
+    .tab-close { color: var(--fg-muted); padding: 0 4px; border-radius: 2px; }
+    .tab-close:hover { background: var(--border); color: var(--fg); }
+    .tab-new, .tab-settings { padding: 6px 10px; cursor: pointer; color: var(--fg-muted); }
+    .tab-new:hover, .tab-settings:hover { color: var(--fg); background: var(--bg-hover); }
     #terminals { flex: 1; min-height: 0; position: relative; }
     .terminal-host { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: none; }
     .terminal-host.active { display: block; }
-    #settings-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 100; }
+    #settings-modal { position: fixed; inset: 0; background: var(--overlay); display: none; align-items: center; justify-content: center; z-index: 100; }
     #settings-modal.visible { display: flex; }
-    .modal { background: #252526; padding: 24px; border-radius: 6px; min-width: 400px; }
-    .modal h3 { margin: 0 0 16px; }
+    .modal { background: var(--modal-bg); padding: 24px; border-radius: 6px; min-width: 420px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); }
+    .modal h3 { margin: 0 0 16px; color: var(--fg); }
     .field { margin-bottom: 12px; }
-    .field label { display: block; font-size: 11px; color: #888; margin-bottom: 4px; }
-    .field input { width: 100%; padding: 6px 8px; background: #1e1e1e; color: #d4d4d4; border: 1px solid #3e3e42; border-radius: 3px; box-sizing: border-box; }
+    .field label { display: block; font-size: 11px; color: var(--fg-muted); margin-bottom: 4px; }
+    .field input, .field select { width: 100%; padding: 6px 8px; background: var(--input-bg); color: var(--fg); border: 1px solid var(--border); border-radius: 3px; box-sizing: border-box; font-family: inherit; font-size: 13px; }
+    .field-hidden { display: none; }
     .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
-    .actions button { padding: 6px 14px; background: #0e639c; color: #fff; border: none; border-radius: 3px; cursor: pointer; }
-    .actions button.secondary { background: #3e3e42; }
+    .actions button { padding: 6px 14px; background: var(--accent); color: var(--button-fg); border: none; border-radius: 3px; cursor: pointer; font-size: 13px; }
+    .actions button.secondary { background: var(--button-second); color: var(--fg); }
   </style>
 </head>
-<body>
+<body class="theme-dark">
   <div id="app">
     <div id="tab-strip">
       <div id="tabs"></div>
@@ -42,8 +73,22 @@
   <div id="settings-modal">
     <div class="modal">
       <h3>Terminal settings</h3>
-      <div class="field"><label>Shell path</label><input id="set-shell" type="text"></div>
+      <div class="field">
+        <label>Shell</label>
+        <select id="set-shell-select"></select>
+      </div>
+      <div class="field" id="set-shell-custom-row">
+        <label>Shell path</label>
+        <input id="set-shell" type="text">
+      </div>
       <div class="field"><label>Args (space-separated)</label><input id="set-args" type="text"></div>
+      <div class="field">
+        <label>Theme</label>
+        <select id="set-theme">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </div>
       <div class="field"><label>Ring buffer (KB)</label><input id="set-ring" type="number" min="64"></div>
       <div class="field"><label>xterm scrollback (lines)</label><input id="set-scroll" type="number" min="100"></div>
       <div class="actions">

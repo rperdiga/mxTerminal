@@ -6,13 +6,15 @@ public sealed record TerminalSettings(
     string ShellPath,
     string[] Args,
     int RingBufferKB,
-    int XtermScrollbackLines)
+    int XtermScrollbackLines,
+    string Theme)
 {
     public static TerminalSettings Defaults() => new(
         ShellPath: "powershell.exe",
         Args: Array.Empty<string>(),
         RingBufferKB: 4096,
-        XtermScrollbackLines: 10000);
+        XtermScrollbackLines: 10000,
+        Theme: "dark");
 
     private const string FileName = "terminal-settings.json";
     private const string SubDir = "resources";
@@ -39,7 +41,8 @@ public sealed record TerminalSettings(
                 ShellPath: dto.ShellPath ?? def.ShellPath,
                 Args: dto.Args ?? def.Args,
                 RingBufferKB: dto.RingBufferKB ?? def.RingBufferKB,
-                XtermScrollbackLines: dto.XtermScrollbackLines ?? def.XtermScrollbackLines);
+                XtermScrollbackLines: dto.XtermScrollbackLines ?? def.XtermScrollbackLines,
+                Theme: dto.Theme ?? def.Theme);
         }
         catch (JsonException)
         {
@@ -52,7 +55,7 @@ public sealed record TerminalSettings(
         var dir = System.IO.Path.Combine(projectDir, SubDir);
         Directory.CreateDirectory(dir);
         var path = System.IO.Path.Combine(dir, FileName);
-        var dto = new Dto(ShellPath, Args, RingBufferKB, XtermScrollbackLines);
+        var dto = new Dto(ShellPath, Args, RingBufferKB, XtermScrollbackLines, Theme);
         File.WriteAllText(path, JsonSerializer.Serialize(dto, Json));
     }
 
@@ -60,5 +63,6 @@ public sealed record TerminalSettings(
         string? ShellPath,
         string[]? Args,
         int? RingBufferKB,
-        int? XtermScrollbackLines);
+        int? XtermScrollbackLines,
+        string? Theme);
 }
