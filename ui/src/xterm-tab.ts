@@ -44,33 +44,25 @@ export class XtermTab {
     this.term.open(this.host);
 
     // Standard terminal-app keybindings:
-    //   Ctrl+C  → copy if text is selected; otherwise fall through (SIGINT)
-    //   Ctrl+V  → paste from clipboard
-    //   Ctrl+Shift+C / Ctrl+Shift+V → always copy / paste (alternate)
+    //   Ctrl+C → copy if text is selected; otherwise fall through (SIGINT)
+    //   Ctrl+V → handled by xterm's native paste event listener; we don't
+    //            touch it here. (Manually calling term.paste() in addition
+    //            to xterm's default produced double pastes.)
     this.term.attachCustomKeyEventHandler(e => {
       if (e.type !== "keydown") return true;
       if (!e.ctrlKey || e.altKey || e.metaKey) return true;
 
       const isC = e.key === "c" || e.key === "C";
-      const isV = e.key === "v" || e.key === "V";
-      if (!isC && !isV) return true;
+      if (!isC) return true;
 
-      if (isC) {
-        const sel = this.term.getSelection();
-        if (sel && (sel.length > 0 || e.shiftKey)) {
-          navigator.clipboard.writeText(sel).catch(err =>
-            console.warn("[terminal] clipboard.writeText failed:", err));
-          return false; // consume — don't send ^C
-        }
-        // No selection (and not Ctrl+Shift+C): let xterm send SIGINT.
-        return true;
+      const sel = this.term.getSelection();
+      if (sel && (sel.length > 0 || e.shiftKey)) {
+        navigator.clipboard.writeText(sel).catch(err =>
+          console.warn("[terminal] clipboard.writeText failed:", err));
+        return false; // consume — don't send ^C
       }
-
-      // Ctrl+V (or Ctrl+Shift+V): paste
-      navigator.clipboard.readText().then(text => {
-        if (text) this.term.paste(text);
-      }).catch(err => console.warn("[terminal] clipboard.readText failed:", err));
-      return false;
+      // No selection (and not Ctrl+Shift+C): let xterm send SIGINT.
+      return true;
     });
 
     // xterm gives strings; convert to UTF-8 bytes for the C# side
