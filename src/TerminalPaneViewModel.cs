@@ -40,6 +40,9 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         this.webView = webView;
         webView.MessageReceived += OnWebViewMessage;
         webView.Address = webIndexUri;
+        // Allow right-click → Inspect inside the WebView for diagnostics.
+        try { ((dynamic)webView).AllowedDevTools = true; } catch { /* best-effort */ }
+        try { ((dynamic)webView).AllowReload    = true; } catch { /* best-effort */ }
 
         outputHandler = (tabId, bytes) => Post("output", new OutputPayload(tabId, Convert.ToBase64String(bytes)));
         exitedHandler = (tabId, code) => Post("exit", new ExitPayload(tabId, code));
@@ -83,7 +86,13 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 case "input":
                 {
                     var p = GetData<InputPayload>(e);
-                    manager.Write(p.TabId, Convert.FromBase64String(p.DataB64));
+                    var bytes = Convert.FromBase64String(p.DataB64);
+                    // DIAGNOSTIC — remove once paste duplication / truncation is resolved.
+                    var preview = bytes.Length <= 64
+                        ? Convert.ToHexString(bytes)
+                        : Convert.ToHexString(bytes.AsSpan(0, 32).ToArray()) + "..." + Convert.ToHexString(bytes.AsSpan(bytes.Length - 8).ToArray());
+                    log.Info($"input tab={p.TabId.Substring(0, 8)} len={bytes.Length} preview={preview}");
+                    manager.Write(p.TabId, bytes);
                     break;
                 }
 

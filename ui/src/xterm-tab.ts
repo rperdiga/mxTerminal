@@ -43,6 +43,21 @@ export class XtermTab {
     this.term.loadAddon(new WebLinksAddon());
     this.term.open(this.host);
 
+    // Capture-phase paste interceptor. Runs BEFORE xterm's own paste handler
+    // and BEFORE the textarea's default paste-into-element behaviour. Without
+    // this, WebView2's default insertion fires the textarea's `input` event
+    // AFTER xterm's paste handler already delivered the clipboard text, and
+    // xterm processes the input event as a SECOND data submission — doubling
+    // the paste. We preventDefault + stopImmediatePropagation, then call
+    // term.paste() ourselves so onData fires exactly once.
+    this.host.addEventListener("paste", (ev: ClipboardEvent) => {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      const text = ev.clipboardData?.getData("text/plain") ?? "";
+      console.log("[terminal] paste intercepted, len=", text.length);
+      if (text) this.term.paste(text);
+    }, /* capture */ true);
+
     // Standard terminal-app keybindings:
     //   Ctrl+C → copy if text is selected; otherwise fall through (SIGINT)
     //   Ctrl+V → swallow the keydown so xterm doesn't translate it to a
@@ -76,7 +91,12 @@ export class XtermTab {
 
     // xterm gives strings; convert to UTF-8 bytes for the C# side
     const enc = new TextEncoder();
-    this.term.onData(s => opts.onInput(enc.encode(s)));
+    this.term.onData(s => {
+      const bytes = enc.encode(s);
+      // DIAGNOSTIC — remove once paste duplication is resolved.
+      console.log("[terminal] onData len=", bytes.length, "preview=", s.length > 32 ? s.slice(0, 32) + "..." + s.length : s);
+      opts.onInput(bytes);
+    });
     this.term.onResize(({ cols, rows }) => opts.onResize(cols, rows));
   }
 
