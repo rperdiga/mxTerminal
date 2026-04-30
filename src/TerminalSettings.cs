@@ -10,7 +10,10 @@ public sealed record TerminalSettings(
     string Theme,
     bool McpEnabled,
     int McpPort,
-    string[] McpClients)
+    string[] McpClients,
+    bool ActionsServerEnabled,
+    int ActionsServerPort,
+    string RefreshFromDiskHotkey)
 {
     public static TerminalSettings Defaults() => new(
         ShellPath: "powershell.exe",
@@ -20,7 +23,10 @@ public sealed record TerminalSettings(
         Theme: "dark",
         McpEnabled: false,
         McpPort: 7782,
-        McpClients: Array.Empty<string>());
+        McpClients: Array.Empty<string>(),
+        ActionsServerEnabled: false,
+        ActionsServerPort: 7783,
+        RefreshFromDiskHotkey: "F4");
 
     private const string FileName = "terminal-settings.json";
     private const string SubDir = "resources";
@@ -51,7 +57,10 @@ public sealed record TerminalSettings(
                 Theme: dto.Theme ?? def.Theme,
                 McpEnabled: dto.McpEnabled ?? def.McpEnabled,
                 McpPort: dto.McpPort ?? def.McpPort,
-                McpClients: dto.McpClients ?? def.McpClients);
+                McpClients: dto.McpClients ?? def.McpClients,
+                ActionsServerEnabled: dto.ActionsServerEnabled ?? def.ActionsServerEnabled,
+                ActionsServerPort: dto.ActionsServerPort ?? def.ActionsServerPort,
+                RefreshFromDiskHotkey: dto.RefreshFromDiskHotkey ?? def.RefreshFromDiskHotkey);
         }
         catch (JsonException)
         {
@@ -64,7 +73,7 @@ public sealed record TerminalSettings(
         var dir = System.IO.Path.Combine(projectDir, SubDir);
         Directory.CreateDirectory(dir);
         var path = System.IO.Path.Combine(dir, FileName);
-        var dto = new Dto(ShellPath, Args, RingBufferKB, XtermScrollbackLines, Theme, McpEnabled, McpPort, McpClients);
+        var dto = new Dto(ShellPath, Args, RingBufferKB, XtermScrollbackLines, Theme, McpEnabled, McpPort, McpClients, ActionsServerEnabled, ActionsServerPort, RefreshFromDiskHotkey);
         File.WriteAllText(path, JsonSerializer.Serialize(dto, Json));
     }
 
@@ -76,5 +85,8 @@ public sealed record TerminalSettings(
         string? Theme,
         bool? McpEnabled,
         int? McpPort,
-        string[]? McpClients);
+        string[]? McpClients,
+        bool? ActionsServerEnabled,
+        int? ActionsServerPort,
+        string? RefreshFromDiskHotkey);
 }
