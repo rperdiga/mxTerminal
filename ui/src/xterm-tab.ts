@@ -43,6 +43,36 @@ export class XtermTab {
     this.term.loadAddon(new WebLinksAddon());
     this.term.open(this.host);
 
+    // Standard terminal-app keybindings:
+    //   Ctrl+C  → copy if text is selected; otherwise fall through (SIGINT)
+    //   Ctrl+V  → paste from clipboard
+    //   Ctrl+Shift+C / Ctrl+Shift+V → always copy / paste (alternate)
+    this.term.attachCustomKeyEventHandler(e => {
+      if (e.type !== "keydown") return true;
+      if (!e.ctrlKey || e.altKey || e.metaKey) return true;
+
+      const isC = e.key === "c" || e.key === "C";
+      const isV = e.key === "v" || e.key === "V";
+      if (!isC && !isV) return true;
+
+      if (isC) {
+        const sel = this.term.getSelection();
+        if (sel && (sel.length > 0 || e.shiftKey)) {
+          navigator.clipboard.writeText(sel).catch(err =>
+            console.warn("[terminal] clipboard.writeText failed:", err));
+          return false; // consume — don't send ^C
+        }
+        // No selection (and not Ctrl+Shift+C): let xterm send SIGINT.
+        return true;
+      }
+
+      // Ctrl+V (or Ctrl+Shift+V): paste
+      navigator.clipboard.readText().then(text => {
+        if (text) this.term.paste(text);
+      }).catch(err => console.warn("[terminal] clipboard.readText failed:", err));
+      return false;
+    });
+
     // xterm gives strings; convert to UTF-8 bytes for the C# side
     const enc = new TextEncoder();
     this.term.onData(s => opts.onInput(enc.encode(s)));
