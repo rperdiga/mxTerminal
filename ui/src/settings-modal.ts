@@ -52,9 +52,26 @@ export class SettingsModal {
     document.getElementById("set-save")!.addEventListener("click", () => this.save());
 
     this.selShell.addEventListener("change", () => this.onShellSelectChange());
+    this.chkMcp.addEventListener("change", () => this.onMcpEnabledChange());
 
     bridge.on("settings", (d: SettingsPayload) => this.populate(d));
     bridge.on("mcpResult", (d: McpResult) => this.showBanner(d.ok ? "ok" : "err", d.message));
+  }
+
+  /** When the master MCP toggle flips, sync the per-CLI checkboxes:
+   *  - turning OFF unchecks all three (and disables them)
+   *  - turning ON re-enables them (leaves their last values alone) */
+  private onMcpEnabledChange() {
+    const enabled = this.chkMcp.checked;
+    if (!enabled) {
+      this.chkMcpClaude.checked = false;
+      this.chkMcpCopilot.checked = false;
+      this.chkMcpCodex.checked = false;
+    }
+    this.chkMcpClaude.disabled = !enabled;
+    this.chkMcpCopilot.disabled = !enabled;
+    this.chkMcpCodex.disabled = !enabled;
+    this.inpMcpPort.disabled = !enabled;
   }
 
   private showBanner(kind: "ok" | "err", message: string) {
@@ -95,6 +112,8 @@ export class SettingsModal {
     this.chkMcpClaude.checked  = clients.has("claude");
     this.chkMcpCopilot.checked = clients.has("copilot");
     this.chkMcpCodex.checked   = clients.has("codex");
+    // Apply enabled/disabled to children based on master state.
+    this.onMcpEnabledChange();
   }
 
   private rebuildShellSelect(currentPath: string) {
