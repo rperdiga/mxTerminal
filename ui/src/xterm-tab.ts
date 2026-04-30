@@ -45,23 +45,32 @@ export class XtermTab {
 
     // Standard terminal-app keybindings:
     //   Ctrl+C → copy if text is selected; otherwise fall through (SIGINT)
-    //   Ctrl+V → handled by xterm's native paste event listener; we don't
-    //            touch it here. (Manually calling term.paste() in addition
-    //            to xterm's default produced double pastes.)
+    //   Ctrl+V → swallow the keydown so xterm doesn't translate it to a
+    //            literal ^V byte (0x16). PSReadLine maps ^V to its own
+    //            "PasteFromClipboard" action — combined with xterm's
+    //            native paste-event handler that ALSO sends the clipboard
+    //            text, you end up with two pastes. Letting only the
+    //            browser-fired paste event reach xterm produces one paste.
     this.term.attachCustomKeyEventHandler(e => {
       if (e.type !== "keydown") return true;
       if (!e.ctrlKey || e.altKey || e.metaKey) return true;
 
       const isC = e.key === "c" || e.key === "C";
-      if (!isC) return true;
+      const isV = e.key === "v" || e.key === "V";
 
-      const sel = this.term.getSelection();
-      if (sel && (sel.length > 0 || e.shiftKey)) {
-        navigator.clipboard.writeText(sel).catch(err =>
-          console.warn("[terminal] clipboard.writeText failed:", err));
-        return false; // consume — don't send ^C
+      if (isV) return false; // suppress ^V; native paste event will deliver
+
+      if (isC) {
+        const sel = this.term.getSelection();
+        if (sel && (sel.length > 0 || e.shiftKey)) {
+          navigator.clipboard.writeText(sel).catch(err =>
+            console.warn("[terminal] clipboard.writeText failed:", err));
+          return false; // consume — don't send ^C
+        }
+        // No selection (and not Ctrl+Shift+C): let xterm send SIGINT.
+        return true;
       }
-      // No selection (and not Ctrl+Shift+C): let xterm send SIGINT.
+
       return true;
     });
 
