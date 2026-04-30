@@ -87,18 +87,13 @@ export class TabManager {
   }
 
   newTab(): void {
-    // Build a temporary xterm to measure cols/rows for the host viewport
-    const probe = new XtermTab({
-      scrollbackLines: 100,
-      theme: this.theme,
-      onInput: () => {},
-      onResize: () => {},
-    });
-    this.terminalsContainer.appendChild(probe.host);
-    probe.host.classList.add("active");
-    const { cols, rows } = probe.fitToContainer();
-    probe.dispose();
-    this.bridge.send("createTab", { cols, rows });
+    // Spawn at sensible defaults — the fit-addon on the real xterm will
+    // resize the PTY to actual viewport size as soon as it mounts. The
+    // earlier "probe a throwaway xterm to measure dimensions" approach
+    // triggered an xterm RenderService race ("Cannot read properties of
+    // undefined (reading 'dimensions')") because xterm.open() was called
+    // on a host element that wasn't in the DOM yet.
+    this.bridge.send("createTab", { cols: 80, rows: 24 });
   }
 
   closeActiveTab(): void {

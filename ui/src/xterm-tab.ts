@@ -24,6 +24,7 @@ export class XtermTab {
   readonly host: HTMLDivElement;
   private term: Terminal;
   private fit: FitAddon;
+  private docPasteHandler?: (ev: ClipboardEvent) => void;
 
   constructor(opts: XtermTabOptions) {
     ensureCssInjected();
@@ -43,33 +44,25 @@ export class XtermTab {
     this.term.loadAddon(new WebLinksAddon());
     this.term.open(this.host);
 
-    // Paste interceptor — attached DIRECTLY to xterm's helper textarea
-    // (where paste events originate, since the textarea has focus). Capture
-    // phase + stopImmediatePropagation prevents xterm's own paste handler
-    // from running, AND preventDefault prevents the browser from inserting
-    // the text into the textarea (which would fire an `input` event that
-    // xterm processes as a second data submission). The result: exactly
-    // one path from clipboard → term.paste → onData → C#.
-    const installPasteHandler = () => {
-      const ta = this.host.querySelector(".xterm-helper-textarea") as HTMLTextAreaElement | null;
-      if (!ta) {
-        console.warn("[terminal] xterm-helper-textarea not found; falling back to host listener");
-        return false;
-      }
-      ta.addEventListener("paste", (ev: ClipboardEvent) => {
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        const text = ev.clipboardData?.getData("text/plain") ?? "";
-        console.log("[terminal] paste intercepted on textarea, len=", text.length);
-        if (text) this.term.paste(text);
-      }, /* capture */ true);
-      console.log("[terminal] paste handler attached to xterm-helper-textarea");
-      return true;
+    // Paste interceptor — attached at document level with capture: true so
+    // it runs BEFORE any other paste listener anywhere in the DOM (including
+    // xterm's own listener on the screen element, and any default browser
+    // text-insertion-into-textarea behaviour that fires an `input` event
+    // xterm interprets as a second data submission).
+    //
+    // Only acts when the focused element is inside our host so we don't
+    // hijack pastes meant for other extensions sharing the WebView.
+    this.docPasteHandler = (ev: ClipboardEvent) => {
+      const focused = document.activeElement;
+      if (!focused || !this.host.contains(focused)) return;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      const text = ev.clipboardData?.getData("text/plain") ?? "";
+      console.log("[terminal] paste intercepted, len=", text.length, "target=", (ev.target as Element)?.tagName);
+      if (text) this.term.paste(text);
     };
-    if (!installPasteHandler()) {
-      // Helper textarea not yet rendered — try again next tick.
-      requestAnimationFrame(() => installPasteHandler());
-    }
+    document.addEventListener("paste", this.docPasteHandler, /* capture */ true);
+    console.log("[terminal] paste handler attached at document level");
 
     // Standard terminal-app keybindings:
     //   Ctrl+C → copy if text is selected; otherwise fall through (SIGINT)
@@ -129,6 +122,10 @@ export class XtermTab {
   focus(): void { this.term.focus(); }
 
   dispose(): void {
+    if (this.docPasteHandler) {
+      document.removeEventListener("paste", this.docPasteHandler, /* capture */ true);
+      this.docPasteHandler = undefined;
+    }
     this.term.dispose();
     this.host.remove();
   }
