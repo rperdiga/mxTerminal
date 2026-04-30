@@ -15,6 +15,16 @@ function boot() {
 
   document.getElementById("btn-new")!.addEventListener("click", () => tabMgr.newTab());
 
+  // F12 opens Studio Pro's WebView DevTools (xterm captures right-click,
+  // so that path doesn't work). Listen at window-level capture phase so
+  // xterm's keyboard handlers don't swallow it.
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "F12") {
+      e.preventDefault();
+      bridge.send("showDevTools");
+    }
+  }, true);
+
   // Fetch settings first so the theme + scrollback are applied before any
   // xterm instance is constructed (the C# `settings` reply triggers
   // SettingsModal.populate which calls back into tabMgr.setTheme/setScrollbackLines).

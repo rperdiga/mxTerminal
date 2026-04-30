@@ -124,6 +124,13 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     HandleSaveSettings(GetData<SaveSettingsPayload>(e));
                     break;
                 }
+
+                case "showDevTools":
+                {
+                    try { webView?.ShowDevTools(); }
+                    catch (Exception ex) { log.Warn($"ShowDevTools failed: {ex.Message}"); }
+                    break;
+                }
             }
         }
         catch (Exception ex)
