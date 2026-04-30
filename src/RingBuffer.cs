@@ -1,4 +1,4 @@
-namespace MxStudioProTerminal;
+namespace Terminal;
 
 /// <summary>
 /// Fixed-capacity circular byte buffer. Thread-unsafe — caller synchronises.

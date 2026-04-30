@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace MxStudioProTerminal;
+namespace Terminal;
 
 public sealed class TerminalSessionManager : IDisposable
 {

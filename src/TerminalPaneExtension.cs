@@ -4,12 +4,12 @@ using Mendix.StudioPro.ExtensionsAPI.UI.Events;
 using Mendix.StudioPro.ExtensionsAPI.Model;
 using Mendix.StudioPro.ExtensionsAPI.Model.Projects;
 
-namespace MxStudioProTerminal;
+namespace Terminal;
 
 [Export(typeof(DockablePaneExtension))]
 public sealed class TerminalPaneExtension : DockablePaneExtension
 {
-    public const string ID = "MxStudioProTerminal";
+    public const string ID = "Terminal";
     public override string Id => ID;
 
     private readonly TerminalSessionManager manager;

@@ -1,4 +1,4 @@
-namespace MxStudioProTerminal.Messages;
+namespace Terminal.Messages;
 
 public sealed record SessionInfoPayload(
     string TabId,

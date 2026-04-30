@@ -3,10 +3,10 @@ using Mendix.StudioPro.ExtensionsAPI.Model;
 using Mendix.StudioPro.ExtensionsAPI.Model.Projects;
 using Mendix.StudioPro.ExtensionsAPI.UI.DockablePane;
 using Mendix.StudioPro.ExtensionsAPI.UI.WebView;
-using MxStudioProTerminal.Messages;
+using Terminal.Messages;
 using System.Text.Json;
 
-namespace MxStudioProTerminal;
+namespace Terminal;
 
 public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
 {

@@ -3,7 +3,7 @@ using System.Net;
 using Mendix.StudioPro.ExtensionsAPI.Services;
 using Mendix.StudioPro.ExtensionsAPI.UI.WebServer;
 
-namespace MxStudioProTerminal;
+namespace Terminal;
 
 [Export(typeof(WebServerExtension))]
 public sealed class TerminalWebServer : WebServerExtension

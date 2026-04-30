@@ -1,8 +1,8 @@
 using FluentAssertions;
-using MxStudioProTerminal;
+using Terminal;
 using Xunit;
 
-namespace MxStudioProTerminal.Tests;
+namespace Terminal.Tests;
 
 public class TerminalSettingsTests : IDisposable
 {

@@ -2,7 +2,7 @@ using System.ComponentModel.Composition;
 using Mendix.StudioPro.ExtensionsAPI.UI.Menu;
 using Mendix.StudioPro.ExtensionsAPI.UI.Services;
 
-namespace MxStudioProTerminal;
+namespace Terminal;
 
 [Export(typeof(MenuExtension))]
 public sealed class TerminalMenuExtension : MenuExtension

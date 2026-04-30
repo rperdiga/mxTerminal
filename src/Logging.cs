@@ -1,4 +1,4 @@
-namespace MxStudioProTerminal;
+namespace Terminal;
 
 public sealed class Logger
 {

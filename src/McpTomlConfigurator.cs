@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace MxStudioProTerminal;
+namespace Terminal;
 
 /// <summary>
 /// Manages the <c>[mcp_servers.mendix-studio-pro]</c> section of the user-level

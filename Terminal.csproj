@@ -4,8 +4,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <AssemblyName>MxStudioProTerminal</AssemblyName>
-    <RootNamespace>MxStudioProTerminal</RootNamespace>
+    <AssemblyName>Terminal</AssemblyName>
+    <RootNamespace>Terminal</RootNamespace>
     <LangVersion>preview</LangVersion>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
@@ -52,7 +52,7 @@
   </Target>
 
   <Target Name="DeployToMendix" AfterTargets="PostBuildEvent" Condition="'$(MendixDeployTarget)' != ''">
-    <Message Importance="high" Text="Deploying to $(MendixDeployTarget)\extensions\MxStudioProTerminal" />
-    <Exec Command="xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;$(MendixDeployTarget)\extensions\MxStudioProTerminal&quot;" />
+    <Message Importance="high" Text="Deploying to $(MendixDeployTarget)\extensions\Terminal" />
+    <Exec Command="xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;$(MendixDeployTarget)\extensions\Terminal&quot;" />
   </Target>
 </Project>

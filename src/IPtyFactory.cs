@@ -1,4 +1,4 @@
-namespace MxStudioProTerminal;
+namespace Terminal;
 
 /// <summary>
 /// Factory abstraction so SessionManager can be unit-tested without spawning processes.

@@ -3,7 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
-namespace MxStudioProTerminal;
+namespace Terminal;
 
 /// <summary>
 /// Sends an MCP <c>initialize</c> JSON-RPC request to the configured port and

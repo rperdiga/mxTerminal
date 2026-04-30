@@ -1,9 +1,9 @@
 using System.Text.Json;
 using FluentAssertions;
-using MxStudioProTerminal.Messages;
+using Terminal.Messages;
 using Xunit;
 
-namespace MxStudioProTerminal.Tests;
+namespace Terminal.Tests;
 
 public class MessageDtoTests
 {

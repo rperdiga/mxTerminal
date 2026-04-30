@@ -2,7 +2,7 @@ using Pty.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
-namespace MxStudioProTerminal;
+namespace Terminal;
 
 public sealed class PtyNetFactory : IPtyFactory
 {
@@ -13,7 +13,7 @@ public sealed class PtyNetFactory : IPtyFactory
         // [DllImport("winpty.dll")] hits a DllNotFoundException because the
         // default Win32 search path doesn't include our extension folder.
         // Install a manual resolver that loads winpty.dll from next to this
-        // assembly (we copy it there in MxStudioProTerminal.csproj).
+        // assembly (we copy it there in Terminal.csproj).
         NativeLibrary.SetDllImportResolver(typeof(PtyProvider).Assembly, (libName, asm, searchPath) =>
         {
             if (!libName.Equals("winpty.dll", StringComparison.OrdinalIgnoreCase))

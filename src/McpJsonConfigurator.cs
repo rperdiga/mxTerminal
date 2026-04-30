@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace MxStudioProTerminal;
+namespace Terminal;
 
 /// <summary>
 /// Manages the project-level <c>.mcp.json</c> file (read by Claude Code and

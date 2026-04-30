@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace MxStudioProTerminal;
+namespace Terminal;
 
 public sealed record TerminalSettings(
     string ShellPath,

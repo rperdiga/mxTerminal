@@ -1,9 +1,9 @@
 using FluentAssertions;
-using MxStudioProTerminal;
+using Terminal;
 using System.Text;
 using Xunit;
 
-namespace MxStudioProTerminal.Tests;
+namespace Terminal.Tests;
 
 public class PtySessionTests
 {
