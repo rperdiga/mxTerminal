@@ -17,10 +17,14 @@ public sealed class McpTomlConfigurator
 
     private readonly string filePath;
 
-    public McpTomlConfigurator()
+    public McpTomlConfigurator() : this(DefaultPath()) { }
+
+    internal McpTomlConfigurator(string filePath) { this.filePath = filePath; }
+
+    private static string DefaultPath()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        filePath = Path.Combine(home, ".codex", "config.toml");
+        return Path.Combine(home, ".codex", "config.toml");
     }
 
     public string FilePath => filePath;
