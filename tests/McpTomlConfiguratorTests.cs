@@ -68,4 +68,55 @@ public class McpTomlConfiguratorTests : IDisposable
         Action act = () => NewConfig().Remove();
         act.Should().NotThrow();
     }
+
+    [Fact]
+    public void UpsertActions_NoFile_CreatesActionsSection()
+    {
+        NewConfig().UpsertActions("http://localhost:7783/mcp");
+        var content = File.ReadAllText(filePath);
+        content.Should().Contain("[mcp_servers.mendix-studio-pro-actions]");
+        content.Should().Contain("\"http://localhost:7783/mcp\"");
+    }
+
+    [Fact]
+    public void UpsertActions_AlongsidePrimary_BothSectionsPresent()
+    {
+        var c = NewConfig();
+        c.Upsert("http://localhost:7782/mcp");
+        c.UpsertActions("http://localhost:7783/mcp");
+        var content = File.ReadAllText(filePath);
+        content.Should().Contain("[mcp_servers.mendix-studio-pro]");
+        content.Should().Contain("[mcp_servers.mendix-studio-pro-actions]");
+    }
+
+    [Fact]
+    public void RemoveActions_KeepsPrimarySection()
+    {
+        var c = NewConfig();
+        c.Upsert("http://localhost:7782/mcp");
+        c.UpsertActions("http://localhost:7783/mcp");
+        c.RemoveActions();
+        var content = File.ReadAllText(filePath);
+        content.Should().Contain("[mcp_servers.mendix-studio-pro]");
+        content.Should().NotContain("[mcp_servers.mendix-studio-pro-actions]");
+    }
+
+    [Fact]
+    public void Remove_KeepsActionsSection()
+    {
+        var c = NewConfig();
+        c.Upsert("http://localhost:7782/mcp");
+        c.UpsertActions("http://localhost:7783/mcp");
+        c.Remove();
+        var content = File.ReadAllText(filePath);
+        content.Should().NotContain("[mcp_servers.mendix-studio-pro]\n");
+        content.Should().Contain("[mcp_servers.mendix-studio-pro-actions]");
+    }
+
+    [Fact]
+    public void RemoveActions_NoFile_NoOp()
+    {
+        Action act = () => NewConfig().RemoveActions();
+        act.Should().NotThrow();
+    }
 }

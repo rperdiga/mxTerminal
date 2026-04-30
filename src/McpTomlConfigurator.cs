@@ -3,17 +3,19 @@ using System.Text;
 namespace Terminal;
 
 /// <summary>
-/// Manages the <c>[mcp_servers.mendix-studio-pro]</c> section of the user-level
+/// Manages the <c>[mcp_servers.&lt;name&gt;]</c> sections of the user-level
 /// Codex config at <c>~/.codex/config.toml</c>. Codex's MCP support is stdio-only
 /// so we wire it through the npx <c>mcp-remote</c> bridge.
 ///
-/// Hand-rolled TOML editing — no need for a full parser since we own a single
-/// well-known section and never touch anything else.
+/// Hand-rolled TOML editing — no need for a full parser since we own a fixed
+/// set of well-known sections and never touch anything else.
 /// </summary>
 public sealed class McpTomlConfigurator
 {
-    public const string ServerName = "mendix-studio-pro";
-    private static readonly string SectionHeader = $"[mcp_servers.{ServerName}]";
+    public const string ServerName        = "mendix-studio-pro";
+    public const string ActionsServerName = "mendix-studio-pro-actions";
+
+    private static string HeaderFor(string serverName) => $"[mcp_servers.{serverName}]";
 
     private readonly string filePath;
 
@@ -29,43 +31,46 @@ public sealed class McpTomlConfigurator
 
     public string FilePath => filePath;
 
-    public void Upsert(string url)
+    public void Upsert(string url)        => UpsertNamed(ServerName, url);
+    public void Remove()                  => RemoveNamed(ServerName);
+    public void UpsertActions(string url) => UpsertNamed(ActionsServerName, url);
+    public void RemoveActions()           => RemoveNamed(ActionsServerName);
+
+    private void UpsertNamed(string serverName, string url)
     {
+        var header = HeaderFor(serverName);
         var lines = ReadLines();
-        var (start, end) = FindSection(lines);
+        var (start, end) = FindSection(lines, header);
         var newSection = new[]
         {
-            SectionHeader,
+            header,
             "command = \"npx\"",
             $"args = [\"-y\", \"mcp-remote\", \"{url}\"]",
         };
 
         if (start < 0)
         {
-            // No existing section — append at end (with a separating blank line).
             if (lines.Count > 0 && lines[^1].Trim().Length > 0) lines.Add("");
             lines.AddRange(newSection);
         }
         else
         {
-            // Replace [start..end] inclusive with the new section.
             lines.RemoveRange(start, end - start + 1);
             lines.InsertRange(start, newSection);
         }
         WriteAtomic(lines);
     }
 
-    public void Remove()
+    private void RemoveNamed(string serverName)
     {
         if (!File.Exists(filePath)) return;
+        var header = HeaderFor(serverName);
         var lines = ReadLines();
-        var (start, end) = FindSection(lines);
+        var (start, end) = FindSection(lines, header);
         if (start < 0) return;
 
-        // Also drop one trailing blank line if it follows the section, to avoid pile-up.
         var until = end;
         if (until + 1 < lines.Count && lines[until + 1].Trim().Length == 0) until++;
-        // …and one preceding blank line if it directly preceded the section.
         var from = start;
         if (from > 0 && lines[from - 1].Trim().Length == 0) from--;
 
@@ -82,15 +87,15 @@ public sealed class McpTomlConfigurator
     /// <summary>
     /// Locate the [mcp_servers.&lt;name&gt;] block. Returns (start, end) inclusive
     /// of the lines to remove, or (-1, -1) if not present.
-    /// The block runs from the header line up to (but not including) the next
-    /// top-level `[` line, or end-of-file.
     /// </summary>
-    private static (int start, int end) FindSection(List<string> lines)
+    private static (int start, int end) FindSection(List<string> lines, string sectionHeader)
     {
         var start = -1;
         for (int i = 0; i < lines.Count; i++)
         {
-            if (lines[i].TrimStart().StartsWith(SectionHeader, StringComparison.Ordinal))
+            // Use exact-line match (after trimming leading whitespace), not StartsWith,
+            // so [mcp_servers.mendix-studio-pro-actions] doesn't match the primary header.
+            if (lines[i].TrimStart() == sectionHeader)
             {
                 start = i;
                 break;
@@ -116,7 +121,6 @@ public sealed class McpTomlConfigurator
         var dir = Path.GetDirectoryName(filePath);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
-        // Trim trailing blank lines.
         while (lines.Count > 0 && lines[^1].Trim().Length == 0)
             lines.RemoveAt(lines.Count - 1);
 
