@@ -19,3 +19,4 @@ Directory.Build.props
 # IDE
 .idea/
 .vscode/
+.claude/worktrees/
