@@ -5,17 +5,15 @@ namespace Terminal;
 
 /// <summary>
 /// Manages the project-level <c>.mcp.json</c> file (read by Claude Code and
-/// GitHub Copilot CLI). Upserts/removes a single named server entry while
-/// preserving anything else the user has in the file.
+/// GitHub Copilot CLI). Upserts/removes named server entries while preserving
+/// anything else the user has in the file.
 /// </summary>
 public sealed class McpJsonConfigurator
 {
     public const string ServerName = "mendix-studio-pro";
+    public const string ActionsServerName = "mendix-studio-pro-actions";
 
-    private static readonly JsonSerializerOptions WriteOpts = new()
-    {
-        WriteIndented = true,
-    };
+    private static readonly JsonSerializerOptions WriteOpts = new() { WriteIndented = true };
 
     private readonly string filePath;
 
@@ -24,8 +22,12 @@ public sealed class McpJsonConfigurator
         filePath = Path.Combine(projectDir, ".mcp.json");
     }
 
-    /// <summary>Ensure the file contains our entry pointing at the given URL.</summary>
-    public void Upsert(string url)
+    public void Upsert(string url)        => UpsertNamed(ServerName, url);
+    public void Remove()                  => RemoveNamed(ServerName);
+    public void UpsertActions(string url) => UpsertNamed(ActionsServerName, url);
+    public void RemoveActions()           => RemoveNamed(ActionsServerName);
+
+    private void UpsertNamed(string serverName, string url)
     {
         var root = ReadOrEmpty();
         if (root["mcpServers"] is not JsonObject servers)
@@ -33,7 +35,7 @@ public sealed class McpJsonConfigurator
             servers = new JsonObject();
             root["mcpServers"] = servers;
         }
-        servers[ServerName] = new JsonObject
+        servers[serverName] = new JsonObject
         {
             ["type"] = "http",
             ["url"]  = url,
@@ -41,18 +43,15 @@ public sealed class McpJsonConfigurator
         WriteAtomic(root);
     }
 
-    /// <summary>Remove our entry. Leaves the rest of the file untouched.
-    /// Deletes the file if it ends up empty.</summary>
-    public void Remove()
+    private void RemoveNamed(string serverName)
     {
         if (!File.Exists(filePath)) return;
         var root = ReadOrEmpty();
-        if (root["mcpServers"] is JsonObject servers && servers.ContainsKey(ServerName))
+        if (root["mcpServers"] is JsonObject servers && servers.ContainsKey(serverName))
         {
-            servers.Remove(ServerName);
+            servers.Remove(serverName);
             if (servers.Count == 0) root.Remove("mcpServers");
         }
-
         if (root.Count == 0)
         {
             try { File.Delete(filePath); } catch { /* best-effort */ }

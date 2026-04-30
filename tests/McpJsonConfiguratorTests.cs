@@ -76,4 +76,55 @@ public class McpJsonConfiguratorTests : IDisposable
         Action act = () => new McpJsonConfigurator(tmpDir).Remove();
         act.Should().NotThrow();
     }
+
+    [Fact]
+    public void UpsertActions_NoFile_CreatesEntryUnderActionsServerName()
+    {
+        new McpJsonConfigurator(tmpDir).UpsertActions("http://localhost:7783/mcp");
+        var json = File.ReadAllText(filePath);
+        json.Should().Contain("\"mendix-studio-pro-actions\"");
+        json.Should().Contain("\"http://localhost:7783/mcp\"");
+    }
+
+    [Fact]
+    public void UpsertActions_AlongsidePrimary_BothPresent()
+    {
+        var c = new McpJsonConfigurator(tmpDir);
+        c.Upsert("http://localhost:7782/mcp");
+        c.UpsertActions("http://localhost:7783/mcp");
+        var json = File.ReadAllText(filePath);
+        json.Should().Contain("\"mendix-studio-pro\"");
+        json.Should().Contain("\"mendix-studio-pro-actions\"");
+    }
+
+    [Fact]
+    public void RemoveActions_KeepsPrimaryEntry()
+    {
+        var c = new McpJsonConfigurator(tmpDir);
+        c.Upsert("http://localhost:7782/mcp");
+        c.UpsertActions("http://localhost:7783/mcp");
+        c.RemoveActions();
+        var json = File.ReadAllText(filePath);
+        json.Should().Contain("mendix-studio-pro");
+        json.Should().NotContain("mendix-studio-pro-actions");
+    }
+
+    [Fact]
+    public void Remove_KeepsActionsEntry()
+    {
+        var c = new McpJsonConfigurator(tmpDir);
+        c.Upsert("http://localhost:7782/mcp");
+        c.UpsertActions("http://localhost:7783/mcp");
+        c.Remove();
+        var json = File.ReadAllText(filePath);
+        json.Should().NotContain("\"mendix-studio-pro\":");      // colon prevents matching the actions entry
+        json.Should().Contain("mendix-studio-pro-actions");
+    }
+
+    [Fact]
+    public void RemoveActions_NoFile_NoOp()
+    {
+        Action act = () => new McpJsonConfigurator(tmpDir).RemoveActions();
+        act.Should().NotThrow();
+    }
 }
