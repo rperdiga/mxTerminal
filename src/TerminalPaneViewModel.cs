@@ -16,6 +16,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     private readonly Func<IModel?> getCurrentApp;
     private readonly Uri webIndexUri;
     private readonly Logger log;
+    private readonly Func<string?> getApplicationRootUrl;
 
     private IWebView? webView;
     private Action<string, byte[]>? outputHandler;
@@ -26,13 +27,15 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         TerminalSessionManager manager,
         Func<IModel?> getCurrentApp,
         Uri webIndexUri,
-        Logger log)
+        Logger log,
+        Func<string?> getApplicationRootUrl)
     {
         Title = title;
         this.manager = manager;
         this.getCurrentApp = getCurrentApp;
         this.webIndexUri = webIndexUri;
         this.log = log;
+        this.getApplicationRootUrl = getApplicationRootUrl;
     }
 
     public override void InitWebView(IWebView webView)
@@ -160,11 +163,15 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             if (dir == null) { Post("error", new ErrorPayload("No Mendix app is open")); return; }
 
             var current = TerminalSettings.Load(dir);
-            var newClients = p.McpClients ?? current.McpClients;
-            var newEnabled = p.McpEnabled ?? current.McpEnabled;
-            var newPort    = p.McpPort    ?? current.McpPort;
 
-            // If MCP is being enabled, probe it first. Refuse to save broken config.
+            var newClients         = p.McpClients ?? current.McpClients;
+            var newEnabled         = p.McpEnabled ?? current.McpEnabled;
+            var newPort            = p.McpPort    ?? current.McpPort;
+            var newActionsEnabled  = p.ActionsServerEnabled ?? current.ActionsServerEnabled;
+            var newActionsPort     = p.ActionsServerPort    ?? current.ActionsServerPort;
+            var newRefreshHotkey   = p.RefreshFromDiskHotkey ?? current.RefreshFromDiskHotkey;
+
+            // 1. Probe Studio Pro's primary MCP server (existing behaviour).
             if (newEnabled)
             {
                 var probe = await McpProbe.ProbeAsync(newPort, log);
@@ -173,10 +180,39 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     Post("mcpResult", new McpResultPayload(false,
                         $"{probe.Message}. Enable Studio Pro's MCP server in Preferences → Maia → MCP Server, then try again.",
                         Array.Empty<string>()));
-                    // Don't persist — leave settings (and toggle) in their previous state.
                     Post("settings", BuildSettingsPayload(current));
                     return;
                 }
+            }
+
+            // 2. Manage our own action-server lifecycle.
+            if (newActionsEnabled)
+            {
+                // Re-create on each save when port or hotkey changed; StartActionServer is idempotent on no-op.
+                var ui = new StudioProUiAutomation(
+                    runHotkey: "F5",
+                    stopHotkey: "Shift+F5",
+                    refreshHotkey: newRefreshHotkey,
+                    log: log);
+                var probe = new RunStateProbe(getApplicationRootUrl);
+                var actions = new StudioProActions(probe, ui);
+                manager.StartActionServer(newActionsPort, actions, log);
+
+                // Probe our own server. Re-use McpProbe since wire formats match.
+                var pr = await McpProbe.ProbeAsync(newActionsPort, log);
+                if (!pr.Ok)
+                {
+                    manager.StopActionServer();
+                    Post("mcpResult", new McpResultPayload(false,
+                        $"Action server failed to answer on port {newActionsPort}: {pr.Message}",
+                        Array.Empty<string>()));
+                    Post("settings", BuildSettingsPayload(current));
+                    return;
+                }
+            }
+            else if (current.ActionsServerEnabled)
+            {
+                manager.StopActionServer();
             }
 
             var updated = current with
@@ -189,25 +225,23 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 McpEnabled = newEnabled,
                 McpPort = newPort,
                 McpClients = newClients,
+                ActionsServerEnabled = newActionsEnabled,
+                ActionsServerPort = newActionsPort,
+                RefreshFromDiskHotkey = newRefreshHotkey,
             };
 
-            // Apply MCP file changes BEFORE saving settings, so a write failure
-            // here doesn't leave settings claiming success.
-            var touched = ApplyMcpConfig(dir, current, updated);
+            // 3. Apply file changes BEFORE saving settings.
+            var touchedPrimary = ApplyMcpConfig(dir, current, updated);
+            var touchedActions = ApplyActionsMcpConfig(dir, current, updated);
 
             updated.Save(dir);
             Post("settings", BuildSettingsPayload(updated));
 
-            if (touched.Length > 0)
+            var allTouched = touchedPrimary.Concat(touchedActions).ToArray();
+            if (allTouched.Length > 0)
             {
-                Post("mcpResult", new McpResultPayload(true,
-                    newEnabled
-                        ? $"MCP enabled for {string.Join(", ", touched)}. Restarting open terminals…"
-                        : $"MCP disabled (cleaned up: {string.Join(", ", touched)}). Restarting open terminals…",
-                    touched));
+                Post("mcpResult", new McpResultPayload(true, BuildResultMessage(updated, allTouched), allTouched));
 
-                // Recycle all open terminals so any running CLI gets killed
-                // and a fresh shell can pick up the new config files.
                 _ = Task.Run(async () =>
                 {
                     try
@@ -219,10 +253,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                             Post("tabCreated", new TabCreatedPayload(r.NewTabId, r.Title, r.ShellPath, r.Cwd));
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        log.Error("RecycleAll after MCP save failed", ex);
-                    }
+                    catch (Exception ex) { log.Error("RecycleAll after MCP save failed", ex); }
                 });
             }
         }
@@ -232,6 +263,11 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             Post("error", new ErrorPayload($"Save failed: {ex.Message}", "saveSettings"));
         }
     }
+
+    private static string BuildResultMessage(TerminalSettings s, string[] touched) =>
+        (s.McpEnabled || s.ActionsServerEnabled)
+            ? $"MCP servers updated for {string.Join(", ", touched)}. Restarting open terminals…"
+            : $"MCP servers disabled (cleaned up: {string.Join(", ", touched)}). Restarting open terminals…";
 
     /// <summary>
     /// Apply the diff between previous and new MCP settings to the relevant
@@ -263,6 +299,38 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
 
         if (tomlNeeded) { toml.Upsert(url); touched.Add("Codex"); }
         else if (tomlHadIt) { toml.Remove(); touched.Add("Codex (removed)"); }
+
+        return touched.ToArray();
+    }
+
+    /// <summary>
+    /// Diff the actions-server toggle (and which CLIs are selected via the existing
+    /// McpClients list) and write the second server entry into .mcp.json / config.toml.
+    /// We piggy-back on McpClients — the action server is registered for the same
+    /// CLIs the user already chose in the primary MCP toggle.
+    /// </summary>
+    private string[] ApplyActionsMcpConfig(string projectDir, TerminalSettings prev, TerminalSettings next)
+    {
+        var prevClients = new HashSet<string>(prev.McpClients, StringComparer.OrdinalIgnoreCase);
+        var nextClients = next.ActionsServerEnabled
+            ? new HashSet<string>(next.McpClients, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var jsonNeeded = nextClients.Contains("claude") || nextClients.Contains("copilot");
+        var jsonHadIt  = prev.ActionsServerEnabled && (prevClients.Contains("claude") || prevClients.Contains("copilot"));
+        var tomlNeeded = nextClients.Contains("codex");
+        var tomlHadIt  = prev.ActionsServerEnabled && prevClients.Contains("codex");
+
+        var url = $"http://localhost:{next.ActionsServerPort}/mcp";
+        var json = new McpJsonConfigurator(projectDir);
+        var toml = new McpTomlConfigurator();
+        var touched = new List<string>();
+
+        if (jsonNeeded) { json.UpsertActions(url); touched.Add(LabelForJson(nextClients) + " actions"); }
+        else if (jsonHadIt) { json.RemoveActions(); touched.Add(LabelForJson(prevClients) + " actions (removed)"); }
+
+        if (tomlNeeded) { toml.UpsertActions(url); touched.Add("Codex actions"); }
+        else if (tomlHadIt) { toml.RemoveActions(); touched.Add("Codex actions (removed)"); }
 
         return touched.ToArray();
     }
@@ -331,5 +399,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             .ToList(),
         McpEnabled: s.McpEnabled,
         McpPort: s.McpPort,
-        McpClients: s.McpClients);
+        McpClients: s.McpClients,
+        ActionsServerEnabled: s.ActionsServerEnabled,
+        ActionsServerPort: s.ActionsServerPort,
+        RefreshFromDiskHotkey: s.RefreshFromDiskHotkey);
 }

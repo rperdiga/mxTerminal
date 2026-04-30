@@ -34,7 +34,8 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
             manager: manager,
             getCurrentApp: () => CurrentApp,
             webIndexUri: indexUri,
-            log: log);
+            log: log,
+            getApplicationRootUrl: () => null);   // wired up in Task 13
     }
 
     private void EnsureLogger()

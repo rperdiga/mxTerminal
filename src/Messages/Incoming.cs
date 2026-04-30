@@ -23,4 +23,7 @@ public sealed record SaveSettingsPayload(
     string? Theme = null,
     bool? McpEnabled = null,
     int? McpPort = null,
-    string[]? McpClients = null);
+    string[]? McpClients = null,
+    bool? ActionsServerEnabled = null,
+    int? ActionsServerPort = null,
+    string? RefreshFromDiskHotkey = null);

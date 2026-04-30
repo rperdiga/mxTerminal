@@ -30,7 +30,10 @@ public sealed record SettingsPayload(
     IReadOnlyList<ShellOptionPayload> AvailableShells,
     bool McpEnabled,
     int McpPort,
-    string[] McpClients);
+    string[] McpClients,
+    bool ActionsServerEnabled,
+    int ActionsServerPort,
+    string RefreshFromDiskHotkey);
 
 /// <summary>
 /// Sent on save when MCP-related work succeeded or failed. The JS side
