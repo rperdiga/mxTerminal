@@ -83,7 +83,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 var model = CurrentApp;
                 if (model is null) return null;
                 try { return localRunConfigs.GetActiveConfiguration(model)?.ApplicationRootUrl; }
-                catch { return null; }
+                catch (Exception ex) { log?.Warn($"GetActiveConfiguration threw: {ex.Message}"); return null; }
             });
             var actions = new StudioProActions(probe, ui);
             manager.StartActionServer(settings.ActionsServerPort, actions, log);

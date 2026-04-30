@@ -208,7 +208,7 @@ export class SettingsModal {
       mcpPort: parseInt(this.inpMcpPort.value, 10) || 7782,
       mcpClients,
       actionsServerEnabled: this.chkActions.checked,
-      actionsServerPort: parseInt(this.inpActionsPort.value, 10),
+      actionsServerPort: parseInt(this.inpActionsPort.value, 10) || 7783,
       refreshFromDiskHotkey: this.inpRefreshHotkey.value,
     });
 
