@@ -43,20 +43,33 @@ export class XtermTab {
     this.term.loadAddon(new WebLinksAddon());
     this.term.open(this.host);
 
-    // Capture-phase paste interceptor. Runs BEFORE xterm's own paste handler
-    // and BEFORE the textarea's default paste-into-element behaviour. Without
-    // this, WebView2's default insertion fires the textarea's `input` event
-    // AFTER xterm's paste handler already delivered the clipboard text, and
-    // xterm processes the input event as a SECOND data submission — doubling
-    // the paste. We preventDefault + stopImmediatePropagation, then call
-    // term.paste() ourselves so onData fires exactly once.
-    this.host.addEventListener("paste", (ev: ClipboardEvent) => {
-      ev.preventDefault();
-      ev.stopImmediatePropagation();
-      const text = ev.clipboardData?.getData("text/plain") ?? "";
-      console.log("[terminal] paste intercepted, len=", text.length);
-      if (text) this.term.paste(text);
-    }, /* capture */ true);
+    // Paste interceptor — attached DIRECTLY to xterm's helper textarea
+    // (where paste events originate, since the textarea has focus). Capture
+    // phase + stopImmediatePropagation prevents xterm's own paste handler
+    // from running, AND preventDefault prevents the browser from inserting
+    // the text into the textarea (which would fire an `input` event that
+    // xterm processes as a second data submission). The result: exactly
+    // one path from clipboard → term.paste → onData → C#.
+    const installPasteHandler = () => {
+      const ta = this.host.querySelector(".xterm-helper-textarea") as HTMLTextAreaElement | null;
+      if (!ta) {
+        console.warn("[terminal] xterm-helper-textarea not found; falling back to host listener");
+        return false;
+      }
+      ta.addEventListener("paste", (ev: ClipboardEvent) => {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        const text = ev.clipboardData?.getData("text/plain") ?? "";
+        console.log("[terminal] paste intercepted on textarea, len=", text.length);
+        if (text) this.term.paste(text);
+      }, /* capture */ true);
+      console.log("[terminal] paste handler attached to xterm-helper-textarea");
+      return true;
+    };
+    if (!installPasteHandler()) {
+      // Helper textarea not yet rendered — try again next tick.
+      requestAnimationFrame(() => installPasteHandler());
+    }
 
     // Standard terminal-app keybindings:
     //   Ctrl+C → copy if text is selected; otherwise fall through (SIGINT)

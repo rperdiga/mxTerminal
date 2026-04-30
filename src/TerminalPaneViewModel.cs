@@ -43,6 +43,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         // Allow right-click → Inspect inside the WebView for diagnostics.
         try { ((dynamic)webView).AllowedDevTools = true; } catch { /* best-effort */ }
         try { ((dynamic)webView).AllowReload    = true; } catch { /* best-effort */ }
+        log.Info($"InitWebView build=v0.1.1+paste-fix at {webIndexUri}");
 
         outputHandler = (tabId, bytes) => Post("output", new OutputPayload(tabId, Convert.ToBase64String(bytes)));
         exitedHandler = (tabId, code) => Post("exit", new ExitPayload(tabId, code));
