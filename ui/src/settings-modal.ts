@@ -38,6 +38,9 @@ export class SettingsModal {
   private chkMcpCopilot = document.getElementById("set-mcp-copilot") as HTMLInputElement;
   private chkMcpCodex = document.getElementById("set-mcp-codex") as HTMLInputElement;
   private banner = document.getElementById("banner") as HTMLDivElement;
+  private bannerIcon = document.getElementById("banner-icon") as HTMLSpanElement;
+  private bannerMessage = document.getElementById("banner-message") as HTMLSpanElement;
+  private bannerClose = document.getElementById("banner-close") as HTMLSpanElement;
   private bannerTimer: number | undefined;
 
   private knownShells: ShellOption[] = [];
