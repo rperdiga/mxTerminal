@@ -27,6 +27,16 @@ public sealed record SettingsPayload(
     int RingBufferKB,
     int XtermScrollbackLines,
     string Theme,
-    IReadOnlyList<ShellOptionPayload> AvailableShells);
+    IReadOnlyList<ShellOptionPayload> AvailableShells,
+    bool McpEnabled,
+    int McpPort,
+    string[] McpClients);
+
+/// <summary>
+/// Sent on save when MCP-related work succeeded or failed. The JS side
+/// shows a banner. If <see cref="Ok"/> is false, the saveSettings call
+/// did NOT persist (so the toggle stays in its previous state).
+/// </summary>
+public sealed record McpResultPayload(bool Ok, string Message, string[] Touched);
 
 public sealed record ErrorPayload(string Message, string? Context = null);

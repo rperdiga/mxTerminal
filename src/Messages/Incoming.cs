@@ -20,4 +20,7 @@ public sealed record SaveSettingsPayload(
     string[] Args,
     int? RingBufferKB = null,
     int? XtermScrollbackLines = null,
-    string? Theme = null);
+    string? Theme = null,
+    bool? McpEnabled = null,
+    int? McpPort = null,
+    string[]? McpClients = null);

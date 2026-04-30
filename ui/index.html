@@ -52,15 +52,26 @@
     .terminal-host.active { display: block; }
     #settings-modal { position: fixed; inset: 0; background: var(--overlay); display: none; align-items: center; justify-content: center; z-index: 100; }
     #settings-modal.visible { display: flex; }
-    .modal { background: var(--modal-bg); padding: 24px; border-radius: 6px; min-width: 420px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); }
+    .modal { background: var(--modal-bg); padding: 24px; border-radius: 6px; min-width: 460px; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.4); }
     .modal h3 { margin: 0 0 16px; color: var(--fg); }
+    .modal h4 { margin: 18px 0 10px; color: var(--fg); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.75; border-top: 1px solid var(--border); padding-top: 14px; }
     .field { margin-bottom: 12px; }
     .field label { display: block; font-size: 11px; color: var(--fg-muted); margin-bottom: 4px; }
     .field input, .field select { width: 100%; padding: 6px 8px; background: var(--input-bg); color: var(--fg); border: 1px solid var(--border); border-radius: 3px; box-sizing: border-box; font-family: inherit; font-size: 13px; }
     .field-hidden { display: none; }
+    .checkbox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; color: var(--fg); }
+    .checkbox-row input[type=checkbox] { width: auto; margin: 0; }
+    .checkbox-row.indent { padding-left: 20px; }
     .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
     .actions button { padding: 6px 14px; background: var(--accent); color: var(--button-fg); border: none; border-radius: 3px; cursor: pointer; font-size: 13px; }
     .actions button.secondary { background: var(--button-second); color: var(--fg); }
+    /* Banner shown after a save touches MCP — auto-hides after a few seconds. */
+    #banner { position: absolute; top: 32px; left: 12px; right: 12px; padding: 8px 12px; border-radius: 4px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); z-index: 50; display: none; }
+    #banner.visible { display: block; }
+    #banner.ok { background: #2d4f2d; color: #d4f4d4; border-left: 3px solid #5cb85c; }
+    #banner.err { background: #5a2d2d; color: #f4d4d4; border-left: 3px solid #d9534f; }
+    body.theme-light #banner.ok { background: #e6f4ea; color: #1f5d2a; }
+    body.theme-light #banner.err { background: #fbeaea; color: #842029; }
   </style>
 </head>
 <body class="theme-dark">
@@ -73,6 +84,7 @@
     </div>
     <div id="terminals"></div>
   </div>
+  <div id="banner"></div>
   <div id="settings-modal">
     <div class="modal">
       <h3>Terminal settings</h3>
@@ -94,6 +106,17 @@
       </div>
       <div class="field"><label>Ring buffer (KB)</label><input id="set-ring" type="number" min="64"></div>
       <div class="field"><label>xterm scrollback (lines)</label><input id="set-scroll" type="number" min="100"></div>
+
+      <h4>MCP Server</h4>
+      <div class="checkbox-row">
+        <input id="set-mcp-enabled" type="checkbox">
+        <label for="set-mcp-enabled" style="margin:0">Enable Studio Pro MCP server integration</label>
+      </div>
+      <div class="field"><label>Port</label><input id="set-mcp-port" type="number" min="1" max="65535" value="7782"></div>
+      <div class="checkbox-row indent"><input id="set-mcp-claude" type="checkbox"><label for="set-mcp-claude" style="margin:0">Claude Code (writes <code>.mcp.json</code>)</label></div>
+      <div class="checkbox-row indent"><input id="set-mcp-copilot" type="checkbox"><label for="set-mcp-copilot" style="margin:0">GitHub Copilot CLI (shares <code>.mcp.json</code>)</label></div>
+      <div class="checkbox-row indent"><input id="set-mcp-codex" type="checkbox"><label for="set-mcp-codex" style="margin:0">Codex (writes <code>~/.codex/config.toml</code> via <code>mcp-remote</code>)</label></div>
+
       <div class="actions">
         <button class="secondary" id="set-cancel">Cancel</button>
         <button id="set-save">Save</button>

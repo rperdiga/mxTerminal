@@ -7,14 +7,20 @@ public sealed record TerminalSettings(
     string[] Args,
     int RingBufferKB,
     int XtermScrollbackLines,
-    string Theme)
+    string Theme,
+    bool McpEnabled,
+    int McpPort,
+    string[] McpClients)
 {
     public static TerminalSettings Defaults() => new(
         ShellPath: "powershell.exe",
         Args: Array.Empty<string>(),
         RingBufferKB: 4096,
         XtermScrollbackLines: 10000,
-        Theme: "dark");
+        Theme: "dark",
+        McpEnabled: false,
+        McpPort: 7782,
+        McpClients: Array.Empty<string>());
 
     private const string FileName = "terminal-settings.json";
     private const string SubDir = "resources";
@@ -42,7 +48,10 @@ public sealed record TerminalSettings(
                 Args: dto.Args ?? def.Args,
                 RingBufferKB: dto.RingBufferKB ?? def.RingBufferKB,
                 XtermScrollbackLines: dto.XtermScrollbackLines ?? def.XtermScrollbackLines,
-                Theme: dto.Theme ?? def.Theme);
+                Theme: dto.Theme ?? def.Theme,
+                McpEnabled: dto.McpEnabled ?? def.McpEnabled,
+                McpPort: dto.McpPort ?? def.McpPort,
+                McpClients: dto.McpClients ?? def.McpClients);
         }
         catch (JsonException)
         {
@@ -55,7 +64,7 @@ public sealed record TerminalSettings(
         var dir = System.IO.Path.Combine(projectDir, SubDir);
         Directory.CreateDirectory(dir);
         var path = System.IO.Path.Combine(dir, FileName);
-        var dto = new Dto(ShellPath, Args, RingBufferKB, XtermScrollbackLines, Theme);
+        var dto = new Dto(ShellPath, Args, RingBufferKB, XtermScrollbackLines, Theme, McpEnabled, McpPort, McpClients);
         File.WriteAllText(path, JsonSerializer.Serialize(dto, Json));
     }
 
@@ -64,5 +73,8 @@ public sealed record TerminalSettings(
         string[]? Args,
         int? RingBufferKB,
         int? XtermScrollbackLines,
-        string? Theme);
+        string? Theme,
+        bool? McpEnabled,
+        int? McpPort,
+        string[]? McpClients);
 }

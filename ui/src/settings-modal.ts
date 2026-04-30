@@ -10,6 +10,15 @@ interface SettingsPayload {
   xtermScrollbackLines: number;
   theme: string;
   availableShells: ShellOption[];
+  mcpEnabled: boolean;
+  mcpPort: number;
+  mcpClients: string[];
+}
+
+interface McpResult {
+  ok: boolean;
+  message: string;
+  touched: string[];
 }
 
 const CUSTOM_VALUE = "__custom__";
@@ -23,6 +32,13 @@ export class SettingsModal {
   private selTheme = document.getElementById("set-theme") as HTMLSelectElement;
   private inpRing = document.getElementById("set-ring") as HTMLInputElement;
   private inpScroll = document.getElementById("set-scroll") as HTMLInputElement;
+  private chkMcp = document.getElementById("set-mcp-enabled") as HTMLInputElement;
+  private inpMcpPort = document.getElementById("set-mcp-port") as HTMLInputElement;
+  private chkMcpClaude = document.getElementById("set-mcp-claude") as HTMLInputElement;
+  private chkMcpCopilot = document.getElementById("set-mcp-copilot") as HTMLInputElement;
+  private chkMcpCodex = document.getElementById("set-mcp-codex") as HTMLInputElement;
+  private banner = document.getElementById("banner") as HTMLDivElement;
+  private bannerTimer: number | undefined;
 
   private knownShells: ShellOption[] = [];
 
@@ -38,6 +54,16 @@ export class SettingsModal {
     this.selShell.addEventListener("change", () => this.onShellSelectChange());
 
     bridge.on("settings", (d: SettingsPayload) => this.populate(d));
+    bridge.on("mcpResult", (d: McpResult) => this.showBanner(d.ok ? "ok" : "err", d.message));
+  }
+
+  private showBanner(kind: "ok" | "err", message: string) {
+    this.banner.textContent = message;
+    this.banner.className = `visible ${kind}`;
+    if (this.bannerTimer !== undefined) window.clearTimeout(this.bannerTimer);
+    this.bannerTimer = window.setTimeout(() => {
+      this.banner.classList.remove("visible");
+    }, kind === "ok" ? 5000 : 9000);
   }
 
   open() {
@@ -61,6 +87,14 @@ export class SettingsModal {
     applyBodyTheme(theme);
     this.onThemeChanged(theme);
     this.onScrollbackChanged(d.xtermScrollbackLines);
+
+    // MCP fields
+    this.chkMcp.checked = !!d.mcpEnabled;
+    this.inpMcpPort.value = String(d.mcpPort ?? 7782);
+    const clients = new Set((d.mcpClients ?? []).map(c => c.toLowerCase()));
+    this.chkMcpClaude.checked  = clients.has("claude");
+    this.chkMcpCopilot.checked = clients.has("copilot");
+    this.chkMcpCodex.checked   = clients.has("codex");
   }
 
   private rebuildShellSelect(currentPath: string) {
@@ -105,12 +139,20 @@ export class SettingsModal {
       ? (this.inpShell.value.trim() || "powershell.exe")
       : this.selShell.value;
 
+    const mcpClients: string[] = [];
+    if (this.chkMcpClaude.checked)  mcpClients.push("claude");
+    if (this.chkMcpCopilot.checked) mcpClients.push("copilot");
+    if (this.chkMcpCodex.checked)   mcpClients.push("codex");
+
     this.bridge.send("saveSettings", {
       shellPath,
       args: args ? args.split(/\s+/) : [],
       ringBufferKB: parseInt(this.inpRing.value, 10) || 4096,
       xtermScrollbackLines: parseInt(this.inpScroll.value, 10) || 10000,
       theme,
+      mcpEnabled: this.chkMcp.checked,
+      mcpPort: parseInt(this.inpMcpPort.value, 10) || 7782,
+      mcpClients,
     });
 
     applyBodyTheme(theme);

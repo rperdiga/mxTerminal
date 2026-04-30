@@ -25,12 +25,16 @@ public class TerminalSettingsTests : IDisposable
         settings.RingBufferKB.Should().Be(4096);
         settings.XtermScrollbackLines.Should().Be(10000);
         settings.Theme.Should().Be("dark");
+        settings.McpEnabled.Should().BeFalse();
+        settings.McpPort.Should().Be(7782);
+        settings.McpClients.Should().BeEmpty();
     }
 
     [Fact]
     public void Save_ThenLoad_PreservesAllFields()
     {
-        var original = new TerminalSettings("bash.exe", new[] { "--login" }, 8192, 20000, "light");
+        var original = new TerminalSettings("bash.exe", new[] { "--login" }, 8192, 20000, "light",
+            McpEnabled: true, McpPort: 7782, McpClients: new[] { "claude", "codex" });
         original.Save(tmpDir);
 
         var loaded = TerminalSettings.Load(tmpDir);
@@ -76,7 +80,8 @@ public class TerminalSettingsTests : IDisposable
     [Fact]
     public void Save_CreatesResourcesDirIfMissing()
     {
-        var settings = new TerminalSettings("powershell.exe", Array.Empty<string>(), 4096, 10000, "dark");
+        var settings = new TerminalSettings("powershell.exe", Array.Empty<string>(), 4096, 10000, "dark",
+            McpEnabled: false, McpPort: 7782, McpClients: Array.Empty<string>());
         settings.Save(tmpDir);
         File.Exists(Path.Combine(tmpDir, "resources", "terminal-settings.json")).Should().BeTrue();
     }

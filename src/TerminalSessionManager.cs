@@ -29,7 +29,7 @@ public sealed class TerminalSessionManager : IDisposable
         var env = BuildEnvironment();
         var pty = await factory.SpawnAsync(shellPath, args, cwd, cols, rows, env, ct);
         var tabId = Guid.NewGuid().ToString("N");
-        var state = new SessionState(tabId, shellPath, cwd, pty, new RingBuffer(ringBufferBytes));
+        var state = new SessionState(tabId, shellPath, args, cwd, cols, rows, pty, new RingBuffer(ringBufferBytes));
         state.AttachTimer(_ => FlushPending(state));
         pty.Exited += (_, code) => OnPtyExited(tabId, code);
 
@@ -59,7 +59,10 @@ public sealed class TerminalSessionManager : IDisposable
     public void Resize(string tabId, int cols, int rows)
     {
         if (sessions.TryGetValue(tabId, out var s))
+        {
+            s.Cols = cols; s.Rows = rows;
             try { s.Pty.Resize(cols, rows); } catch { }
+        }
     }
 
     public void Close(string tabId)
@@ -75,6 +78,32 @@ public sealed class TerminalSessionManager : IDisposable
     {
         foreach (var key in sessions.Keys.ToList())
             Close(key);
+    }
+
+    public sealed record RecycledSession(string OldTabId, string NewTabId, string Title, string ShellPath, string Cwd);
+
+    /// <summary>
+    /// Closes every active session and respawns it with the same shell/args/cwd
+    /// and the most recently observed cols/rows. Returns one row per session
+    /// describing the old → new tab id mapping so callers can update UIs.
+    /// </summary>
+    public async Task<IReadOnlyList<RecycledSession>> RecycleAllAsync(CancellationToken ct = default)
+    {
+        if (disposed) throw new ObjectDisposedException(nameof(TerminalSessionManager));
+
+        // Snapshot before we start mutating the dictionary.
+        var snapshots = sessions.Values
+            .Select(s => (s.TabId, s.ShellPath, Args: s.Args.ToArray(), s.Cwd, s.Cols, s.Rows))
+            .ToList();
+
+        var recycled = new List<RecycledSession>();
+        foreach (var snap in snapshots)
+        {
+            Close(snap.TabId);
+            var newId = await CreateSessionAsync(snap.ShellPath, snap.Args, snap.Cwd, snap.Cols, snap.Rows, ct);
+            recycled.Add(new RecycledSession(snap.TabId, newId, TitleFor(snap.ShellPath), snap.ShellPath, snap.Cwd));
+        }
+        return recycled;
     }
 
     public void Dispose()
@@ -176,7 +205,10 @@ public sealed class TerminalSessionManager : IDisposable
     {
         public string TabId { get; }
         public string ShellPath { get; }
+        public string[] Args { get; }
         public string Cwd { get; }
+        public int Cols { get; set; }
+        public int Rows { get; set; }
         public IPtySession Pty { get; }
         public RingBuffer Ring { get; }
         public List<byte[]> Pending { get; } = new();
@@ -185,9 +217,10 @@ public sealed class TerminalSessionManager : IDisposable
         public CancellationTokenSource Cts { get; } = new();
         public object Gate { get; } = new();
 
-        public SessionState(string tabId, string shellPath, string cwd, IPtySession pty, RingBuffer ring)
+        public SessionState(string tabId, string shellPath, string[] args, string cwd, int cols, int rows, IPtySession pty, RingBuffer ring)
         {
-            TabId = tabId; ShellPath = shellPath; Cwd = cwd; Pty = pty; Ring = ring;
+            TabId = tabId; ShellPath = shellPath; Args = args; Cwd = cwd;
+            Cols = cols; Rows = rows; Pty = pty; Ring = ring;
         }
 
         public void AttachTimer(TimerCallback cb) => Timer = new Timer(cb);
