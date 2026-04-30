@@ -60,6 +60,26 @@ export class TabManager {
 
   setScrollbackLines(n: number) { this.scrollbackLines = n; }
 
+  /**
+   * Mendix's WebView postMessage has a per-message size limit (≈ 1 MB in
+   * practice). A single Ctrl+V of a long string was arriving truncated on
+   * the C# side. Split the bytes into 16 KB chunks and send each as its own
+   * "input" message — C# processes them in arrival order so the PTY sees
+   * the original byte stream intact.
+   */
+  private static readonly INPUT_CHUNK_BYTES = 16 * 1024;
+
+  private sendInputChunked(tabId: string, bytes: Uint8Array) {
+    if (bytes.length <= TabManager.INPUT_CHUNK_BYTES) {
+      this.bridge.send("input", { tabId, dataB64: encodeBase64(bytes) });
+      return;
+    }
+    for (let off = 0; off < bytes.length; off += TabManager.INPUT_CHUNK_BYTES) {
+      const end = Math.min(off + TabManager.INPUT_CHUNK_BYTES, bytes.length);
+      this.bridge.send("input", { tabId, dataB64: encodeBase64(bytes.subarray(off, end)) });
+    }
+  }
+
   setTheme(theme: ThemeName): void {
     this.theme = theme;
     // Live-update existing xterm instances.
@@ -89,7 +109,7 @@ export class TabManager {
     const xterm = new XtermTab({
       scrollbackLines: this.scrollbackLines,
       theme: this.theme,
-      onInput: bytes => this.bridge.send("input", { tabId, dataB64: encodeBase64(bytes) }),
+      onInput: bytes => this.sendInputChunked(tabId, bytes),
       onResize: (cols, rows) => this.bridge.send("resize", { tabId, cols, rows }),
     });
     this.terminalsContainer.appendChild(xterm.host);
