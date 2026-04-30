@@ -56,6 +56,7 @@ export class SettingsModal {
 
     this.selShell.addEventListener("change", () => this.onShellSelectChange());
     this.chkMcp.addEventListener("change", () => this.onMcpEnabledChange());
+    this.bannerClose.addEventListener("click", () => this.hideBanner());
 
     bridge.on("settings", (d: SettingsPayload) => this.populate(d));
     bridge.on("mcpResult", (d: McpResult) => this.showBanner(d.ok ? "ok" : "err", d.message));
@@ -78,12 +79,22 @@ export class SettingsModal {
   }
 
   private showBanner(kind: "ok" | "err", message: string) {
-    this.banner.textContent = message;
+    this.bannerIcon.textContent = kind === "ok" ? "✓" : "!";
+    this.bannerMessage.textContent = message;
     this.banner.className = `visible ${kind}`;
     if (this.bannerTimer !== undefined) window.clearTimeout(this.bannerTimer);
-    this.bannerTimer = window.setTimeout(() => {
-      this.banner.classList.remove("visible");
-    }, kind === "ok" ? 5000 : 9000);
+    this.bannerTimer = window.setTimeout(
+      () => this.hideBanner(),
+      kind === "ok" ? 6000 : 12000,
+    );
+  }
+
+  private hideBanner() {
+    this.banner.classList.remove("visible");
+    if (this.bannerTimer !== undefined) {
+      window.clearTimeout(this.bannerTimer);
+      this.bannerTimer = undefined;
+    }
   }
 
   open() {
