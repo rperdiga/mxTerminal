@@ -58,11 +58,11 @@ export class XtermTab {
       ev.preventDefault();
       ev.stopImmediatePropagation();
       const text = ev.clipboardData?.getData("text/plain") ?? "";
-      console.log("[terminal] paste intercepted, len=", text.length, "target=", (ev.target as Element)?.tagName);
+      console.warn("[terminal] paste intercepted, len=", text.length, "target=", (ev.target as Element)?.tagName);
       if (text) this.term.paste(text);
     };
     document.addEventListener("paste", this.docPasteHandler, /* capture */ true);
-    console.log("[terminal] paste handler attached at document level");
+    console.warn("[terminal] paste handler attached at document level");
 
     // Standard terminal-app keybindings:
     //   Ctrl+C → copy if text is selected; otherwise fall through (SIGINT)
@@ -100,7 +100,7 @@ export class XtermTab {
     this.term.onData(s => {
       const bytes = enc.encode(s);
       // DIAGNOSTIC — remove once paste duplication is resolved.
-      console.log("[terminal] onData len=", bytes.length, "preview=", s.length > 32 ? s.slice(0, 32) + "..." + s.length : s);
+      console.warn("[terminal] onData len=", bytes.length, "preview=", s.length > 32 ? s.slice(0, 32) + "..." + s.length : s);
       opts.onInput(bytes);
     });
     this.term.onResize(({ cols, rows }) => opts.onResize(cols, rows));
