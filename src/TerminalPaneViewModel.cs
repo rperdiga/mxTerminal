@@ -139,7 +139,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             // If MCP is being enabled, probe it first. Refuse to save broken config.
             if (newEnabled)
             {
-                var probe = await McpProbe.ProbeAsync(newPort);
+                var probe = await McpProbe.ProbeAsync(newPort, log);
                 if (!probe.Ok)
                 {
                     Post("mcpResult", new McpResultPayload(false,
