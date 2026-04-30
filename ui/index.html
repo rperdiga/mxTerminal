@@ -157,6 +157,14 @@
       <div class="checkbox-row indent"><input id="set-mcp-copilot" type="checkbox"><label for="set-mcp-copilot" style="margin:0">GitHub Copilot CLI (shares <code>.mcp.json</code>)</label></div>
       <div class="checkbox-row indent"><input id="set-mcp-codex" type="checkbox"><label for="set-mcp-codex" style="margin:0">Codex (writes <code>~/.codex/config.toml</code> via <code>mcp-remote</code>)</label></div>
 
+      <h4>MCP Actions Server</h4>
+      <div class="checkbox-row">
+        <input id="set-actions-enabled" type="checkbox">
+        <label for="set-actions-enabled" style="margin:0">Enable Studio Pro action tools (run_app / stop_app / refresh_project) for the CLIs above</label>
+      </div>
+      <div class="field"><label>Port</label><input id="set-actions-port" type="number" min="1" max="65535" value="7783"></div>
+      <div class="field"><label>Refresh-from-disk hotkey</label><input id="set-refresh-hotkey" type="text" value="F4" placeholder="e.g. F4 or Ctrl+F5"></div>
+
       <div class="actions">
         <button class="secondary" id="set-cancel">Cancel</button>
         <button id="set-save">Save</button>

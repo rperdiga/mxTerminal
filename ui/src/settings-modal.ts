@@ -13,6 +13,9 @@ interface SettingsPayload {
   mcpEnabled: boolean;
   mcpPort: number;
   mcpClients: string[];
+  actionsServerEnabled: boolean;
+  actionsServerPort: number;
+  refreshFromDiskHotkey: string;
 }
 
 interface McpResult {
@@ -37,6 +40,9 @@ export class SettingsModal {
   private chkMcpClaude = document.getElementById("set-mcp-claude") as HTMLInputElement;
   private chkMcpCopilot = document.getElementById("set-mcp-copilot") as HTMLInputElement;
   private chkMcpCodex = document.getElementById("set-mcp-codex") as HTMLInputElement;
+  private chkActions = document.getElementById("set-actions-enabled") as HTMLInputElement;
+  private inpActionsPort = document.getElementById("set-actions-port") as HTMLInputElement;
+  private inpRefreshHotkey = document.getElementById("set-refresh-hotkey") as HTMLInputElement;
   private banner = document.getElementById("banner") as HTMLDivElement;
   private bannerIcon = document.getElementById("banner-icon") as HTMLSpanElement;
   private bannerMessage = document.getElementById("banner-message") as HTMLSpanElement;
@@ -56,6 +62,7 @@ export class SettingsModal {
 
     this.selShell.addEventListener("change", () => this.onShellSelectChange());
     this.chkMcp.addEventListener("change", () => this.onMcpEnabledChange());
+    this.chkActions.addEventListener("change", () => this.onActionsEnabledChange());
     this.bannerClose.addEventListener("click", () => this.hideBanner());
 
     bridge.on("settings", (d: SettingsPayload) => this.populate(d));
@@ -71,11 +78,19 @@ export class SettingsModal {
       this.chkMcpClaude.checked = false;
       this.chkMcpCopilot.checked = false;
       this.chkMcpCodex.checked = false;
+      this.chkActions.checked = false;        // actions can't run without primary MCP wiring
     }
     this.chkMcpClaude.disabled = !enabled;
     this.chkMcpCopilot.disabled = !enabled;
     this.chkMcpCodex.disabled = !enabled;
     this.inpMcpPort.disabled = !enabled;
+    this.chkActions.disabled = !enabled;
+    this.onActionsEnabledChange();
+  }
+
+  private onActionsEnabledChange() {
+    const on = this.chkMcp.checked && this.chkActions.checked;
+    this.inpActionsPort.disabled = !on;
   }
 
   private showBanner(kind: "ok" | "err", message: string) {
@@ -128,6 +143,12 @@ export class SettingsModal {
     this.chkMcpCodex.checked   = clients.has("codex");
     // Apply enabled/disabled to children based on master state.
     this.onMcpEnabledChange();
+
+    // Actions server fields
+    this.chkActions.checked = d.actionsServerEnabled;
+    this.inpActionsPort.value = String(d.actionsServerPort);
+    this.inpRefreshHotkey.value = d.refreshFromDiskHotkey;
+    this.onMcpEnabledChange();   // also flips actions enabled state
   }
 
   private rebuildShellSelect(currentPath: string) {
@@ -186,6 +207,9 @@ export class SettingsModal {
       mcpEnabled: this.chkMcp.checked,
       mcpPort: parseInt(this.inpMcpPort.value, 10) || 7782,
       mcpClients,
+      actionsServerEnabled: this.chkActions.checked,
+      actionsServerPort: parseInt(this.inpActionsPort.value, 10),
+      refreshFromDiskHotkey: this.inpRefreshHotkey.value,
     });
 
     applyBodyTheme(theme);
