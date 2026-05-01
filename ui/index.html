@@ -618,6 +618,43 @@
     }
     .banner-close:hover { background: var(--surface-2); color: var(--text-primary); }
     .banner-close svg { width: 12px; height: 12px; display: block; }
+
+    /* ============================================================
+       Status pills (Slice 4): subtle integration health indicators
+       wedged between the new-tab button and the cog. Show whether
+       Studio Pro MCP / UI Action Bridge are wired so the user can
+       see at a glance — instead of opening Settings to check.
+       ============================================================ */
+    #status-pills {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px;
+      flex-shrink: 0;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font: var(--fw-medium) var(--fs-xs)/1.2 var(--font-chrome);
+      border: 1px solid;
+      cursor: default;
+      user-select: none;
+      transition: background var(--motion-fast), color var(--motion-fast);
+    }
+    .pill .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .pill.on  { color: var(--success); border-color: color-mix(in srgb, var(--success) 35%, transparent); background: color-mix(in srgb, var(--success) 10%, transparent); }
+    .pill.on .dot  { background: var(--success); }
+    .pill.off { color: var(--text-muted); border-color: var(--border-default); background: transparent; }
+    .pill.off .dot { background: var(--text-disabled); }
+    .pill .tools { color: var(--text-muted); font-weight: var(--fw-regular); }
+    .pill.on .tools { color: color-mix(in srgb, var(--success) 70%, var(--text-body)); }
   </style>
 </head>
 <body>
@@ -626,6 +663,14 @@
       <div id="tabs"></div>
       <div class="tab-action" id="btn-new" role="button" tabindex="0" title="New tab" aria-label="New tab"></div>
       <div style="flex:1"></div>
+      <div id="status-pills">
+        <span class="pill off" id="pill-mcp" title="Studio Pro MCP — open Settings to enable">
+          <span class="dot"></span><span class="label">MCP</span><span class="tools" id="pill-mcp-tools"></span>
+        </span>
+        <span class="pill off" id="pill-actions" title="UI Action Bridge — open Settings to enable">
+          <span class="dot"></span><span class="label">Action bridge</span><span class="tools" id="pill-actions-tools"></span>
+        </span>
+      </div>
       <div class="tab-action tab-settings" id="btn-settings" role="button" tabindex="0" title="Settings" aria-label="Settings"></div>
     </div>
     <div id="terminals"></div>

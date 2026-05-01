@@ -12,6 +12,31 @@ const SECTIONS = [
 ] as const;
 type SectionName = (typeof SECTIONS)[number];
 
+/** Set the on/off state and label suffix on a status pill in the tab strip.
+ *  Lives at module scope so the renderer doesn't need a class instance. */
+function setPill(
+  pillId: string,
+  enabled: boolean,
+  port: number,
+  shortLabel: string,
+  longLabel: string,
+): void {
+  const pill = document.getElementById(pillId);
+  if (!pill) return;
+  pill.classList.toggle("on", enabled);
+  pill.classList.toggle("off", !enabled);
+  pill.setAttribute(
+    "title",
+    enabled
+      ? `${longLabel} — listening on :${port}`
+      : `${longLabel} — open Settings to enable`,
+  );
+  const tools = pill.querySelector(".tools");
+  if (tools) tools.textContent = enabled ? `:${port}` : "";
+  const label = pill.querySelector(".label");
+  if (label) label.textContent = shortLabel;
+}
+
 interface ShellOption {
   name: string;
   path: string;
@@ -271,6 +296,22 @@ export class SettingsModal {
 
     // About section
     this.populateAbout(d.about);
+
+    // Status pills in the tab strip — reflect the just-loaded settings.
+    this.updatePills(d);
+  }
+
+  /** Refresh the two status pills. Live tool-count probe is fire-and-forget;
+   *  pill renders the on/off state immediately, then updates when probe lands. */
+  private updatePills(d: SettingsPayload): void {
+    setPill("pill-mcp", d.mcpEnabled, d.mcpPort, "MCP", "Studio Pro MCP");
+    setPill(
+      "pill-actions",
+      d.actionsServerEnabled,
+      d.actionsServerPort,
+      "Action bridge",
+      "UI Action Bridge",
+    );
   }
 
   private populateAbout(a: AboutInfo | undefined): void {
