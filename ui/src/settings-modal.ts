@@ -168,7 +168,7 @@ export class SettingsModal {
 
     this.mountNavIcons();
     this.wireNavRail();
-    this.mountAboutLogo();
+    this.mountRailLogo();
     this.activateSection("general");
 
     bridge.on("settings", (d: SettingsPayload) => this.populate(d));
@@ -186,11 +186,10 @@ export class SettingsModal {
     });
   }
 
-  /** Mount the OneSource logo into the About-section footer. Hover-to-spin.
-   *  Studio Pro convention is to keep brand marks out of nav chrome and
-   *  inside content panels — About is the appropriate context. */
-  private mountAboutLogo(): void {
-    const host = document.getElementById("about-logo");
+  /** Mount the OneSource logo into the nav rail above the About item.
+   *  Always visible while the modal is open. Hover-to-spin behavior. */
+  private mountRailLogo(): void {
+    const host = document.getElementById("rail-logo");
     if (host && host.childElementCount === 0) mountLogo(host, 0, true);
   }
 

@@ -474,8 +474,24 @@
     }
     .os-logo:hover svg { transform: rotate(360deg); }
 
-    /* (Rail logo slot removed — Studio Pro doesn't put brand marks in nav
-       chrome. Logo lives in the About content area now via .about-logo-footer.) */
+    /* Rail logo slot — sits above the About item in the left navigation.
+       Per owner direction (overriding the design-reviewer's "logos don't
+       go in nav chrome" guidance): always visible while the modal is open,
+       sized for real presence (~65% of rail width), hover-to-spin only. */
+    .rail-logo-slot {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 0 16px;
+      cursor: default;
+    }
+    .rail-logo-slot .os-logo {
+      width: 110px;
+      height: 110px;
+      opacity: 0.92;
+      transition: opacity var(--motion);
+    }
+    .rail-logo-slot:hover .os-logo { opacity: 1; }
 
     /* About-section ASCII art for the product name. Renders in the
        terminal monospace — meta nod to the host context. Painted in
@@ -733,14 +749,11 @@
        Studio Pro MCP / UI Action Bridge are wired so the user can
        see at a glance — instead of opening Settings to check.
        ============================================================ */
-    #pane-status-bar {
+    #status-pills {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       padding: 0 10px;
-      min-height: 24px;
-      background: var(--surface-1);
-      border-top: 1px solid var(--border-subtle);
       flex-shrink: 0;
     }
     .pill {
@@ -780,17 +793,14 @@
       <div id="tabs"></div>
       <div class="tab-action" id="btn-new" role="button" tabindex="0" title="New tab" aria-label="New tab"></div>
       <div style="flex:1"></div>
+      <div id="status-pills">
+        <span class="pill off" id="pill-actions" title="UI Action Bridge — open Settings to enable">
+          <span class="dot"></span><span class="label">Action bridge</span><span class="tools" id="pill-actions-tools"></span>
+        </span>
+      </div>
       <div class="tab-action tab-settings" id="btn-settings" role="button" tabindex="0" title="Settings" aria-label="Settings"></div>
     </div>
     <div id="terminals"></div>
-    <!-- Pane bottom status bar (Studio Pro convention: integration state lives
-         at the bottom, not in the navigation chrome). Hosts the Action bridge
-         pill + room for future status indicators. -->
-    <div id="pane-status-bar">
-      <span class="pill off" id="pill-actions" title="UI Action Bridge — open Settings to enable">
-        <span class="dot"></span><span class="label">Action bridge</span><span class="tools" id="pill-actions-tools"></span>
-      </span>
-    </div>
   </div>
 
   <div id="banner">
@@ -802,7 +812,7 @@
   <div id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
     <div class="modal">
       <div class="modal-header">
-        <h3 id="settings-title">Terminal settings</h3>
+        <h3 id="settings-title">Concord Terminal Settings</h3>
       </div>
       <div class="modal-body">
         <nav class="settings-nav" role="tablist" aria-orientation="vertical">
@@ -822,6 +832,7 @@
             <span class="nav-icon" data-icon="packagePlus"></span>Skills
           </div>
           <div class="nav-divider"></div>
+          <div class="rail-logo-slot" id="rail-logo" aria-hidden="true" title="Built by the Siemens Center of Excellence — hover to spin"></div>
           <div class="nav-item nav-bottom" data-section="about" role="tab" tabindex="-1" aria-selected="false">
             <span class="nav-icon" data-icon="info"></span>About
           </div>
@@ -904,7 +915,6 @@
             <div class="info-row"><span class="label">Version</span><span id="about-version">—</span></div>
             <div class="info-row"><span class="label">Log file</span><code id="about-log">—</code></div>
             <div class="info-row"><span class="label">Settings file</span><code id="about-settings">—</code></div>
-            <div class="about-logo-footer" id="about-logo" aria-hidden="true" title="Built by the Siemens Center of Excellence — hover to spin"></div>
           </section>
         </div>
       </div>
