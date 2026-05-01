@@ -18,7 +18,7 @@ const ctx = await esbuild.context({
   target: "es2022",
   format: "iife",
   outfile: resolve(wwwroot, "terminal.bundle.js"),
-  loader: { ".css": "text" },
+  loader: { ".css": "text", ".svg": "text", ".png": "dataurl" },
   logLevel: "info"
 });
 

@@ -2,13 +2,23 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import xtermCss from "@xterm/xterm/css/xterm.css";
-import { ThemeName, XtermThemes } from "./theme.js";
+import { ThemeName, XtermThemes, resolveTheme } from "./theme.js";
 
 let cssInjected = false;
 function ensureCssInjected() {
   if (cssInjected) return;
   const style = document.createElement("style");
-  style.textContent = xtermCss;
+  // Append our overrides AFTER xterm's stylesheet so cascade order favors them.
+  // Thinner scrollbar reduces the visual collision with TUI box-drawing borders
+  // (e.g. Claude Code's welcome card) that hug the right edge of the canvas.
+  style.textContent =
+    xtermCss +
+    `
+.xterm-viewport::-webkit-scrollbar { width: 8px; height: 8px; }
+.xterm-viewport::-webkit-scrollbar-track { background: transparent; }
+.xterm-viewport::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.35); border-radius: 4px; }
+.xterm-viewport::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.55); }
+`;
   document.head.appendChild(style);
   cssInjected = true;
 }
@@ -41,11 +51,23 @@ export class XtermTab {
 
     this.term = new Terminal({
       scrollback: opts.scrollbackLines,
+      // Cascadia Mono is a variable font shipping weights 200-700. We pull
+      // it at weight 300 (Light) for a designer-clean look that reads less
+      // "code editor brutalist" while still being a true monospace (terminal
+      // grids must stay aligned). Size bumped 13→14 + lineHeight 1.3 + slight
+      // letter-spacing for breathing room — closer to Studio Pro's chrome
+      // typography while keeping monospace behavior PowerShell needs.
       fontFamily: "Cascadia Mono, Consolas, 'Courier New', monospace",
-      fontSize: 13,
-      theme: XtermThemes[opts.theme],
-      allowProposedApi: true,
+      fontSize: 14,
+      fontWeight: "300",
+      fontWeightBold: "600",
+      lineHeight: 1.3,
+      letterSpacing: 0.4,
+      cursorStyle: "bar",
       cursorBlink: true,
+      bellStyle: "none",
+      theme: XtermThemes[resolveTheme(opts.theme)],
+      allowProposedApi: true,
     });
     this.fit = new FitAddon();
     this.term.loadAddon(this.fit);
@@ -65,17 +87,23 @@ export class XtermTab {
       ev.preventDefault();
       ev.stopImmediatePropagation();
       const text = ev.clipboardData?.getData("text/plain") ?? "";
-      this.diag(`paste intercepted len=${text.length} target=${(ev.target as Element)?.tagName}`);
+      this.diag(
+        `paste intercepted len=${text.length} target=${(ev.target as Element)?.tagName}`,
+      );
       if (text) this.term.paste(text);
     };
-    document.addEventListener("paste", this.docPasteHandler, /* capture */ true);
+    document.addEventListener(
+      "paste",
+      this.docPasteHandler,
+      /* capture */ true,
+    );
     this.diag("paste handler attached at document level");
 
     // Standard terminal-app keybindings:
     //   Ctrl+C → copy if text is selected; otherwise fall through (SIGINT)
     //   Ctrl+V → swallow the keydown so xterm doesn't translate it to a
     //            literal ^V byte (0x16) which would be a second paste path.
-    this.term.attachCustomKeyEventHandler(e => {
+    this.term.attachCustomKeyEventHandler((e) => {
       if (e.type !== "keydown") return true;
       if (!e.ctrlKey || e.altKey || e.metaKey) return true;
 
@@ -87,8 +115,9 @@ export class XtermTab {
       if (isC) {
         const sel = this.term.getSelection();
         if (sel && (sel.length > 0 || e.shiftKey)) {
-          navigator.clipboard.writeText(sel).catch(err =>
-            this.diag(`clipboard.writeText failed: ${err}`));
+          navigator.clipboard
+            .writeText(sel)
+            .catch((err) => this.diag(`clipboard.writeText failed: ${err}`));
           return false; // consume — don't send ^C
         }
         // No selection (and not Ctrl+Shift+C): let xterm send SIGINT.
@@ -100,9 +129,11 @@ export class XtermTab {
 
     // xterm gives strings; convert to UTF-8 bytes for the C# side
     const enc = new TextEncoder();
-    this.term.onData(s => {
+    this.term.onData((s) => {
       const bytes = enc.encode(s);
-      this.diag(`onData len=${bytes.length} preview=${s.length > 32 ? s.slice(0, 32) + "..." : s}`);
+      this.diag(
+        `onData len=${bytes.length} preview=${s.length > 32 ? s.slice(0, 32) + "..." : s}`,
+      );
       opts.onInput(bytes);
     });
     this.term.onResize(({ cols, rows }) => opts.onResize(cols, rows));
@@ -118,14 +149,24 @@ export class XtermTab {
   }
 
   setTheme(theme: ThemeName): void {
-    this.term.options.theme = XtermThemes[theme];
+    this.term.options.theme = XtermThemes[resolveTheme(theme)];
+    // Force a redraw — xterm.js updates internal style state when options.theme
+    // is reassigned, but the canvas/webgl renderer keeps the previous frame's
+    // background fill until the next render pass. refresh() blits a fresh frame.
+    this.term.refresh(0, this.term.rows - 1);
   }
 
-  focus(): void { this.term.focus(); }
+  focus(): void {
+    this.term.focus();
+  }
 
   dispose(): void {
     if (this.docPasteHandler) {
-      document.removeEventListener("paste", this.docPasteHandler, /* capture */ true);
+      document.removeEventListener(
+        "paste",
+        this.docPasteHandler,
+        /* capture */ true,
+      );
       this.docPasteHandler = undefined;
     }
     this.term.dispose();

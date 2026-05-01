@@ -14,6 +14,15 @@ public sealed class StudioProActionServer : IDisposable
 {
     public const string ServerName = "mendix-studio-pro-actions";
     public const string ServerVersion = "1.0.0";
+    /// <summary>
+    /// Fixed default port for the Action bridge. The user has no setting for
+    /// this — the bridge auto-binds 7783 (chosen because it's the original
+    /// default Studio Pro itself uses for ITS MCP, so the convention is
+    /// "Mendix things live in the 778x range") and falls back to a free port
+    /// at startup if 7783 is busy. Saved values in older settings.json
+    /// files are ignored.
+    /// </summary>
+    public const int DefaultPort = 7783;
 
     private readonly StudioProActions actions;
     private readonly Logger? log;
@@ -37,10 +46,26 @@ public sealed class StudioProActionServer : IDisposable
     {
         if (listener != null) throw new InvalidOperationException("Server already started");
 
+        // Try the requested port first; if it's taken (HttpListener throws on
+        // bind), fall back to a free OS-picked port. The user no longer sees
+        // a port input — we surface whatever we end up bound to via the
+        // settings payload + status pill.
         boundPort = requestedPort > 0 ? requestedPort : PickFreePort();
         listener = new HttpListener();
         listener.Prefixes.Add($"http://127.0.0.1:{boundPort}/");
-        listener.Start();
+        try
+        {
+            listener.Start();
+        }
+        catch (HttpListenerException ex) when (requestedPort > 0)
+        {
+            log?.Warn($"[actions] requested port {requestedPort} unavailable ({ex.Message}); falling back to a free port");
+            try { listener.Close(); } catch { }
+            boundPort = PickFreePort();
+            listener = new HttpListener();
+            listener.Prefixes.Add($"http://127.0.0.1:{boundPort}/");
+            listener.Start();
+        }
         cts = new CancellationTokenSource();
         loop = Task.Run(() => AcceptLoopAsync(cts.Token));
         log?.Info($"[actions] HTTP server listening on http://127.0.0.1:{boundPort}/mcp");
@@ -154,6 +179,12 @@ public sealed class StudioProActionServer : IDisposable
                 "Stop the local Mendix runtime. No-op if it isn't running."),
             ToolDef("refresh_project",
                 "Reload the project model from disk. Use after editing model files (e.g. microflow XML) outside Studio Pro to make the IDE pick up the changes."),
+            ToolDef("save_all",
+                "Best-effort save: posts Ctrl+S to Studio Pro's main window. Works when the active document tab has focus; if the user's focus is elsewhere (e.g. inside this terminal), Studio Pro routes the keystroke to the focused child instead and the save may not fire. For guaranteed save, ask the user to click the document tab once first."),
+            ToolDef("get_active_run_configuration",
+                "Read-only: returns the currently selected local run configuration (id, name, applicationRootUrl). Useful for confirming which environment a run/stop will affect."),
+            ToolDef("get_app_status",
+                "Composite read-only snapshot for orienting: project path/name, run state (running|stopped|unknown), running URL if any, active run configuration. Call this first when starting work in a fresh Claude Code session."),
         }
     };
 
@@ -174,9 +205,12 @@ public sealed class StudioProActionServer : IDisposable
         var name = pars?["name"]?.GetValue<string>();
         ActionResult result = name switch
         {
-            "run_app"         => await actions.RunAppAsync(),
-            "stop_app"        => await actions.StopAppAsync(),
-            "refresh_project" => await actions.RefreshProjectAsync(),
+            "run_app"                       => await actions.RunAppAsync(),
+            "stop_app"                      => await actions.StopAppAsync(),
+            "refresh_project"               => await actions.RefreshProjectAsync(),
+            "save_all"                      => await actions.SaveAllAsync(),
+            "get_active_run_configuration"  => await actions.GetActiveRunConfigurationAsync(),
+            "get_app_status"                => await actions.GetAppStatusAsync(),
             _ => null!,
         };
 

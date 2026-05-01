@@ -24,7 +24,7 @@ public class TerminalSettingsTests : IDisposable
         settings.Args.Should().BeEmpty();
         settings.RingBufferKB.Should().Be(4096);
         settings.XtermScrollbackLines.Should().Be(10000);
-        settings.Theme.Should().Be("dark");
+        settings.Theme.Should().Be("auto");
         settings.McpEnabled.Should().BeFalse();
         settings.McpPort.Should().Be(7782);
         settings.McpClients.Should().BeEmpty();
@@ -35,7 +35,7 @@ public class TerminalSettingsTests : IDisposable
     {
         var original = new TerminalSettings("bash.exe", new[] { "--login" }, 8192, 20000, "light",
             McpEnabled: true, McpPort: 7782, McpClients: new[] { "claude", "codex" },
-            ActionsServerEnabled: false, ActionsServerPort: 7783, RefreshFromDiskHotkey: "F4");
+            ActionsServerEnabled: false, ActionsServerPort: 7783, RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true);
         original.Save(tmpDir);
 
         var loaded = TerminalSettings.Load(tmpDir);
@@ -67,7 +67,7 @@ public class TerminalSettingsTests : IDisposable
     }
 
     [Fact]
-    public void Load_OldFileWithoutTheme_DefaultsThemeToDark()
+    public void Load_OldFileWithoutTheme_DefaultsThemeToAuto()
     {
         var resourcesDir = Path.Combine(tmpDir, "resources");
         Directory.CreateDirectory(resourcesDir);
@@ -75,7 +75,7 @@ public class TerminalSettingsTests : IDisposable
             """{"shellPath":"cmd.exe","args":[],"ringBufferKB":4096,"xtermScrollbackLines":10000}""");
 
         var loaded = TerminalSettings.Load(tmpDir);
-        loaded.Theme.Should().Be("dark");
+        loaded.Theme.Should().Be("auto");
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public class TerminalSettingsTests : IDisposable
     {
         var settings = new TerminalSettings("powershell.exe", Array.Empty<string>(), 4096, 10000, "dark",
             McpEnabled: false, McpPort: 7782, McpClients: Array.Empty<string>(),
-            ActionsServerEnabled: false, ActionsServerPort: 7783, RefreshFromDiskHotkey: "F4");
+            ActionsServerEnabled: false, ActionsServerPort: 7783, RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true);
         settings.Save(tmpDir);
         File.Exists(Path.Combine(tmpDir, "resources", "terminal-settings.json")).Should().BeTrue();
     }
@@ -102,7 +102,7 @@ public class TerminalSettingsTests : IDisposable
     {
         var original = new TerminalSettings("bash.exe", new[] { "--login" }, 8192, 20000, "light",
             McpEnabled: true, McpPort: 7782, McpClients: new[] { "claude" },
-            ActionsServerEnabled: true, ActionsServerPort: 7799, RefreshFromDiskHotkey: "Ctrl+F5");
+            ActionsServerEnabled: true, ActionsServerPort: 7799, RefreshFromDiskHotkey: "Ctrl+F5", RestoreTabsOnReopen: false);
         original.Save(tmpDir);
 
         var loaded = TerminalSettings.Load(tmpDir);

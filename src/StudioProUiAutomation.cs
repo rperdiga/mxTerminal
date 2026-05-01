@@ -40,6 +40,7 @@ public sealed class StudioProUiAutomation : IStudioProUiAutomation
     public bool TriggerRun()              => Send(runHotkey);
     public bool TriggerStop()             => Send(stopHotkey);
     public bool TriggerRefreshFromDisk()  => Send(refreshHotkey);
+    public bool TriggerSaveAll()          => Send("Ctrl+S");
 
     private bool Send(string hotkeyText)
     {
@@ -94,11 +95,18 @@ public sealed class StudioProUiAutomation : IStudioProUiAutomation
         }
 
         var key = parts[^1];
+        // Function keys: F1-F24
         if (key.Length >= 2 && (key[0] == 'F' || key[0] == 'f') &&
             int.TryParse(key.AsSpan(1), out var n) && n is >= 1 and <= 24)
         {
             vk = (ushort)(VK_F1 + (n - 1));
             return true;
+        }
+        // Letter keys: A-Z (VK codes 0x41-0x5A); needed for Ctrl+S etc.
+        if (key.Length == 1)
+        {
+            var c = char.ToUpperInvariant(key[0]);
+            if (c >= 'A' && c <= 'Z') { vk = (ushort)c; return true; }
         }
         return false;
     }

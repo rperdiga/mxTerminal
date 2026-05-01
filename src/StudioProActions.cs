@@ -1,14 +1,31 @@
 namespace Terminal;
 
 /// <summary>
-/// Result of one action call. Exactly one of <see cref="Status"/> or
-/// <see cref="Error"/> is non-null.
+/// Result of one action call. <see cref="Error"/> set means failure;
+/// otherwise <see cref="Status"/> describes the outcome and any of the
+/// optional payload fields may carry richer detail.
 /// </summary>
-public sealed record ActionResult(string? Status = null, string? Url = null, string? Error = null)
+public sealed record ActionResult(
+    string? Status = null,
+    string? Url = null,
+    string? Error = null,
+    object? Data = null)
 {
     public static ActionResult Ok(string status, string? url = null) => new(Status: status, Url: url);
+    public static ActionResult OkWith(string status, object data) => new(Status: status, Data: data);
     public static ActionResult Fail(string error) => new(Error: error);
 }
+
+/// <summary>Snapshot of a Mendix local run configuration.</summary>
+public sealed record RunConfigurationInfo(string? Id, string? Name, string? ApplicationRootUrl);
+
+/// <summary>Composite status for the get_app_status tool.</summary>
+public sealed record AppStatusInfo(
+    string? ProjectPath,
+    string? ProjectName,
+    string Running,                    // "running" | "stopped" | "unknown"
+    string? RunningUrl,
+    RunConfigurationInfo? ActiveRunConfiguration);
 
 /// <summary>
 /// State machine for run_app / stop_app / refresh_project. Pure logic — no
@@ -26,19 +43,27 @@ public sealed class StudioProActions
     private readonly TimeSpan stopTimeout;
     private readonly TimeSpan pollInterval;
     private readonly SemaphoreSlim gate = new(1, 1);
+    // Optional callbacks supplied by the pane extension. Decoupled from the
+    // Mendix Extensibility API surface so this class stays unit-testable.
+    private readonly Func<RunConfigurationInfo?>? getActiveRunConfig;
+    private readonly Func<(string? path, string? name)>? getProjectInfo;
 
     public StudioProActions(
         IRunStateProbe probe,
         IStudioProUiAutomation ui,
         TimeSpan? runTimeout = null,
         TimeSpan? stopTimeout = null,
-        TimeSpan? pollInterval = null)
+        TimeSpan? pollInterval = null,
+        Func<RunConfigurationInfo?>? getActiveRunConfig = null,
+        Func<(string? path, string? name)>? getProjectInfo = null)
     {
         this.probe = probe;
         this.ui = ui;
         this.runTimeout = runTimeout ?? DefaultRunTimeout;
         this.stopTimeout = stopTimeout ?? DefaultStopTimeout;
         this.pollInterval = pollInterval ?? DefaultPollInterval;
+        this.getActiveRunConfig = getActiveRunConfig;
+        this.getProjectInfo = getProjectInfo;
     }
 
     public async Task<ActionResult> RunAppAsync(CancellationToken ct = default)
@@ -95,6 +120,52 @@ public sealed class StudioProActions
             return ActionResult.Ok("reloaded");
         }
         finally { gate.Release(); }
+    }
+
+    /// <summary>Send Ctrl+S to Studio Pro — saves all unsaved model changes.</summary>
+    public async Task<ActionResult> SaveAllAsync(CancellationToken ct = default)
+    {
+        await gate.WaitAsync(ct);
+        try
+        {
+            if (!ui.TriggerSaveAll())
+                return ActionResult.Fail("Studio Pro main window unavailable; try again after the IDE finishes loading");
+            return ActionResult.Ok("save_command_sent");
+        }
+        finally { gate.Release(); }
+    }
+
+    /// <summary>Read-only: returns the currently selected local run configuration.</summary>
+    public Task<ActionResult> GetActiveRunConfigurationAsync(CancellationToken ct = default)
+    {
+        if (getActiveRunConfig is null)
+            return Task.FromResult(ActionResult.Fail("Active-run-configuration callback not wired"));
+        var cfg = getActiveRunConfig();
+        if (cfg is null)
+            return Task.FromResult(ActionResult.OkWith("no_active_configuration", new { }));
+        return Task.FromResult(ActionResult.OkWith("ok", cfg));
+    }
+
+    /// <summary>Composite snapshot for orienting Claude Code: project, run state, active config.</summary>
+    public async Task<ActionResult> GetAppStatusAsync(CancellationToken ct = default)
+    {
+        var (projPath, projName) = getProjectInfo?.Invoke() ?? (null, null);
+        var state = await probe.IsRunningAsync(ct);
+        var stateStr = state switch
+        {
+            RunState.Running => "running",
+            RunState.Stopped => "stopped",
+            _                => "unknown",
+        };
+        var url = state == RunState.Running ? probe.GetActiveUrl() : null;
+        var cfg = getActiveRunConfig?.Invoke();
+        var info = new AppStatusInfo(
+            ProjectPath: projPath,
+            ProjectName: projName,
+            Running: stateStr,
+            RunningUrl: url,
+            ActiveRunConfiguration: cfg);
+        return ActionResult.OkWith("ok", info);
     }
 
     private async Task<RunState> WaitForAsync(RunState target, TimeSpan timeout, CancellationToken ct)

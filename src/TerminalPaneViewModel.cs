@@ -4,6 +4,7 @@ using Mendix.StudioPro.ExtensionsAPI.Model.Projects;
 using Mendix.StudioPro.ExtensionsAPI.UI.DockablePane;
 using Mendix.StudioPro.ExtensionsAPI.UI.WebView;
 using Terminal.Messages;
+using System.Reflection;
 using System.Text.Json;
 
 namespace Terminal;
@@ -46,7 +47,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         // Allow right-click → Inspect inside the WebView for diagnostics.
         try { ((dynamic)webView).AllowedDevTools = true; } catch { /* best-effort */ }
         try { ((dynamic)webView).AllowReload    = true; } catch { /* best-effort */ }
-        log.Info($"InitWebView build=v0.1.1+paste-fix at {webIndexUri}");
+        log.Info($"InitWebView build={ResolveBuildVersion()} at {webIndexUri}");
 
         outputHandler = (tabId, bytes) => Post("output", new OutputPayload(tabId, Convert.ToBase64String(bytes)));
         exitedHandler = (tabId, code) => Post("exit", new ExitPayload(tabId, code));
@@ -170,6 +171,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             var newActionsEnabled  = p.ActionsServerEnabled ?? current.ActionsServerEnabled;
             var newActionsPort     = p.ActionsServerPort    ?? current.ActionsServerPort;
             var newRefreshHotkey   = p.RefreshFromDiskHotkey ?? current.RefreshFromDiskHotkey;
+            var newRestoreTabs     = p.RestoreTabsOnReopen ?? current.RestoreTabsOnReopen;
 
             // 1. Probe Studio Pro's primary MCP server (existing behaviour).
             if (newEnabled)
@@ -196,15 +198,17 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     log: log);
                 var probe = new RunStateProbe(getApplicationRootUrl);
                 var actions = new StudioProActions(probe, ui);
-                manager.StartActionServer(newActionsPort, actions, log);
+                manager.StartActionServer(StudioProActionServer.DefaultPort, actions, log);
 
-                // Probe our own server. Re-use McpProbe since wire formats match.
-                var pr = await McpProbe.ProbeAsync(newActionsPort, log);
+                // Probe the LIVE bound port (auto-fallback may have moved off
+                // the default if the OS said 7783 was busy).
+                var actualPort = manager.CurrentActionServerPort ?? StudioProActionServer.DefaultPort;
+                var pr = await McpProbe.ProbeAsync(actualPort, log);
                 if (!pr.Ok)
                 {
                     manager.StopActionServer();
                     Post("mcpResult", new McpResultPayload(false,
-                        $"Action server failed to answer on port {newActionsPort}: {pr.Message}",
+                        $"Action server failed to answer on port {actualPort}: {pr.Message}",
                         Array.Empty<string>()));
                     Post("settings", BuildSettingsPayload(current));
                     return;
@@ -228,6 +232,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 ActionsServerEnabled = newActionsEnabled,
                 ActionsServerPort = newActionsPort,
                 RefreshFromDiskHotkey = newRefreshHotkey,
+                RestoreTabsOnReopen = newRestoreTabs,
             };
 
             // 3. Apply file changes BEFORE saving settings.
@@ -289,7 +294,12 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         var tomlNeeded = nextClients.Contains("codex");
         var tomlHadIt  = prev.McpEnabled && prevClients.Contains("codex");
 
-        var url = $"http://localhost:{next.McpPort}/mcp";
+        // Always use Studio Pro's actual MCP port (probed live each save).
+        // The saved next.McpPort is back-compat only — no longer user-settable.
+        // Falls back to the saved value if the probe fails, keeping legacy
+        // configs working until the user enables Studio Pro's MCP.
+        var probedPort = ProbeStudioProMcp()?.Port ?? next.McpPort;
+        var url = $"http://localhost:{probedPort}/mcp";
         var json = new McpJsonConfigurator(projectDir);
         var toml = new McpTomlConfigurator();
         var touched = new List<string>();
@@ -321,7 +331,11 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         var tomlNeeded = nextClients.Contains("codex");
         var tomlHadIt  = prev.ActionsServerEnabled && prevClients.Contains("codex");
 
-        var url = $"http://localhost:{next.ActionsServerPort}/mcp";
+        // Use the LIVE bound port (manager surfaces it after Start). The
+        // saved value is back-compat fallback only — bridge auto-binds at
+        // 7783 with free-port fallback; user can't choose anymore.
+        var port = manager.CurrentActionServerPort ?? next.ActionsServerPort;
+        var url = $"http://localhost:{port}/mcp";
         var json = new McpJsonConfigurator(projectDir);
         var toml = new McpTomlConfigurator();
         var touched = new List<string>();
@@ -353,8 +367,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             var args = p.Args ?? settings.Args;
             var cwd = p.Cwd ?? dir;
 
-            var tabId = await manager.CreateSessionAsync(shell, args, cwd, p.Cols, p.Rows);
-            Post("tabCreated", new TabCreatedPayload(tabId, Path.GetFileNameWithoutExtension(shell), shell, cwd));
+            var (tabId, title) = await manager.CreateSessionAsync(shell, args, cwd, p.Cols, p.Rows);
+            Post("tabCreated", new TabCreatedPayload(tabId, title, shell, cwd));
         }
         catch (Exception ex)
         {
@@ -388,19 +402,76 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
 
     private string? GetProjectDir() => (getCurrentApp()?.Root as IProject)?.DirectoryPath;
 
-    private static SettingsPayload BuildSettingsPayload(TerminalSettings s) => new(
-        ShellPath: s.ShellPath,
-        Args: s.Args,
-        RingBufferKB: s.RingBufferKB,
-        XtermScrollbackLines: s.XtermScrollbackLines,
-        Theme: s.Theme,
-        AvailableShells: ShellDetector.Detect()
-            .Select(o => new ShellOptionPayload(o.Name, o.Path))
-            .ToList(),
-        McpEnabled: s.McpEnabled,
-        McpPort: s.McpPort,
-        McpClients: s.McpClients,
-        ActionsServerEnabled: s.ActionsServerEnabled,
-        ActionsServerPort: s.ActionsServerPort,
-        RefreshFromDiskHotkey: s.RefreshFromDiskHotkey);
+    /// <summary>
+    /// Pulls the build version from assembly metadata so logs (and the
+    /// future "About" surface in the settings modal) read a single source
+    /// of truth set in Terminal.csproj's &lt;InformationalVersion&gt;.
+    /// </summary>
+    private static string ResolveBuildVersion()
+    {
+        var asm = Assembly.GetExecutingAssembly();
+        var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        if (!string.IsNullOrEmpty(info))
+        {
+            // Strip the +metadata segment (build label, git hash, etc.) so the
+            // visible version is just the SemVer triple — readable and stable
+            // across rebuilds. The full string is still in logs if we need it.
+            var plus = info.IndexOf('+');
+            var clean = plus > 0 ? info.Substring(0, plus) : info;
+            return $"v{clean}";
+        }
+        var v = asm.GetName().Version;
+        return v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "v?";
+    }
+
+    private SettingsPayload BuildSettingsPayload(TerminalSettings s)
+    {
+        var dir = GetProjectDir();
+        var settingsPath = dir != null
+            ? System.IO.Path.Combine(dir, "resources", "terminal-settings.json")
+            : null;
+        return new SettingsPayload(
+            ShellPath: s.ShellPath,
+            Args: s.Args,
+            RingBufferKB: s.RingBufferKB,
+            XtermScrollbackLines: s.XtermScrollbackLines,
+            Theme: s.Theme,
+            AvailableShells: ShellDetector.Detect()
+                .Select(o => new ShellOptionPayload(o.Name, o.Path))
+                .ToList(),
+            McpEnabled: s.McpEnabled,
+            McpPort: s.McpPort,
+            McpClients: s.McpClients,
+            ActionsServerEnabled: s.ActionsServerEnabled,
+            // Report the LIVE bound port when the bridge is running so the JS
+            // readout shows the truth (auto-fallback may have moved off 7783).
+            ActionsServerPort: manager.CurrentActionServerPort ?? s.ActionsServerPort,
+            RefreshFromDiskHotkey: s.RefreshFromDiskHotkey,
+            RestoreTabsOnReopen: s.RestoreTabsOnReopen,
+            About: new AboutInfoPayload(
+                Version: ResolveBuildVersion(),
+                LogPath: log?.Path,
+                SettingsPath: settingsPath),
+            StudioProMcp: ProbeStudioProMcp());
+    }
+
+    /// <summary>
+    /// Try to read Studio Pro's own MCP-server preference (from Settings.sqlite)
+    /// so the JS side can warn when our saved port differs from what Studio Pro
+    /// is actually serving on. Returns null on any probe failure.
+    /// </summary>
+    private static StudioProMcpInfoPayload? ProbeStudioProMcp()
+    {
+        try
+        {
+            var sp = System.Diagnostics.Process.GetCurrentProcess();
+            var exePath = sp.MainModule?.FileName;
+            if (string.IsNullOrEmpty(exePath)) return null;
+            var versionDir = new FileInfo(exePath).Directory?.Parent?.Name;
+            if (string.IsNullOrEmpty(versionDir)) return null;
+            var info = StudioProThemeProbe.ReadMcpServer(versionDir);
+            return new StudioProMcpInfoPayload(info.Enabled, info.Port);
+        }
+        catch { return null; }
+    }
 }

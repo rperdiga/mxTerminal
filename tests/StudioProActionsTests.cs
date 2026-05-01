@@ -19,11 +19,12 @@ public class StudioProActionsTests
 
     private sealed class FakeUi : IStudioProUiAutomation
     {
-        public int RunCount, StopCount, RefreshCount;
-        public bool RunOk = true, StopOk = true, RefreshOk = true;
+        public int RunCount, StopCount, RefreshCount, SaveAllCount;
+        public bool RunOk = true, StopOk = true, RefreshOk = true, SaveAllOk = true;
         public bool TriggerRun()             { RunCount++;     return RunOk; }
         public bool TriggerStop()            { StopCount++;    return StopOk; }
         public bool TriggerRefreshFromDisk() { RefreshCount++; return RefreshOk; }
+        public bool TriggerSaveAll()         { SaveAllCount++; return SaveAllOk; }
     }
 
     private static StudioProActions NewActions(FakeProbe probe, FakeUi ui) =>
