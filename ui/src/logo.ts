@@ -11,20 +11,17 @@ export function logoSvgString(): string {
 
 /**
  * Mount the OneSource logo into a host element.
+ * Size is controlled by CSS (e.g. .rail-logo-slot .os-logo { width: 110px; })
+ * rather than inline style, so per-context sizing wins specificity battles.
  * @param host  Element to populate. Replaces innerHTML.
- * @param size  Pixel dimension (square). Default 80.
- * @param spin  Whether to apply the slow rotation animation. Default true.
+ * @param spin  Whether to apply the slow rotation animation. Default false.
  */
 export function mountLogo(
   host: Element,
-  size: number = 80,
-  spin: boolean = true,
+  _legacySize: number = 0, // kept for back-compat; ignored
+  spin: boolean = false,
 ): void {
-  // We wrap so the rotation animation has a stable container; the SVG
-  // itself stays at its native viewBox so glyphs scale crisply.
+  void _legacySize;
   const cls = spin ? "os-logo os-logo-spin" : "os-logo";
-  host.innerHTML =
-    `<div class="${cls}" style="width:${size}px;height:${size}px">` +
-    (logoSvg as unknown as string) +
-    `</div>`;
+  host.innerHTML = `<div class="${cls}">${logoSvg as unknown as string}</div>`;
 }

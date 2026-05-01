@@ -237,20 +237,23 @@ export class SettingsModal {
   }
 
   /** When the master MCP toggle flips, sync the per-CLI checkboxes:
-   *  - turning OFF unchecks all three (and disables them)
-   *  - turning ON re-enables them (leaves their last values alone) */
+   *  - turning OFF unchecks the per-CLI client list (and disables them)
+   *  - turning ON re-enables them (leaves their last values alone)
+   *  Action bridge is INDEPENDENT — it writes its own .mcp.json entry and
+   *  doesn't need the primary MCP integration to be on. (Earlier code
+   *  force-unchecked it; that was wrong and produced "checkbox checked but
+   *  pill OFF" reports.) */
   private onMcpEnabledChange() {
     const enabled = this.chkMcp.checked;
     if (!enabled) {
       this.chkMcpClaude.checked = false;
       this.chkMcpCopilot.checked = false;
       this.chkMcpCodex.checked = false;
-      this.chkActions.checked = false; // actions can't run without primary MCP wiring
     }
     this.chkMcpClaude.disabled = !enabled;
     this.chkMcpCopilot.disabled = !enabled;
     this.chkMcpCodex.disabled = !enabled;
-    this.chkActions.disabled = !enabled;
+    // chkActions.disabled removed — action bridge is independent.
     this.onActionsEnabledChange();
   }
 
@@ -332,6 +335,11 @@ export class SettingsModal {
    *  removed the user-settable MCP port; nothing left to misconfigure on that
    *  side (URL always tracks Studio Pro's own port via SQLite probe). */
   private updatePills(d: SettingsPayload): void {
+    // Diagnostic — prints to DevTools console so we can see the values
+    // populate is using to drive the pill. Safe to keep; it's tiny.
+    this.bridge.send("diag", {
+      msg: `pill-actions update: enabled=${d.actionsServerEnabled} port=${d.actionsServerPort}`,
+    });
     setPill(
       "pill-actions",
       d.actionsServerEnabled,
@@ -339,6 +347,12 @@ export class SettingsModal {
       "Action bridge",
       "UI Action Bridge",
     );
+    const pill = document.getElementById("pill-actions");
+    if (pill) {
+      this.bridge.send("diag", {
+        msg: `pill-actions classList after setPill: ${pill.className}`,
+      });
+    }
   }
 
   /** Read-only port readout under the Action bridge enable checkbox.
