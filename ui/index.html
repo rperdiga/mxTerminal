@@ -287,12 +287,15 @@
 
     .modal {
       background: var(--modal-bg);
-      border-radius: 6px;
+      /* Tighter radius + softer shadow — Studio Pro's own dialogs sit with
+         hard 2-3px corners and a defined frame border, not the soft web-app
+         drop a 6px+40px combo gives. */
+      border-radius: 3px;
       border: 1px solid var(--border-default);
       width: 680px;
       max-width: 92vw;
       max-height: 82vh;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
       display: flex;
       flex-direction: column;
       overflow: hidden;          /* let body and footer manage their own scroll */
@@ -407,7 +410,20 @@
       border-top: 1px solid var(--border-subtle);
       padding: 12px 20px;
       display: flex;
-      justify-content: flex-end;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .modal-footer-credit {
+      font: var(--fw-regular) var(--fs-xs) var(--font-body);
+      font-style: italic;
+      color: var(--text-muted);
+      flex: 1;
+      min-width: 0;
+    }
+    .modal-footer-actions {
+      display: flex;
       gap: 8px;
       flex-shrink: 0;
     }
@@ -458,39 +474,27 @@
     }
     .os-logo:hover svg { transform: rotate(360deg); }
 
-    /* Nav-rail logo slot — sits between the divider and the About item.
-       Sized to ~55% of rail width so the team mark earns real presence,
-       not the easy-to-miss thumbnail it had before. Padding pushes the
-       mark down toward the About item with margin to the divider above. */
-    .rail-logo-slot {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 32px 0 18px;
-      cursor: default;
-    }
-    .rail-logo-slot .os-logo {
-      width: 110px;
-      height: 110px;
-      opacity: 0.92;
-      transition: opacity var(--motion);
-    }
-    .rail-logo-slot:hover .os-logo { opacity: 1; }
+    /* (Rail logo slot removed — Studio Pro doesn't put brand marks in nav
+       chrome. Logo lives in the About content area now via .about-logo-footer.) */
 
-    /* About-section ASCII art for the product name. Renders in the same
-       monospace as the terminal — meta nod to the host context. */
+    /* About-section ASCII art for the product name. Renders in the
+       terminal monospace — meta nod to the host context. Painted in
+       --text-body (not --accent-primary) so it reads as a typographic
+       header rather than marketing material. */
     .concord-ascii {
       margin: 4px 0 14px;
       padding: 12px 14px 10px;
       background: var(--surface-1);
       border: 1px solid var(--border-subtle);
-      border-radius: 6px;
+      border-radius: 3px;
       font: var(--fw-regular) 13px/1.05 var(--font-mono);
-      color: var(--accent-primary);
+      color: var(--text-body);
       white-space: pre;
       overflow-x: auto;
       letter-spacing: 0;
     }
+    /* Italic tagline below the ASCII. Plain italic — no curly-quote
+       pseudo-elements; the typography speaks for itself. */
     .concord-script {
       margin: 0 0 22px;
       font: var(--fw-regular) var(--fs-md)/1.55 var(--font-body);
@@ -498,19 +502,18 @@
       color: var(--text-body);
       padding: 0 4px;
     }
-    .concord-script::before { content: "“"; color: var(--text-muted); margin-right: 2px; }
-    .concord-script::after  { content: "”"; color: var(--text-muted); margin-left: 2px; }
 
-    /* CoE attribution — small, muted, separated from the script.
-       Lives at the very bottom of the About panel as a quiet credit. */
-    .about-coe-footer {
-      margin: 22px 0 0;
-      padding: 12px 0 0;
-      border-top: 1px solid var(--border-subtle);
-      font: var(--fw-regular) var(--fs-xs) var(--font-body);
-      font-style: italic;
-      color: var(--text-muted);
-      text-align: center;
+    /* About-section logo footer — quiet brand mark below the info rows.
+       Hover-to-spin behavior; same SVG inherited from .os-logo. */
+    .about-logo-footer {
+      display: flex;
+      justify-content: center;
+      padding: 22px 0 4px;
+    }
+    .about-logo-footer .os-logo {
+      width: 72px;
+      height: 72px;
+      opacity: 0.88;
     }
 
     /* About-section info row */
@@ -730,11 +733,14 @@
        Studio Pro MCP / UI Action Bridge are wired so the user can
        see at a glance — instead of opening Settings to check.
        ============================================================ */
-    #status-pills {
+    #pane-status-bar {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       padding: 0 10px;
+      min-height: 24px;
+      background: var(--surface-1);
+      border-top: 1px solid var(--border-subtle);
       flex-shrink: 0;
     }
     .pill {
@@ -774,14 +780,17 @@
       <div id="tabs"></div>
       <div class="tab-action" id="btn-new" role="button" tabindex="0" title="New tab" aria-label="New tab"></div>
       <div style="flex:1"></div>
-      <div id="status-pills">
-        <span class="pill off" id="pill-actions" title="UI Action Bridge — open Settings to enable">
-          <span class="dot"></span><span class="label">Action bridge</span><span class="tools" id="pill-actions-tools"></span>
-        </span>
-      </div>
       <div class="tab-action tab-settings" id="btn-settings" role="button" tabindex="0" title="Settings" aria-label="Settings"></div>
     </div>
     <div id="terminals"></div>
+    <!-- Pane bottom status bar (Studio Pro convention: integration state lives
+         at the bottom, not in the navigation chrome). Hosts the Action bridge
+         pill + room for future status indicators. -->
+    <div id="pane-status-bar">
+      <span class="pill off" id="pill-actions" title="UI Action Bridge — open Settings to enable">
+        <span class="dot"></span><span class="label">Action bridge</span><span class="tools" id="pill-actions-tools"></span>
+      </span>
+    </div>
   </div>
 
   <div id="banner">
@@ -813,7 +822,6 @@
             <span class="nav-icon" data-icon="packagePlus"></span>Skills
           </div>
           <div class="nav-divider"></div>
-          <div class="rail-logo-slot" id="rail-logo" aria-hidden="true" title="Built by the Siemens Center of Excellence — hover to spin"></div>
           <div class="nav-item nav-bottom" data-section="about" role="tab" tabindex="-1" aria-selected="false">
             <span class="nav-icon" data-icon="info"></span>About
           </div>
@@ -892,17 +900,20 @@
  ╔═╗╔═╗╔╗╔╔═╗╔═╗╦═╗╔╦╗
  ║  ║ ║║║║║  ║ ║╠╦╝ ║║
  ╚═╝╚═╝╝╚╝╚═╝╚═╝╩╚══╩╝</pre>
-            <p class="concord-script">Three minds. One project. Zero translation loss.</p>
+            <p class="concord-script">The terminal Studio Pro was missing.</p>
             <div class="info-row"><span class="label">Version</span><span id="about-version">—</span></div>
             <div class="info-row"><span class="label">Log file</span><code id="about-log">—</code></div>
             <div class="info-row"><span class="label">Settings file</span><code id="about-settings">—</code></div>
-            <p class="about-coe-footer">A Siemens CoE extension for Studio Pro.</p>
+            <div class="about-logo-footer" id="about-logo" aria-hidden="true" title="Built by the Siemens Center of Excellence — hover to spin"></div>
           </section>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn secondary" id="set-cancel">Cancel</button>
-        <button class="btn" id="set-save">Save</button>
+        <span class="modal-footer-credit">A Siemens CoE extension for Studio Pro.</span>
+        <div class="modal-footer-actions">
+          <button class="btn secondary" id="set-cancel">Cancel</button>
+          <button class="btn" id="set-save">Save</button>
+        </div>
       </div>
     </div>
   </div>

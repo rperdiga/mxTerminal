@@ -168,7 +168,7 @@ export class SettingsModal {
 
     this.mountNavIcons();
     this.wireNavRail();
-    this.mountRailLogo();
+    this.mountAboutLogo();
     this.activateSection("general");
 
     bridge.on("settings", (d: SettingsPayload) => this.populate(d));
@@ -186,11 +186,12 @@ export class SettingsModal {
     });
   }
 
-  /** Mount the OneSource logo into the nav-rail slot above the About item.
-   *  Always visible while the modal is open. Static; rotates on hover only. */
-  private mountRailLogo(): void {
-    const host = document.getElementById("rail-logo");
-    if (host) mountLogo(host, 40, false);
+  /** Mount the OneSource logo into the About-section footer. Hover-to-spin.
+   *  Studio Pro convention is to keep brand marks out of nav chrome and
+   *  inside content panels — About is the appropriate context. */
+  private mountAboutLogo(): void {
+    const host = document.getElementById("about-logo");
+    if (host && host.childElementCount === 0) mountLogo(host, 0, true);
   }
 
   /** Wire click + keyboard nav on the rail (ARIA tablist pattern). */
@@ -335,11 +336,6 @@ export class SettingsModal {
    *  removed the user-settable MCP port; nothing left to misconfigure on that
    *  side (URL always tracks Studio Pro's own port via SQLite probe). */
   private updatePills(d: SettingsPayload): void {
-    // Diagnostic — prints to DevTools console so we can see the values
-    // populate is using to drive the pill. Safe to keep; it's tiny.
-    this.bridge.send("diag", {
-      msg: `pill-actions update: enabled=${d.actionsServerEnabled} port=${d.actionsServerPort}`,
-    });
     setPill(
       "pill-actions",
       d.actionsServerEnabled,
@@ -347,12 +343,6 @@ export class SettingsModal {
       "Action bridge",
       "UI Action Bridge",
     );
-    const pill = document.getElementById("pill-actions");
-    if (pill) {
-      this.bridge.send("diag", {
-        msg: `pill-actions classList after setPill: ${pill.className}`,
-      });
-    }
   }
 
   /** Read-only port readout under the Action bridge enable checkbox.
