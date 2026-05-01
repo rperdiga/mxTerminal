@@ -122,9 +122,11 @@ export class SettingsModal {
   private chkActions = document.getElementById(
     "set-actions-enabled",
   ) as HTMLInputElement;
-  private inpActionsPort = document.getElementById(
-    "set-actions-port",
-  ) as HTMLInputElement;
+  // Read-only readout — bridge picks its own port at startup (default 7783;
+  // auto-fallback to a free port on collision). User no longer chooses.
+  private actionsPortReadout = document.getElementById(
+    "actions-port-readout",
+  ) as HTMLDivElement;
   private inpRefreshHotkey = document.getElementById(
     "set-refresh-hotkey",
   ) as HTMLInputElement;
@@ -245,8 +247,7 @@ export class SettingsModal {
   }
 
   private onActionsEnabledChange() {
-    const on = this.chkMcp.checked && this.chkActions.checked;
-    this.inpActionsPort.disabled = !on;
+    // No port input to disable anymore — bridge auto-binds when enabled.
   }
 
   private showBanner(kind: "ok" | "err", message: string) {
@@ -305,7 +306,7 @@ export class SettingsModal {
 
     // Actions server fields
     this.chkActions.checked = d.actionsServerEnabled;
-    this.inpActionsPort.value = String(d.actionsServerPort);
+    this.renderActionsPortReadout(d.actionsServerEnabled, d.actionsServerPort);
     this.inpRefreshHotkey.value = d.refreshFromDiskHotkey;
     this.onMcpEnabledChange(); // also flips actions enabled state
 
@@ -330,6 +331,22 @@ export class SettingsModal {
       "Action bridge",
       "UI Action Bridge",
     );
+  }
+
+  /** Read-only port readout under the Action bridge enable checkbox.
+   *  Shows the live bound port (or "not running" when disabled). */
+  private renderActionsPortReadout(enabled: boolean, boundPort: number): void {
+    if (!this.actionsPortReadout) return;
+    if (!enabled) {
+      this.actionsPortReadout.classList.remove("warn");
+      this.actionsPortReadout.innerHTML = `Action bridge is <strong>not running</strong>. Enable to start the local HTTP server that exposes Studio Pro UI actions to the CLIs above.`;
+      return;
+    }
+    this.actionsPortReadout.classList.remove("warn");
+    this.actionsPortReadout.innerHTML =
+      `Action bridge is listening on <code>localhost:${boundPort}</code>. ` +
+      `Each Save writes that URL into the CLI configs. Default is 7783; ` +
+      `if that's busy on your machine the bridge falls back to a free port automatically.`;
   }
 
   /** Read-only port readout under the MCP enable checkbox. Surfaces what
@@ -437,7 +454,8 @@ export class SettingsModal {
       // but no longer user-settable.
       mcpClients,
       actionsServerEnabled: this.chkActions.checked,
-      actionsServerPort: parseInt(this.inpActionsPort.value, 10) || 7783,
+      // actionsServerPort intentionally omitted — bridge auto-binds default
+      // 7783 with free-port fallback. Saved field kept for back-compat.
       refreshFromDiskHotkey: this.inpRefreshHotkey.value,
       restoreTabsOnReopen: this.chkRestoreTabs.checked,
     });

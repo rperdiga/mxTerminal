@@ -329,7 +329,11 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         var tomlNeeded = nextClients.Contains("codex");
         var tomlHadIt  = prev.ActionsServerEnabled && prevClients.Contains("codex");
 
-        var url = $"http://localhost:{next.ActionsServerPort}/mcp";
+        // Use the LIVE bound port (manager surfaces it after Start). The
+        // saved value is back-compat fallback only — bridge auto-binds at
+        // 7783 with free-port fallback; user can't choose anymore.
+        var port = manager.CurrentActionServerPort ?? next.ActionsServerPort;
+        var url = $"http://localhost:{port}/mcp";
         var json = new McpJsonConfigurator(projectDir);
         var toml = new McpTomlConfigurator();
         var touched = new List<string>();
@@ -429,7 +433,9 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             McpPort: s.McpPort,
             McpClients: s.McpClients,
             ActionsServerEnabled: s.ActionsServerEnabled,
-            ActionsServerPort: s.ActionsServerPort,
+            // Report the LIVE bound port when the bridge is running so the JS
+            // readout shows the truth (auto-fallback may have moved off 7783).
+            ActionsServerPort: manager.CurrentActionServerPort ?? s.ActionsServerPort,
             RefreshFromDiskHotkey: s.RefreshFromDiskHotkey,
             RestoreTabsOnReopen: s.RestoreTabsOnReopen,
             About: new AboutInfoPayload(

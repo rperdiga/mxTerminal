@@ -835,12 +835,12 @@
           <!-- Action bridge -->
           <section class="settings-section" data-section="actions" role="tabpanel">
             <h4>Action bridge</h4>
-            <p class="section-desc">Exposes Studio Pro UI actions (run, stop, refresh from disk) to the CLIs above as MCP tools — so Claude Code can drive Studio Pro the way you do.</p>
+            <p class="section-desc">Exposes Studio Pro UI actions (run, stop, refresh from disk, save all, get app status) to the CLIs above as MCP tools — so Claude Code can drive Studio Pro the way you do.</p>
             <div class="checkbox-row">
               <input id="set-actions-enabled" type="checkbox">
               <label for="set-actions-enabled" style="margin:0">Expose UI actions to the CLIs above</label>
             </div>
-            <div class="field port-field"><label>Port</label><input id="set-actions-port" type="number" min="1" max="65535" value="7783"></div>
+            <div id="actions-port-readout" class="mcp-port-readout"></div>
             <div class="field hotkey-field"><label>Refresh-from-disk hotkey</label><input id="set-refresh-hotkey" type="text" value="F4" placeholder="e.g. F4 or Ctrl+F5"></div>
           </section>
 

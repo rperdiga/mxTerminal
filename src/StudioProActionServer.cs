@@ -37,10 +37,26 @@ public sealed class StudioProActionServer : IDisposable
     {
         if (listener != null) throw new InvalidOperationException("Server already started");
 
+        // Try the requested port first; if it's taken (HttpListener throws on
+        // bind), fall back to a free OS-picked port. The user no longer sees
+        // a port input — we surface whatever we end up bound to via the
+        // settings payload + status pill.
         boundPort = requestedPort > 0 ? requestedPort : PickFreePort();
         listener = new HttpListener();
         listener.Prefixes.Add($"http://127.0.0.1:{boundPort}/");
-        listener.Start();
+        try
+        {
+            listener.Start();
+        }
+        catch (HttpListenerException ex) when (requestedPort > 0)
+        {
+            log?.Warn($"[actions] requested port {requestedPort} unavailable ({ex.Message}); falling back to a free port");
+            try { listener.Close(); } catch { }
+            boundPort = PickFreePort();
+            listener = new HttpListener();
+            listener.Prefixes.Add($"http://127.0.0.1:{boundPort}/");
+            listener.Start();
+        }
         cts = new CancellationTokenSource();
         loop = Task.Run(() => AcceptLoopAsync(cts.Token));
         log?.Info($"[actions] HTTP server listening on http://127.0.0.1:{boundPort}/mcp");
