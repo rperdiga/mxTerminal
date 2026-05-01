@@ -11,4 +11,7 @@ public interface IStudioProUiAutomation
 
     /// <summary>Send the configured refresh-from-disk hotkey (default F4).</summary>
     bool TriggerRefreshFromDisk();
+
+    /// <summary>Send Ctrl+S to save all unsaved changes in Studio Pro.</summary>
+    bool TriggerSaveAll();
 }

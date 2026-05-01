@@ -25,6 +25,7 @@ public class StudioProActionServerTests : IAsyncLifetime
         public bool TriggerRun() => true;
         public bool TriggerStop() => true;
         public bool TriggerRefreshFromDisk() => true;
+        public bool TriggerSaveAll() => true;
     }
 
     private StudioProActionServer? server;
@@ -73,14 +74,17 @@ public class StudioProActionServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ToolsList_ReturnsThreeTools()
+    public async Task ToolsList_ReturnsExpectedTools()
     {
         var doc = await Post("""{"jsonrpc":"2.0","id":2,"method":"tools/list"}""");
         var tools = doc.RootElement.GetProperty("result").GetProperty("tools");
-        tools.GetArrayLength().Should().Be(3);
         var names = new List<string>();
         foreach (var t in tools.EnumerateArray()) names.Add(t.GetProperty("name").GetString()!);
-        names.Should().BeEquivalentTo(new[] { "run_app", "stop_app", "refresh_project" });
+        // Slice 2 expanded the tool surface from 3 (run/stop/refresh) to 6.
+        names.Should().BeEquivalentTo(new[] {
+            "run_app", "stop_app", "refresh_project",
+            "save_all", "get_active_run_configuration", "get_app_status",
+        });
     }
 
     [Fact]

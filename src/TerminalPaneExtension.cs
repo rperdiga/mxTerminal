@@ -170,7 +170,31 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 try { return localRunConfigs.GetActiveConfiguration(model)?.ApplicationRootUrl; }
                 catch (Exception ex) { log?.Warn($"GetActiveConfiguration threw: {ex.Message}"); return null; }
             });
-            var actions = new StudioProActions(probe, ui);
+            var actions = new StudioProActions(
+                probe, ui,
+                getActiveRunConfig: () =>
+                {
+                    var model = CurrentApp;
+                    if (model is null) return null;
+                    try
+                    {
+                        var c = localRunConfigs.GetActiveConfiguration(model);
+                        if (c is null) return null;
+                        // Use reflection-friendly property access via dynamic; Mendix's
+                        // service contract may evolve and we want to fail soft, not hard.
+                        dynamic d = c;
+                        string? id  = TryStr(() => (string?)d.Id?.ToString());
+                        string? nm  = TryStr(() => (string?)d.Name);
+                        string? url = TryStr(() => (string?)d.ApplicationRootUrl);
+                        return new RunConfigurationInfo(id, nm, url);
+                    }
+                    catch (Exception ex) { log?.Warn($"getActiveRunConfig threw: {ex.Message}"); return null; }
+                },
+                getProjectInfo: () =>
+                {
+                    var proj = CurrentApp?.Root as IProject;
+                    return (proj?.DirectoryPath, proj?.Name);
+                });
             manager.StartActionServer(settings.ActionsServerPort, actions, log);
             log.Info($"[actions] auto-started server on port {settings.ActionsServerPort}");
         }
@@ -178,6 +202,11 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         {
             log.Error("[actions] auto-start failed", ex);
         }
+    }
+
+    private static string? TryStr(Func<string?> f)
+    {
+        try { return f(); } catch { return null; }
     }
 
     /// <summary>

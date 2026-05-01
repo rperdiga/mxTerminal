@@ -154,6 +154,12 @@ public sealed class StudioProActionServer : IDisposable
                 "Stop the local Mendix runtime. No-op if it isn't running."),
             ToolDef("refresh_project",
                 "Reload the project model from disk. Use after editing model files (e.g. microflow XML) outside Studio Pro to make the IDE pick up the changes."),
+            ToolDef("save_all",
+                "Save all unsaved changes in Studio Pro (Ctrl+S). Use before triggering a run or external CLI op so disk and the in-memory model agree."),
+            ToolDef("get_active_run_configuration",
+                "Read-only: returns the currently selected local run configuration (id, name, applicationRootUrl). Useful for confirming which environment a run/stop will affect."),
+            ToolDef("get_app_status",
+                "Composite read-only snapshot for orienting: project path/name, run state (running|stopped|unknown), running URL if any, active run configuration. Call this first when starting work in a fresh Claude Code session."),
         }
     };
 
@@ -174,9 +180,12 @@ public sealed class StudioProActionServer : IDisposable
         var name = pars?["name"]?.GetValue<string>();
         ActionResult result = name switch
         {
-            "run_app"         => await actions.RunAppAsync(),
-            "stop_app"        => await actions.StopAppAsync(),
-            "refresh_project" => await actions.RefreshProjectAsync(),
+            "run_app"                       => await actions.RunAppAsync(),
+            "stop_app"                      => await actions.StopAppAsync(),
+            "refresh_project"               => await actions.RefreshProjectAsync(),
+            "save_all"                      => await actions.SaveAllAsync(),
+            "get_active_run_configuration"  => await actions.GetActiveRunConfigurationAsync(),
+            "get_app_status"                => await actions.GetAppStatusAsync(),
             _ => null!,
         };
 
