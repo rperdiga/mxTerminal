@@ -13,38 +13,6 @@ const SECTIONS = [
 ] as const;
 type SectionName = (typeof SECTIONS)[number];
 
-/** Set the on/off/warn state and label suffix on a status pill in the tab strip.
- *  Lives at module scope so the renderer doesn't need a class instance.
- *  - stateOverride: when "warn", forces the warning style regardless of enabled.
- *  - tooltipOverride: when set, replaces the default tooltip text. */
-function setPill(
-  pillId: string,
-  enabled: boolean,
-  port: number,
-  shortLabel: string,
-  longLabel: string,
-  stateOverride: "warn" | null = null,
-  tooltipOverride: string | null = null,
-): void {
-  const pill = document.getElementById(pillId);
-  if (!pill) return;
-  const isWarn = enabled && stateOverride === "warn";
-  pill.classList.toggle("on", enabled && !isWarn);
-  pill.classList.toggle("off", !enabled);
-  pill.classList.toggle("warn", isWarn);
-  pill.setAttribute(
-    "title",
-    tooltipOverride ??
-      (enabled
-        ? `${longLabel} — listening on :${port}`
-        : `${longLabel} — open Settings to enable`),
-  );
-  const tools = pill.querySelector(".tools");
-  if (tools) tools.textContent = enabled ? `:${port}` : "";
-  const label = pill.querySelector(".label");
-  if (label) label.textContent = shortLabel;
-}
-
 interface ShellOption {
   name: string;
   path: string;
@@ -324,24 +292,9 @@ export class SettingsModal {
     // About section
     this.populateAbout(d.about);
 
-    // Port-mismatch banner inside MCP section + warn-state on the pill.
-    this.applyMcpMismatch(d);
-
-    // Status pills in the tab strip — reflect the just-loaded settings.
-    this.updatePills(d);
-  }
-
-  /** Single status pill — Action bridge only. The MCP pill went away when we
-   *  removed the user-settable MCP port; nothing left to misconfigure on that
-   *  side (URL always tracks Studio Pro's own port via SQLite probe). */
-  private updatePills(d: SettingsPayload): void {
-    setPill(
-      "pill-actions",
-      d.actionsServerEnabled,
-      d.actionsServerPort,
-      "Action bridge",
-      "UI Action Bridge",
-    );
+    // (Port-mismatch banner + chrome status pill retired — the readouts
+    // inside Settings → Studio Pro MCP and Settings → Action bridge are
+    // the canonical state surfaces now.)
   }
 
   /** Read-only port readout under the Action bridge enable checkbox.
