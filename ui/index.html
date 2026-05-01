@@ -459,19 +459,20 @@
     .os-logo:hover svg { transform: rotate(360deg); }
 
     /* Nav-rail logo slot — sits between the divider and the About item.
-       Always visible while the modal is open. Subtle presence; the team
-       earns a moment of attention on hover, not a constant spin. */
+       Sized to ~55% of rail width so the team mark earns real presence,
+       not the easy-to-miss thumbnail it had before. Padding pushes the
+       mark down toward the About item with margin to the divider above. */
     .rail-logo-slot {
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 14px 0 12px;
+      padding: 32px 0 18px;
       cursor: default;
     }
     .rail-logo-slot .os-logo {
-      width: 40px;
-      height: 40px;
-      opacity: 0.85;
+      width: 92px;
+      height: 92px;
+      opacity: 0.92;
       transition: opacity var(--motion);
     }
     .rail-logo-slot:hover .os-logo { opacity: 1; }
@@ -887,16 +888,15 @@
           <!-- About -->
           <section class="settings-section" data-section="about" role="tabpanel">
             <h4>About</h4>
-            <p class="section-desc">Build details and useful paths.</p>
 <pre class="concord-ascii" aria-label="Concord">
  ╔═╗╔═╗╔╗╔╔═╗╔═╗╦═╗╔╦╗
  ║  ║ ║║║║║  ║ ║╠╦╝ ║║
  ╚═╝╚═╝╝╚╝╚═╝╚═╝╩╚══╩╝</pre>
-            <p class="concord-script">Concordia &mdash; agreement among distinct voices, bound to one end. Here three minds &mdash; yours, Maia&rsquo;s, the agent&rsquo;s &mdash; meet upon the work.</p>
+            <p class="concord-script">Three minds. One project. Zero translation loss.</p>
             <div class="info-row"><span class="label">Version</span><span id="about-version">—</span></div>
             <div class="info-row"><span class="label">Log file</span><code id="about-log">—</code></div>
             <div class="info-row"><span class="label">Settings file</span><code id="about-settings">—</code></div>
-            <p class="about-coe-footer">A Siemens Center of Excellence extension for Mendix Studio Pro.</p>
+            <p class="about-coe-footer">A Siemens CoE extension for Studio Pro.</p>
           </section>
         </div>
       </div>

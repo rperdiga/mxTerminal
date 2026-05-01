@@ -198,15 +198,17 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     log: log);
                 var probe = new RunStateProbe(getApplicationRootUrl);
                 var actions = new StudioProActions(probe, ui);
-                manager.StartActionServer(newActionsPort, actions, log);
+                manager.StartActionServer(StudioProActionServer.DefaultPort, actions, log);
 
-                // Probe our own server. Re-use McpProbe since wire formats match.
-                var pr = await McpProbe.ProbeAsync(newActionsPort, log);
+                // Probe the LIVE bound port (auto-fallback may have moved off
+                // the default if the OS said 7783 was busy).
+                var actualPort = manager.CurrentActionServerPort ?? StudioProActionServer.DefaultPort;
+                var pr = await McpProbe.ProbeAsync(actualPort, log);
                 if (!pr.Ok)
                 {
                     manager.StopActionServer();
                     Post("mcpResult", new McpResultPayload(false,
-                        $"Action server failed to answer on port {newActionsPort}: {pr.Message}",
+                        $"Action server failed to answer on port {actualPort}: {pr.Message}",
                         Array.Empty<string>()));
                     Post("settings", BuildSettingsPayload(current));
                     return;
@@ -409,7 +411,15 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     {
         var asm = Assembly.GetExecutingAssembly();
         var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        if (!string.IsNullOrEmpty(info)) return $"v{info}";
+        if (!string.IsNullOrEmpty(info))
+        {
+            // Strip the +metadata segment (build label, git hash, etc.) so the
+            // visible version is just the SemVer triple — readable and stable
+            // across rebuilds. The full string is still in logs if we need it.
+            var plus = info.IndexOf('+');
+            var clean = plus > 0 ? info.Substring(0, plus) : info;
+            return $"v{clean}";
+        }
         var v = asm.GetName().Version;
         return v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "v?";
     }

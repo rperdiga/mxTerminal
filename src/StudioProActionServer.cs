@@ -14,6 +14,15 @@ public sealed class StudioProActionServer : IDisposable
 {
     public const string ServerName = "mendix-studio-pro-actions";
     public const string ServerVersion = "1.0.0";
+    /// <summary>
+    /// Fixed default port for the Action bridge. The user has no setting for
+    /// this — the bridge auto-binds 7783 (chosen because it's the original
+    /// default Studio Pro itself uses for ITS MCP, so the convention is
+    /// "Mendix things live in the 778x range") and falls back to a free port
+    /// at startup if 7783 is busy. Saved values in older settings.json
+    /// files are ignored.
+    /// </summary>
+    public const int DefaultPort = 7783;
 
     private readonly StudioProActions actions;
     private readonly Logger? log;

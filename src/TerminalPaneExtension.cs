@@ -198,7 +198,9 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                     var proj = CurrentApp?.Root as IProject;
                     return (proj?.DirectoryPath, proj?.Name);
                 });
-            manager.StartActionServer(settings.ActionsServerPort, actions, log);
+            // Fixed default — saved settings.ActionsServerPort is ignored.
+            // The server falls back to a free OS-assigned port if 7783 is taken.
+            manager.StartActionServer(StudioProActionServer.DefaultPort, actions, log);
             log.Info($"[actions] auto-started server on port {settings.ActionsServerPort}");
         }
         catch (Exception ex)
