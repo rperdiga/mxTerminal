@@ -168,6 +168,7 @@ export class SettingsModal {
 
     this.mountNavIcons();
     this.wireNavRail();
+    this.mountRailLogo();
     this.activateSection("general");
 
     bridge.on("settings", (d: SettingsPayload) => this.populate(d));
@@ -183,6 +184,13 @@ export class SettingsModal {
       const name = el.dataset.icon as IconName | undefined;
       if (name) mountIcon(el, name);
     });
+  }
+
+  /** Mount the OneSource logo into the nav-rail slot above the About item.
+   *  Always visible while the modal is open. Static; rotates on hover only. */
+  private mountRailLogo(): void {
+    const host = document.getElementById("rail-logo");
+    if (host) mountLogo(host, 40, false);
   }
 
   /** Wire click + keyboard nav on the rail (ARIA tablist pattern). */
@@ -374,8 +382,6 @@ export class SettingsModal {
       `is enabled with a port set, then reopen this pane.`;
   }
 
-  private aboutLogoMounted = false;
-
   private populateAbout(a: AboutInfo | undefined): void {
     const set = (id: string, value: string) => {
       const el = document.getElementById(id);
@@ -384,15 +390,6 @@ export class SettingsModal {
     set("about-version", a?.version ?? "—");
     set("about-log", a?.logPath ?? "—");
     set("about-settings", a?.settingsPath ?? "—");
-    // Mount the spinning OneSource logo once — re-mounting on every settings
-    // reload would restart the CSS animation and look glitchy.
-    if (!this.aboutLogoMounted) {
-      const host = document.getElementById("about-logo");
-      if (host) {
-        mountLogo(host, 64, true);
-        this.aboutLogoMounted = true;
-      }
-    }
   }
 
   private rebuildShellSelect(currentPath: string) {

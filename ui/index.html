@@ -441,8 +441,9 @@
       color: var(--text-muted);
     }
 
-    /* OneSource logo — built by the OneSource Center of Excellence.
-       Spins slowly when shown in About; static when used elsewhere. */
+    /* OneSource logo — built by the Siemens Center of Excellence.
+       Static by default; rotates 360° on hover (matches the team's
+       portal Logo.tsx behavior, vanilla CSS port). */
     .os-logo {
       display: inline-block;
       line-height: 0;
@@ -452,36 +453,63 @@
       width: 100%;
       height: 100%;
       display: block;
-    }
-    .os-logo-spin svg {
-      animation: os-logo-spin 24s linear infinite;
+      transition: transform 0.9s ease;
       transform-origin: 50% 50%;
     }
-    @keyframes os-logo-spin {
-      to { transform: rotate(360deg); }
-    }
+    .os-logo:hover svg { transform: rotate(360deg); }
 
-    /* About header — logo + product credit row above the info rows. */
-    .about-header {
+    /* Nav-rail logo slot — sits between the divider and the About item.
+       Always visible while the modal is open. Subtle presence; the team
+       earns a moment of attention on hover, not a constant spin. */
+    .rail-logo-slot {
       display: flex;
       align-items: center;
-      gap: 16px;
-      margin: 4px 0 22px;
-      padding: 14px 16px;
+      justify-content: center;
+      padding: 14px 0 12px;
+      cursor: default;
+    }
+    .rail-logo-slot .os-logo {
+      width: 40px;
+      height: 40px;
+      opacity: 0.85;
+      transition: opacity var(--motion);
+    }
+    .rail-logo-slot:hover .os-logo { opacity: 1; }
+
+    /* About-section ASCII art for the product name. Renders in the same
+       monospace as the terminal — meta nod to the host context. */
+    .concord-ascii {
+      margin: 4px 0 14px;
+      padding: 12px 14px 10px;
       background: var(--surface-1);
       border: 1px solid var(--border-subtle);
       border-radius: 6px;
+      font: var(--fw-regular) 13px/1.05 var(--font-mono);
+      color: var(--accent-primary);
+      white-space: pre;
+      overflow-x: auto;
+      letter-spacing: 0;
     }
-    .about-header .meta { flex: 1; min-width: 0; }
-    .about-header .product-name {
-      font: var(--fw-semibold) var(--fs-lg) var(--font-chrome);
-      color: var(--text-primary);
-      margin: 0 0 2px;
+    .concord-script {
+      margin: 0 0 22px;
+      font: var(--fw-regular) var(--fs-md)/1.55 var(--font-body);
+      font-style: italic;
+      color: var(--text-body);
+      padding: 0 4px;
     }
-    .about-header .product-credit {
-      font: var(--fw-regular) var(--fs-sm) var(--font-body);
+    .concord-script::before { content: "“"; color: var(--text-muted); margin-right: 2px; }
+    .concord-script::after  { content: "”"; color: var(--text-muted); margin-left: 2px; }
+
+    /* CoE attribution — small, muted, separated from the script.
+       Lives at the very bottom of the About panel as a quiet credit. */
+    .about-coe-footer {
+      margin: 22px 0 0;
+      padding: 12px 0 0;
+      border-top: 1px solid var(--border-subtle);
+      font: var(--fw-regular) var(--fs-xs) var(--font-body);
+      font-style: italic;
       color: var(--text-muted);
-      margin: 0;
+      text-align: center;
     }
 
     /* About-section info row */
@@ -784,6 +812,7 @@
             <span class="nav-icon" data-icon="packagePlus"></span>Skills
           </div>
           <div class="nav-divider"></div>
+          <div class="rail-logo-slot" id="rail-logo" aria-hidden="true" title="Built by the Siemens Center of Excellence — hover to spin"></div>
           <div class="nav-item nav-bottom" data-section="about" role="tab" tabindex="-1" aria-selected="false">
             <span class="nav-icon" data-icon="info"></span>About
           </div>
@@ -859,16 +888,15 @@
           <section class="settings-section" data-section="about" role="tabpanel">
             <h4>About</h4>
             <p class="section-desc">Build details and useful paths.</p>
-            <div class="about-header">
-              <div id="about-logo" class="about-logo-host" aria-hidden="true"></div>
-              <div class="meta">
-                <p class="product-name">Mendix Terminal</p>
-                <p class="product-credit">Crafted by the Siemens OneSource Center of Excellence.</p>
-              </div>
-            </div>
+<pre class="concord-ascii" aria-label="Concord">
+ ╔═╗╔═╗╔╗╔╔═╗╔═╗╦═╗╔╦╗
+ ║  ║ ║║║║║  ║ ║╠╦╝ ║║
+ ╚═╝╚═╝╝╚╝╚═╝╚═╝╩╚══╩╝</pre>
+            <p class="concord-script">Concordia &mdash; agreement among distinct voices, bound to one end. Here three minds &mdash; yours, Maia&rsquo;s, the agent&rsquo;s &mdash; meet upon the work.</p>
             <div class="info-row"><span class="label">Version</span><span id="about-version">—</span></div>
             <div class="info-row"><span class="label">Log file</span><code id="about-log">—</code></div>
             <div class="info-row"><span class="label">Settings file</span><code id="about-settings">—</code></div>
+            <p class="about-coe-footer">A Siemens Center of Excellence extension for Mendix Studio Pro.</p>
           </section>
         </div>
       </div>

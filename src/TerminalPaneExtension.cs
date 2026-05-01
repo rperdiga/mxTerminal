@@ -10,7 +10,10 @@ namespace Terminal;
 [Export(typeof(DockablePaneExtension))]
 public sealed class TerminalPaneExtension : DockablePaneExtension
 {
-    public const string ID = "Terminal";
+    // Product name. Used by Studio Pro both as the pane's MEF identity AND
+    // the visible tab title in the right-pane strip. Renamed from "Terminal"
+    // to "Concord" — see About panel for the meaning.
+    public const string ID = "Concord";
     public override string Id => ID;
 
     private readonly TerminalSessionManager manager;
@@ -51,7 +54,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
             indexUri = new Uri($"{indexUri}?theme={themeQuery}");
         log?.Info($"InitWebView indexUri={indexUri} theme-from-probe={themeQuery ?? "<none>"}");
         return new TerminalPaneViewModel(
-            title: "Terminal",
+            title: "Concord",
             manager: manager,
             getCurrentApp: () => CurrentApp,
             webIndexUri: indexUri,
