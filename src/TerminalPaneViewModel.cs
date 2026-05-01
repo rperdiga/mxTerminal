@@ -292,7 +292,12 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         var tomlNeeded = nextClients.Contains("codex");
         var tomlHadIt  = prev.McpEnabled && prevClients.Contains("codex");
 
-        var url = $"http://localhost:{next.McpPort}/mcp";
+        // Always use Studio Pro's actual MCP port (probed live each save).
+        // The saved next.McpPort is back-compat only — no longer user-settable.
+        // Falls back to the saved value if the probe fails, keeping legacy
+        // configs working until the user enables Studio Pro's MCP.
+        var probedPort = ProbeStudioProMcp()?.Port ?? next.McpPort;
+        var url = $"http://localhost:{probedPort}/mcp";
         var json = new McpJsonConfigurator(projectDir);
         var toml = new McpTomlConfigurator();
         var touched = new List<string>();

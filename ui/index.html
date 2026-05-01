@@ -505,32 +505,28 @@
     .field.port-field input { max-width: 140px; }
     .field.hotkey-field input { max-width: 180px; }
 
-    /* Port-mismatch banner inside the MCP section. Surfaces when our saved
-       port disagrees with what Studio Pro is actually serving on. */
-    .port-mismatch {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
+    /* Read-only readout of Studio Pro's actual MCP port (probed from the
+       SQLite each settings load). Replaces the user-settable port input —
+       the URL written into .mcp.json always tracks Studio Pro's own value. */
+    .mcp-port-readout {
       padding: 10px 12px;
       margin: -4px 0 12px;
-      background: var(--warning-fill);
-      border: 1px solid var(--warning-border);
+      background: var(--surface-1);
+      border: 1px solid var(--border-subtle);
       border-radius: 4px;
-      color: var(--warning);
       font: var(--fw-regular) var(--fs-sm)/1.5 var(--font-body);
+      color: var(--text-body);
     }
-    .port-mismatch-icon {
-      flex-shrink: 0;
-      width: 16px; height: 16px;
-      color: var(--warning);
+    .mcp-port-readout.warn {
+      background: var(--warning-fill);
+      border-color: var(--warning-border);
     }
-    .port-mismatch-icon svg { width: 16px; height: 16px; display: block; }
-    .port-mismatch-msg { flex: 1; color: var(--text-body); }
-    .port-mismatch-msg strong { color: var(--warning); }
-    .port-mismatch-fix {
-      flex-shrink: 0;
-      padding: 4px 10px !important;
-      font-size: var(--fs-xs) !important;
+    .mcp-port-readout code {
+      font: var(--fw-regular) var(--fs-xs) var(--font-mono);
+      background: var(--surface-2);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--text-primary);
     }
 
     .checkbox-row {
@@ -707,9 +703,6 @@
       <div class="tab-action" id="btn-new" role="button" tabindex="0" title="New tab" aria-label="New tab"></div>
       <div style="flex:1"></div>
       <div id="status-pills">
-        <span class="pill off" id="pill-mcp" title="Studio Pro MCP — open Settings to enable">
-          <span class="dot"></span><span class="label">MCP</span><span class="tools" id="pill-mcp-tools"></span>
-        </span>
         <span class="pill off" id="pill-actions" title="UI Action Bridge — open Settings to enable">
           <span class="dot"></span><span class="label">Action bridge</span><span class="tools" id="pill-actions-tools"></span>
         </span>
@@ -784,17 +777,12 @@
           <!-- Studio Pro MCP -->
           <section class="settings-section" data-section="mcp" role="tabpanel">
             <h4>Studio Pro MCP</h4>
-            <p class="section-desc">Studio Pro 11.10+ exposes its model-tier API as an MCP server. Enable to wire it into the CLIs you use inside this terminal.</p>
+            <p class="section-desc">Studio Pro 11.10+ exposes its model-tier API as an MCP server. Enable to wire it into the CLIs you use inside this terminal — the URL we write into <code>.mcp.json</code> always tracks Studio Pro's own port (no manual port to keep in sync).</p>
             <div class="checkbox-row">
               <input id="set-mcp-enabled" type="checkbox">
               <label for="set-mcp-enabled" style="margin:0">Enable Studio Pro MCP server integration</label>
             </div>
-            <div class="field port-field"><label>Port</label><input id="set-mcp-port" type="number" min="1" max="65535" value="7782"></div>
-            <div id="mcp-port-mismatch" class="port-mismatch" style="display:none">
-              <span class="port-mismatch-icon" id="mcp-mismatch-icon"></span>
-              <span class="port-mismatch-msg" id="mcp-mismatch-msg"></span>
-              <button type="button" class="btn secondary port-mismatch-fix" id="mcp-mismatch-fix">Use Studio Pro's port</button>
-            </div>
+            <div id="mcp-port-readout" class="mcp-port-readout"></div>
             <h5>CLIs to wire</h5>
             <div class="checkbox-row"><input id="set-mcp-claude" type="checkbox"><label for="set-mcp-claude" style="margin:0">Claude Code (writes <code>.mcp.json</code>)</label></div>
             <div class="checkbox-row"><input id="set-mcp-copilot" type="checkbox"><label for="set-mcp-copilot" style="margin:0">GitHub Copilot CLI (shares <code>.mcp.json</code>)</label></div>

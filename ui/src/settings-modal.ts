@@ -44,16 +44,6 @@ function setPill(
   if (label) label.textContent = shortLabel;
 }
 
-/** Returns true when our saved MCP port disagrees with what Studio Pro is
- *  actually serving on (per the SQLite probe). Only meaningful when both
- *  sides are enabled — if either side is off, there's nothing to mismatch. */
-function mcpHasMismatch(d: SettingsPayload): boolean {
-  const sp = d.studioProMcp;
-  if (!sp || sp.enabled !== true || sp.port == null) return false;
-  if (!d.mcpEnabled) return false;
-  return sp.port !== d.mcpPort;
-}
-
 interface ShellOption {
   name: string;
   path: string;
@@ -114,9 +104,11 @@ export class SettingsModal {
   private chkMcp = document.getElementById(
     "set-mcp-enabled",
   ) as HTMLInputElement;
-  private inpMcpPort = document.getElementById(
-    "set-mcp-port",
-  ) as HTMLInputElement;
+  // Port readout — read-only; URL written into .mcp.json always tracks
+  // Studio Pro's actual port via the SQLite probe.
+  private mcpPortReadout = document.getElementById(
+    "mcp-port-readout",
+  ) as HTMLDivElement;
   private chkMcpClaude = document.getElementById(
     "set-mcp-claude",
   ) as HTMLInputElement;
@@ -247,7 +239,6 @@ export class SettingsModal {
     this.chkMcpClaude.disabled = !enabled;
     this.chkMcpCopilot.disabled = !enabled;
     this.chkMcpCodex.disabled = !enabled;
-    this.inpMcpPort.disabled = !enabled;
     this.chkActions.disabled = !enabled;
     this.onActionsEnabledChange();
   }
@@ -303,7 +294,7 @@ export class SettingsModal {
 
     // MCP fields
     this.chkMcp.checked = !!d.mcpEnabled;
-    this.inpMcpPort.value = String(d.mcpPort ?? 7782);
+    this.renderMcpPortReadout(d.studioProMcp);
     const clients = new Set((d.mcpClients ?? []).map((c) => c.toLowerCase()));
     this.chkMcpClaude.checked = clients.has("claude");
     this.chkMcpCopilot.checked = clients.has("copilot");
@@ -327,21 +318,10 @@ export class SettingsModal {
     this.updatePills(d);
   }
 
-  /** Refresh the two status pills. MCP pill flips to "warn" state when our
-   *  saved port disagrees with what Studio Pro is actually serving on. */
+  /** Single status pill — Action bridge only. The MCP pill went away when we
+   *  removed the user-settable MCP port; nothing left to misconfigure on that
+   *  side (URL always tracks Studio Pro's own port via SQLite probe). */
   private updatePills(d: SettingsPayload): void {
-    const mismatch = mcpHasMismatch(d);
-    setPill(
-      "pill-mcp",
-      d.mcpEnabled,
-      d.mcpPort,
-      "MCP",
-      "Studio Pro MCP",
-      mismatch ? "warn" : null,
-      mismatch
-        ? `Saved port :${d.mcpPort} differs from Studio Pro's :${d.studioProMcp?.port}`
-        : null,
-    );
     setPill(
       "pill-actions",
       d.actionsServerEnabled,
@@ -351,45 +331,29 @@ export class SettingsModal {
     );
   }
 
-  /** Show / hide the warning banner in the MCP section. When shown, wire the
-   *  fix button to one-click sync the saved port to whatever Studio Pro reports. */
-  private applyMcpMismatch(d: SettingsPayload): void {
-    const banner = document.getElementById(
-      "mcp-port-mismatch",
-    ) as HTMLDivElement | null;
-    if (!banner) return;
-    const mismatch = mcpHasMismatch(d);
-    banner.style.display = mismatch ? "flex" : "none";
-    if (!mismatch) return;
-    const studioPort = d.studioProMcp?.port;
-    const iconEl = document.getElementById("mcp-mismatch-icon");
-    if (iconEl) mountIcon(iconEl, "alertCircle");
-    const msg = document.getElementById("mcp-mismatch-msg");
-    if (msg) {
-      msg.innerHTML =
-        `Studio Pro is serving its MCP on <strong>:${studioPort}</strong>, ` +
-        `but the saved port is <strong>:${d.mcpPort}</strong>. ` +
-        `Claude Code will be wired to a dead port.`;
+  /** Read-only port readout under the MCP enable checkbox. Surfaces what
+   *  Studio Pro is actually serving on (or warns when it can't tell). */
+  private renderMcpPortReadout(sp: StudioProMcpInfo | null): void {
+    if (!this.mcpPortReadout) return;
+    if (sp?.enabled === true && sp.port != null) {
+      this.mcpPortReadout.classList.remove("warn");
+      this.mcpPortReadout.innerHTML =
+        `Studio Pro reports its MCP server on <code>localhost:${sp.port}</code>. ` +
+        `Each Save writes that URL into the CLI configs below.`;
+      return;
     }
-    const fix = document.getElementById(
-      "mcp-mismatch-fix",
-    ) as HTMLButtonElement | null;
-    if (fix) {
-      fix.onclick = () => {
-        if (studioPort != null) {
-          this.inpMcpPort.value = String(studioPort);
-          banner.style.display = "none";
-          // Also update the pill state immediately for visual feedback.
-          setPill(
-            "pill-mcp",
-            d.mcpEnabled,
-            studioPort,
-            "MCP",
-            "Studio Pro MCP",
-          );
-        }
-      };
+    if (sp?.enabled === false) {
+      this.mcpPortReadout.classList.add("warn");
+      this.mcpPortReadout.innerHTML =
+        `Studio Pro's MCP server is <strong>disabled</strong>. ` +
+        `Enable it in <em>Edit → Preferences → Maia → MCP Server</em>, then reopen this pane.`;
+      return;
     }
+    // Probe couldn't tell — file unreadable, schema mismatch, etc.
+    this.mcpPortReadout.classList.add("warn");
+    this.mcpPortReadout.innerHTML =
+      `Couldn't read Studio Pro's MCP preference. Check <em>Edit → Preferences → Maia → MCP Server</em> ` +
+      `is enabled with a port set, then reopen this pane.`;
   }
 
   private populateAbout(a: AboutInfo | undefined): void {
@@ -456,7 +420,9 @@ export class SettingsModal {
       xtermScrollbackLines: parseInt(this.inpScroll.value, 10) || 10000,
       theme,
       mcpEnabled: this.chkMcp.checked,
-      mcpPort: parseInt(this.inpMcpPort.value, 10) || 7782,
+      // mcpPort intentionally omitted — C# always uses Studio Pro's actual
+      // port (probed from Settings.sqlite). Saved field kept for back-compat
+      // but no longer user-settable.
       mcpClients,
       actionsServerEnabled: this.chkActions.checked,
       actionsServerPort: parseInt(this.inpActionsPort.value, 10) || 7783,
