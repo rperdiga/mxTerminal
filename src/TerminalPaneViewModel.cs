@@ -430,6 +430,27 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             About: new AboutInfoPayload(
                 Version: ResolveBuildVersion(),
                 LogPath: log?.Path,
-                SettingsPath: settingsPath));
+                SettingsPath: settingsPath),
+            StudioProMcp: ProbeStudioProMcp());
+    }
+
+    /// <summary>
+    /// Try to read Studio Pro's own MCP-server preference (from Settings.sqlite)
+    /// so the JS side can warn when our saved port differs from what Studio Pro
+    /// is actually serving on. Returns null on any probe failure.
+    /// </summary>
+    private static StudioProMcpInfoPayload? ProbeStudioProMcp()
+    {
+        try
+        {
+            var sp = System.Diagnostics.Process.GetCurrentProcess();
+            var exePath = sp.MainModule?.FileName;
+            if (string.IsNullOrEmpty(exePath)) return null;
+            var versionDir = new FileInfo(exePath).Directory?.Parent?.Name;
+            if (string.IsNullOrEmpty(versionDir)) return null;
+            var info = StudioProThemeProbe.ReadMcpServer(versionDir);
+            return new StudioProMcpInfoPayload(info.Enabled, info.Port);
+        }
+        catch { return null; }
     }
 }

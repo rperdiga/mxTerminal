@@ -12,29 +12,46 @@ const SECTIONS = [
 ] as const;
 type SectionName = (typeof SECTIONS)[number];
 
-/** Set the on/off state and label suffix on a status pill in the tab strip.
- *  Lives at module scope so the renderer doesn't need a class instance. */
+/** Set the on/off/warn state and label suffix on a status pill in the tab strip.
+ *  Lives at module scope so the renderer doesn't need a class instance.
+ *  - stateOverride: when "warn", forces the warning style regardless of enabled.
+ *  - tooltipOverride: when set, replaces the default tooltip text. */
 function setPill(
   pillId: string,
   enabled: boolean,
   port: number,
   shortLabel: string,
   longLabel: string,
+  stateOverride: "warn" | null = null,
+  tooltipOverride: string | null = null,
 ): void {
   const pill = document.getElementById(pillId);
   if (!pill) return;
-  pill.classList.toggle("on", enabled);
+  const isWarn = enabled && stateOverride === "warn";
+  pill.classList.toggle("on", enabled && !isWarn);
   pill.classList.toggle("off", !enabled);
+  pill.classList.toggle("warn", isWarn);
   pill.setAttribute(
     "title",
-    enabled
-      ? `${longLabel} — listening on :${port}`
-      : `${longLabel} — open Settings to enable`,
+    tooltipOverride ??
+      (enabled
+        ? `${longLabel} — listening on :${port}`
+        : `${longLabel} — open Settings to enable`),
   );
   const tools = pill.querySelector(".tools");
   if (tools) tools.textContent = enabled ? `:${port}` : "";
   const label = pill.querySelector(".label");
   if (label) label.textContent = shortLabel;
+}
+
+/** Returns true when our saved MCP port disagrees with what Studio Pro is
+ *  actually serving on (per the SQLite probe). Only meaningful when both
+ *  sides are enabled — if either side is off, there's nothing to mismatch. */
+function mcpHasMismatch(d: SettingsPayload): boolean {
+  const sp = d.studioProMcp;
+  if (!sp || sp.enabled !== true || sp.port == null) return false;
+  if (!d.mcpEnabled) return false;
+  return sp.port !== d.mcpPort;
 }
 
 interface ShellOption {
@@ -57,6 +74,12 @@ interface SettingsPayload {
   refreshFromDiskHotkey: string;
   restoreTabsOnReopen: boolean;
   about: AboutInfo;
+  studioProMcp: StudioProMcpInfo | null;
+}
+
+interface StudioProMcpInfo {
+  enabled: boolean | null;
+  port: number | null;
 }
 
 interface AboutInfo {
@@ -297,14 +320,28 @@ export class SettingsModal {
     // About section
     this.populateAbout(d.about);
 
+    // Port-mismatch banner inside MCP section + warn-state on the pill.
+    this.applyMcpMismatch(d);
+
     // Status pills in the tab strip — reflect the just-loaded settings.
     this.updatePills(d);
   }
 
-  /** Refresh the two status pills. Live tool-count probe is fire-and-forget;
-   *  pill renders the on/off state immediately, then updates when probe lands. */
+  /** Refresh the two status pills. MCP pill flips to "warn" state when our
+   *  saved port disagrees with what Studio Pro is actually serving on. */
   private updatePills(d: SettingsPayload): void {
-    setPill("pill-mcp", d.mcpEnabled, d.mcpPort, "MCP", "Studio Pro MCP");
+    const mismatch = mcpHasMismatch(d);
+    setPill(
+      "pill-mcp",
+      d.mcpEnabled,
+      d.mcpPort,
+      "MCP",
+      "Studio Pro MCP",
+      mismatch ? "warn" : null,
+      mismatch
+        ? `Saved port :${d.mcpPort} differs from Studio Pro's :${d.studioProMcp?.port}`
+        : null,
+    );
     setPill(
       "pill-actions",
       d.actionsServerEnabled,
@@ -312,6 +349,47 @@ export class SettingsModal {
       "Action bridge",
       "UI Action Bridge",
     );
+  }
+
+  /** Show / hide the warning banner in the MCP section. When shown, wire the
+   *  fix button to one-click sync the saved port to whatever Studio Pro reports. */
+  private applyMcpMismatch(d: SettingsPayload): void {
+    const banner = document.getElementById(
+      "mcp-port-mismatch",
+    ) as HTMLDivElement | null;
+    if (!banner) return;
+    const mismatch = mcpHasMismatch(d);
+    banner.style.display = mismatch ? "flex" : "none";
+    if (!mismatch) return;
+    const studioPort = d.studioProMcp?.port;
+    const iconEl = document.getElementById("mcp-mismatch-icon");
+    if (iconEl) mountIcon(iconEl, "alertCircle");
+    const msg = document.getElementById("mcp-mismatch-msg");
+    if (msg) {
+      msg.innerHTML =
+        `Studio Pro is serving its MCP on <strong>:${studioPort}</strong>, ` +
+        `but the saved port is <strong>:${d.mcpPort}</strong>. ` +
+        `Claude Code will be wired to a dead port.`;
+    }
+    const fix = document.getElementById(
+      "mcp-mismatch-fix",
+    ) as HTMLButtonElement | null;
+    if (fix) {
+      fix.onclick = () => {
+        if (studioPort != null) {
+          this.inpMcpPort.value = String(studioPort);
+          banner.style.display = "none";
+          // Also update the pill state immediately for visual feedback.
+          setPill(
+            "pill-mcp",
+            d.mcpEnabled,
+            studioPort,
+            "MCP",
+            "Studio Pro MCP",
+          );
+        }
+      };
+    }
   }
 
   private populateAbout(a: AboutInfo | undefined): void {

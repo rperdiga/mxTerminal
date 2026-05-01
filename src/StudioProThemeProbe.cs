@@ -97,4 +97,63 @@ public static class StudioProThemeProbe
 
     /// <summary>Convert a probed theme to a URL-friendly lowercase string.</summary>
     public static string ToUrlValue(Theme t) => t == Theme.Dark ? "dark" : "light";
+
+    /// <summary>Studio Pro's MCP-server preference snapshot.</summary>
+    public readonly record struct McpServerInfo(bool? Enabled, int? Port, string Diagnostic);
+
+    /// <summary>
+    /// Read Studio Pro's MCP server preference from the same Settings.sqlite.
+    /// Keys discovered 2026-05-01 in ModelerSettings JSON root:
+    ///   EnableMcpServer (bool), McpServerPort (int).
+    /// Used to warn the user when the port WE wire into Claude's .mcp.json
+    /// doesn't match the port Studio Pro is actually serving on.
+    /// </summary>
+    public static McpServerInfo ReadMcpServer(string studioProVersion)
+    {
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var dbPath = Path.Combine(local, "Mendix", "Settings.sqlite");
+        if (!File.Exists(dbPath))
+            return new McpServerInfo(null, null, $"db-not-found at {dbPath}");
+
+        string tempCopy;
+        try
+        {
+            tempCopy = Path.Combine(Path.GetTempPath(), $"mxterm-settings-mcp-{Guid.NewGuid():N}.sqlite");
+            File.Copy(dbPath, tempCopy, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            return new McpServerInfo(null, null, $"copy-failed: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        try
+        {
+            var connStr = new SqliteConnectionStringBuilder
+            {
+                DataSource = tempCopy,
+                Mode       = SqliteOpenMode.ReadOnly,
+            }.ToString();
+            using var conn = new SqliteConnection(connStr);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT Settings FROM ModelerSettings WHERE Version = $v LIMIT 1";
+            cmd.Parameters.AddWithValue("$v", studioProVersion);
+            var json = cmd.ExecuteScalar() as string;
+            if (string.IsNullOrEmpty(json))
+                return new McpServerInfo(null, null, $"no-row for Version={studioProVersion}");
+
+            using var doc = JsonDocument.Parse(json);
+            bool? enabled = null;
+            int? port = null;
+            if (doc.RootElement.TryGetProperty("EnableMcpServer", out var en) && en.ValueKind == JsonValueKind.True) enabled = true;
+            else if (doc.RootElement.TryGetProperty("EnableMcpServer", out var en2) && en2.ValueKind == JsonValueKind.False) enabled = false;
+            if (doc.RootElement.TryGetProperty("McpServerPort", out var p) && p.ValueKind == JsonValueKind.Number) port = p.GetInt32();
+            return new McpServerInfo(enabled, port, $"enabled={enabled} port={port}");
+        }
+        catch (Exception ex)
+        {
+            return new McpServerInfo(null, null, $"{ex.GetType().Name}: {ex.Message}");
+        }
+        finally { try { File.Delete(tempCopy); } catch { } }
+    }
 }

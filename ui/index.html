@@ -505,6 +505,34 @@
     .field.port-field input { max-width: 140px; }
     .field.hotkey-field input { max-width: 180px; }
 
+    /* Port-mismatch banner inside the MCP section. Surfaces when our saved
+       port disagrees with what Studio Pro is actually serving on. */
+    .port-mismatch {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      margin: -4px 0 12px;
+      background: var(--warning-fill);
+      border: 1px solid var(--warning-border);
+      border-radius: 4px;
+      color: var(--warning);
+      font: var(--fw-regular) var(--fs-sm)/1.5 var(--font-body);
+    }
+    .port-mismatch-icon {
+      flex-shrink: 0;
+      width: 16px; height: 16px;
+      color: var(--warning);
+    }
+    .port-mismatch-icon svg { width: 16px; height: 16px; display: block; }
+    .port-mismatch-msg { flex: 1; color: var(--text-body); }
+    .port-mismatch-msg strong { color: var(--warning); }
+    .port-mismatch-fix {
+      flex-shrink: 0;
+      padding: 4px 10px !important;
+      font-size: var(--fs-xs) !important;
+    }
+
     .checkbox-row {
       display: flex;
       align-items: center;
@@ -662,8 +690,14 @@
     .pill.on .dot  { background: var(--success); }
     .pill.off { color: var(--text-muted); border-color: var(--border-default); background: transparent; }
     .pill.off .dot { background: var(--text-disabled); }
+    /* Warn state — used when our saved MCP port doesn't match the port
+       Studio Pro is actually serving on (from Settings.sqlite). The CLI
+       will be wired to a dead port. */
+    .pill.warn { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 35%, transparent); background: color-mix(in srgb, var(--warning) 10%, transparent); }
+    .pill.warn .dot { background: var(--warning); }
     .pill .tools { color: var(--text-muted); font-weight: var(--fw-regular); }
     .pill.on .tools { color: color-mix(in srgb, var(--success) 70%, var(--text-body)); }
+    .pill.warn .tools { color: color-mix(in srgb, var(--warning) 70%, var(--text-body)); }
   </style>
 </head>
 <body>
@@ -756,6 +790,11 @@
               <label for="set-mcp-enabled" style="margin:0">Enable Studio Pro MCP server integration</label>
             </div>
             <div class="field port-field"><label>Port</label><input id="set-mcp-port" type="number" min="1" max="65535" value="7782"></div>
+            <div id="mcp-port-mismatch" class="port-mismatch" style="display:none">
+              <span class="port-mismatch-icon" id="mcp-mismatch-icon"></span>
+              <span class="port-mismatch-msg" id="mcp-mismatch-msg"></span>
+              <button type="button" class="btn secondary port-mismatch-fix" id="mcp-mismatch-fix">Use Studio Pro's port</button>
+            </div>
             <h5>CLIs to wire</h5>
             <div class="checkbox-row"><input id="set-mcp-claude" type="checkbox"><label for="set-mcp-claude" style="margin:0">Claude Code (writes <code>.mcp.json</code>)</label></div>
             <div class="checkbox-row"><input id="set-mcp-copilot" type="checkbox"><label for="set-mcp-copilot" style="margin:0">GitHub Copilot CLI (shares <code>.mcp.json</code>)</label></div>

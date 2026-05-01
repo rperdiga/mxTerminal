@@ -35,7 +35,15 @@ public sealed record SettingsPayload(
     int ActionsServerPort,
     string RefreshFromDiskHotkey,
     bool RestoreTabsOnReopen,
-    AboutInfoPayload About);
+    AboutInfoPayload About,
+    StudioProMcpInfoPayload? StudioProMcp);
+
+/// <summary>
+/// Snapshot of Studio Pro's own MCP-server preference. JS uses this to warn
+/// when the port we wire into Claude's .mcp.json doesn't match what Studio
+/// Pro actually serves on. Null when the SQLite probe couldn't read it.
+/// </summary>
+public sealed record StudioProMcpInfoPayload(bool? Enabled, int? Port);
 
 /// <summary>Read-only metadata shown in the settings modal's About section.</summary>
 public sealed record AboutInfoPayload(
