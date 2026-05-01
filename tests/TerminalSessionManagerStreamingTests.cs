@@ -14,7 +14,7 @@ public class TerminalSessionManagerStreamingTests
         var received = new List<byte[]>();
         mgr.Output += (id, data) => received.Add(data);
 
-        var id = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\", 80, 24);
+        var (id, _) = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\", 80, 24);
         fake.LastSession.PushOutput(new byte[] { 0x41, 0x42 });
         fake.LastSession.PushOutput(new byte[] { 0x43 });
 
@@ -30,7 +30,7 @@ public class TerminalSessionManagerStreamingTests
     {
         var fake = new StreamingFakePtyFactory();
         var mgr = new TerminalSessionManager(fake, ringBufferBytes: 64);
-        var id = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\", 80, 24);
+        var (id, _) = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\", 80, 24);
         fake.LastSession.PushOutput(new byte[] { 1, 2, 3 });
         fake.LastSession.PushOutput(new byte[] { 4, 5 });
 
@@ -44,7 +44,7 @@ public class TerminalSessionManagerStreamingTests
     {
         var fake = new StreamingFakePtyFactory();
         var mgr = new TerminalSessionManager(fake, ringBufferBytes: 4);
-        var id = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\", 80, 24);
+        var (id, _) = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\", 80, 24);
         fake.LastSession.PushOutput(new byte[] { 1, 2, 3, 4, 5, 6 });
 
         await Task.Delay(100);
@@ -61,7 +61,7 @@ public class TerminalSessionManagerStreamingTests
         string? capturedId = null;
         mgr.Exited += (id, code) => { capturedId = id; capturedCode = code; };
 
-        var id = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\", 80, 24);
+        var (id, _) = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\", 80, 24);
         fake.LastSession.RaiseExited(7);
 
         await Task.Delay(50);

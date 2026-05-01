@@ -26,4 +26,5 @@ public sealed record SaveSettingsPayload(
     string[]? McpClients = null,
     bool? ActionsServerEnabled = null,
     int? ActionsServerPort = null,
-    string? RefreshFromDiskHotkey = null);
+    string? RefreshFromDiskHotkey = null,
+    bool? RestoreTabsOnReopen = null);

@@ -1,7 +1,21 @@
 import { Bridge } from "./bridge.js";
-import { ThemeName, applyBodyTheme, isThemeName } from "./theme.js";
+import { ThemeName } from "./theme.js";
+import { mountIcon, IconName } from "./icons.js";
 
-interface ShellOption { name: string; path: string; }
+const SECTIONS = [
+  "general",
+  "shell",
+  "mcp",
+  "actions",
+  "skills",
+  "about",
+] as const;
+type SectionName = (typeof SECTIONS)[number];
+
+interface ShellOption {
+  name: string;
+  path: string;
+}
 
 interface SettingsPayload {
   shellPath: string;
@@ -16,6 +30,7 @@ interface SettingsPayload {
   actionsServerEnabled: boolean;
   actionsServerPort: number;
   refreshFromDiskHotkey: string;
+  restoreTabsOnReopen: boolean;
 }
 
 interface McpResult {
@@ -28,25 +43,53 @@ const CUSTOM_VALUE = "__custom__";
 
 export class SettingsModal {
   private modal = document.getElementById("settings-modal") as HTMLDivElement;
-  private selShell = document.getElementById("set-shell-select") as HTMLSelectElement;
+  private selShell = document.getElementById(
+    "set-shell-select",
+  ) as HTMLSelectElement;
   private inpShell = document.getElementById("set-shell") as HTMLInputElement;
-  private rowShellCustom = document.getElementById("set-shell-custom-row") as HTMLDivElement;
+  private rowShellCustom = document.getElementById(
+    "set-shell-custom-row",
+  ) as HTMLDivElement;
   private inpArgs = document.getElementById("set-args") as HTMLInputElement;
-  private selTheme = document.getElementById("set-theme") as HTMLSelectElement;
   private inpRing = document.getElementById("set-ring") as HTMLInputElement;
   private inpScroll = document.getElementById("set-scroll") as HTMLInputElement;
-  private chkMcp = document.getElementById("set-mcp-enabled") as HTMLInputElement;
-  private inpMcpPort = document.getElementById("set-mcp-port") as HTMLInputElement;
-  private chkMcpClaude = document.getElementById("set-mcp-claude") as HTMLInputElement;
-  private chkMcpCopilot = document.getElementById("set-mcp-copilot") as HTMLInputElement;
-  private chkMcpCodex = document.getElementById("set-mcp-codex") as HTMLInputElement;
-  private chkActions = document.getElementById("set-actions-enabled") as HTMLInputElement;
-  private inpActionsPort = document.getElementById("set-actions-port") as HTMLInputElement;
-  private inpRefreshHotkey = document.getElementById("set-refresh-hotkey") as HTMLInputElement;
+  private chkRestoreTabs = document.getElementById(
+    "set-restore-tabs",
+  ) as HTMLInputElement;
+  private chkMcp = document.getElementById(
+    "set-mcp-enabled",
+  ) as HTMLInputElement;
+  private inpMcpPort = document.getElementById(
+    "set-mcp-port",
+  ) as HTMLInputElement;
+  private chkMcpClaude = document.getElementById(
+    "set-mcp-claude",
+  ) as HTMLInputElement;
+  private chkMcpCopilot = document.getElementById(
+    "set-mcp-copilot",
+  ) as HTMLInputElement;
+  private chkMcpCodex = document.getElementById(
+    "set-mcp-codex",
+  ) as HTMLInputElement;
+  private chkActions = document.getElementById(
+    "set-actions-enabled",
+  ) as HTMLInputElement;
+  private inpActionsPort = document.getElementById(
+    "set-actions-port",
+  ) as HTMLInputElement;
+  private inpRefreshHotkey = document.getElementById(
+    "set-refresh-hotkey",
+  ) as HTMLInputElement;
   private banner = document.getElementById("banner") as HTMLDivElement;
-  private bannerIcon = document.getElementById("banner-icon") as HTMLSpanElement;
-  private bannerMessage = document.getElementById("banner-message") as HTMLSpanElement;
-  private bannerClose = document.getElementById("banner-close") as HTMLSpanElement;
+  private bannerIcon = document.getElementById(
+    "banner-icon",
+  ) as HTMLSpanElement;
+  private bannerMessage = document.getElementById(
+    "banner-message",
+  ) as HTMLSpanElement;
+  private bannerClose = document.getElementById(
+    "banner-close",
+  ) as HTMLSpanElement;
   private bannerTimer: number | undefined;
 
   private knownShells: ShellOption[] = [];
@@ -56,17 +99,83 @@ export class SettingsModal {
     private onScrollbackChanged: (lines: number) => void,
     private onThemeChanged: (theme: ThemeName) => void,
   ) {
-    document.getElementById("btn-settings")!.addEventListener("click", () => this.open());
-    document.getElementById("set-cancel")!.addEventListener("click", () => this.close());
-    document.getElementById("set-save")!.addEventListener("click", () => this.save());
+    document
+      .getElementById("btn-settings")!
+      .addEventListener("click", () => this.open());
+    document
+      .getElementById("set-cancel")!
+      .addEventListener("click", () => this.close());
+    document
+      .getElementById("set-save")!
+      .addEventListener("click", () => this.save());
 
     this.selShell.addEventListener("change", () => this.onShellSelectChange());
     this.chkMcp.addEventListener("change", () => this.onMcpEnabledChange());
-    this.chkActions.addEventListener("change", () => this.onActionsEnabledChange());
+    this.chkActions.addEventListener("change", () =>
+      this.onActionsEnabledChange(),
+    );
     this.bannerClose.addEventListener("click", () => this.hideBanner());
 
+    this.mountNavIcons();
+    this.wireNavRail();
+    this.activateSection("general");
+
     bridge.on("settings", (d: SettingsPayload) => this.populate(d));
-    bridge.on("mcpResult", (d: McpResult) => this.showBanner(d.ok ? "ok" : "err", d.message));
+    bridge.on("mcpResult", (d: McpResult) =>
+      this.showBanner(d.ok ? "ok" : "err", d.message),
+    );
+  }
+
+  /** Replace each .nav-icon[data-icon=NAME] placeholder with the matching SVG.
+   *  Same trick for the "Coming soon" Skills card (.coming-soon .icon[data-icon]). */
+  private mountNavIcons(): void {
+    document.querySelectorAll<HTMLElement>("[data-icon]").forEach((el) => {
+      const name = el.dataset.icon as IconName | undefined;
+      if (name) mountIcon(el, name);
+    });
+  }
+
+  /** Wire click + keyboard nav on the rail (ARIA tablist pattern). */
+  private wireNavRail(): void {
+    const items = Array.from(
+      document.querySelectorAll<HTMLDivElement>(".nav-item[data-section]"),
+    );
+    items.forEach((el, idx) => {
+      el.addEventListener("click", () => {
+        const target = el.dataset.section as SectionName | undefined;
+        if (target) this.activateSection(target);
+      });
+      el.addEventListener("keydown", (e: KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          el.click();
+          return;
+        }
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          const dir = e.key === "ArrowDown" ? 1 : -1;
+          const next = items[(idx + dir + items.length) % items.length];
+          next?.focus();
+        }
+      });
+    });
+  }
+
+  /** Switch the visible section + sync rail aria/active state + move focus. */
+  private activateSection(name: SectionName): void {
+    document
+      .querySelectorAll<HTMLDivElement>(".nav-item[data-section]")
+      .forEach((el) => {
+        const matches = el.dataset.section === name;
+        el.classList.toggle("active", matches);
+        el.setAttribute("aria-selected", String(matches));
+        el.tabIndex = matches ? 0 : -1;
+      });
+    document
+      .querySelectorAll<HTMLElement>(".settings-section[data-section]")
+      .forEach((el) => {
+        el.classList.toggle("active", el.dataset.section === name);
+      });
   }
 
   /** When the master MCP toggle flips, sync the per-CLI checkboxes:
@@ -78,7 +187,7 @@ export class SettingsModal {
       this.chkMcpClaude.checked = false;
       this.chkMcpCopilot.checked = false;
       this.chkMcpCodex.checked = false;
-      this.chkActions.checked = false;        // actions can't run without primary MCP wiring
+      this.chkActions.checked = false; // actions can't run without primary MCP wiring
     }
     this.chkMcpClaude.disabled = !enabled;
     this.chkMcpCopilot.disabled = !enabled;
@@ -94,7 +203,7 @@ export class SettingsModal {
   }
 
   private showBanner(kind: "ok" | "err", message: string) {
-    this.bannerIcon.textContent = kind === "ok" ? "✓" : "!";
+    mountIcon(this.bannerIcon, kind === "ok" ? "checkCircle" : "alertCircle");
     this.bannerMessage.textContent = message;
     this.banner.className = `visible ${kind}`;
     if (this.bannerTimer !== undefined) window.clearTimeout(this.bannerTimer);
@@ -117,7 +226,9 @@ export class SettingsModal {
     this.modal.classList.add("visible");
   }
 
-  close() { this.modal.classList.remove("visible"); }
+  close() {
+    this.modal.classList.remove("visible");
+  }
 
   /** Apply incoming settings to all form fields and to the live UI. */
   private populate(d: SettingsPayload) {
@@ -127,20 +238,21 @@ export class SettingsModal {
     this.inpArgs.value = (d.args ?? []).join(" ");
     this.inpRing.value = String(d.ringBufferKB);
     this.inpScroll.value = String(d.xtermScrollbackLines);
+    this.chkRestoreTabs.checked = d.restoreTabsOnReopen ?? true;
 
-    const theme = isThemeName(d.theme) ? d.theme : "dark";
-    this.selTheme.value = theme;
-    applyBodyTheme(theme);
-    this.onThemeChanged(theme);
+    // Theme is not user-settable here; C# pushes Studio Pro's actual theme
+    // via ?theme= URL param, with prefers-color-scheme as fallback. We always
+    // call onThemeChanged("auto") so resolveTheme() runs the priority chain.
+    this.onThemeChanged("auto");
     this.onScrollbackChanged(d.xtermScrollbackLines);
 
     // MCP fields
     this.chkMcp.checked = !!d.mcpEnabled;
     this.inpMcpPort.value = String(d.mcpPort ?? 7782);
-    const clients = new Set((d.mcpClients ?? []).map(c => c.toLowerCase()));
-    this.chkMcpClaude.checked  = clients.has("claude");
+    const clients = new Set((d.mcpClients ?? []).map((c) => c.toLowerCase()));
+    this.chkMcpClaude.checked = clients.has("claude");
     this.chkMcpCopilot.checked = clients.has("copilot");
-    this.chkMcpCodex.checked   = clients.has("codex");
+    this.chkMcpCodex.checked = clients.has("codex");
     // Apply enabled/disabled to children based on master state.
     this.onMcpEnabledChange();
 
@@ -148,7 +260,7 @@ export class SettingsModal {
     this.chkActions.checked = d.actionsServerEnabled;
     this.inpActionsPort.value = String(d.actionsServerPort);
     this.inpRefreshHotkey.value = d.refreshFromDiskHotkey;
-    this.onMcpEnabledChange();   // also flips actions enabled state
+    this.onMcpEnabledChange(); // also flips actions enabled state
   }
 
   private rebuildShellSelect(currentPath: string) {
@@ -187,16 +299,16 @@ export class SettingsModal {
 
   private save() {
     const args = this.inpArgs.value.trim();
-    const themeRaw = this.selTheme.value;
-    const theme: ThemeName = isThemeName(themeRaw) ? themeRaw : "dark";
-    const shellPath = this.selShell.value === CUSTOM_VALUE
-      ? (this.inpShell.value.trim() || "powershell.exe")
-      : this.selShell.value;
+    const theme: ThemeName = "auto";
+    const shellPath =
+      this.selShell.value === CUSTOM_VALUE
+        ? this.inpShell.value.trim() || "powershell.exe"
+        : this.selShell.value;
 
     const mcpClients: string[] = [];
-    if (this.chkMcpClaude.checked)  mcpClients.push("claude");
+    if (this.chkMcpClaude.checked) mcpClients.push("claude");
     if (this.chkMcpCopilot.checked) mcpClients.push("copilot");
-    if (this.chkMcpCodex.checked)   mcpClients.push("codex");
+    if (this.chkMcpCodex.checked) mcpClients.push("codex");
 
     this.bridge.send("saveSettings", {
       shellPath,
@@ -210,9 +322,9 @@ export class SettingsModal {
       actionsServerEnabled: this.chkActions.checked,
       actionsServerPort: parseInt(this.inpActionsPort.value, 10) || 7783,
       refreshFromDiskHotkey: this.inpRefreshHotkey.value,
+      restoreTabsOnReopen: this.chkRestoreTabs.checked,
     });
 
-    applyBodyTheme(theme);
     this.onThemeChanged(theme);
     this.onScrollbackChanged(parseInt(this.inpScroll.value, 10) || 10000);
     this.close();

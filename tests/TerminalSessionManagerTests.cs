@@ -7,19 +7,63 @@ namespace Terminal.Tests;
 public class TerminalSessionManagerTests
 {
     [Fact]
-    public async Task CreateSession_ReturnsTabId_AndSessionAppearsInList()
+    public async Task CreateSession_ReturnsTabIdAndTitle_AndSessionAppearsInList()
     {
         var fake = new FakePtyFactory();
         var mgr = new TerminalSessionManager(fake);
-        var id = await mgr.CreateSessionAsync("powershell.exe", Array.Empty<string>(), "C:\\X", 80, 24);
+        var (id, title) = await mgr.CreateSessionAsync("powershell.exe", Array.Empty<string>(), "C:\\X", 80, 24);
 
         id.Should().NotBeNullOrEmpty();
+        title.Should().Be("Pwsh - 1");
         var list = mgr.ListSessions();
         list.Should().HaveCount(1);
         list[0].TabId.Should().Be(id);
+        list[0].Title.Should().Be("Pwsh - 1");
         list[0].ShellPath.Should().Be("powershell.exe");
         list[0].Cwd.Should().Be("C:\\X");
         list[0].Alive.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TabTitles_UseLowercaseShellLabel_AndIncrementOrdinal()
+    {
+        var fake = new FakePtyFactory();
+        var mgr = new TerminalSessionManager(fake);
+        var (_, t1) = await mgr.CreateSessionAsync("powershell.exe", Array.Empty<string>(), "C:\\X", 80, 24);
+        var (_, t2) = await mgr.CreateSessionAsync("bash.exe", Array.Empty<string>(), "C:\\X", 80, 24);
+        var (_, t3) = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\X", 80, 24);
+        var (_, t4) = await mgr.CreateSessionAsync("pwsh.exe", Array.Empty<string>(), "C:\\X", 80, 24);
+
+        t1.Should().Be("Pwsh - 1");
+        t2.Should().Be("Bash - 2");
+        t3.Should().Be("Cmd - 3");
+        t4.Should().Be("Pwsh - 4");  // pwsh.exe and powershell.exe both canonicalize to "Pwsh"
+    }
+
+    [Fact]
+    public async Task TabOrdinal_GapFills_AfterClose()
+    {
+        var fake = new FakePtyFactory();
+        var mgr = new TerminalSessionManager(fake);
+        var (id1, t1) = await mgr.CreateSessionAsync("powershell.exe", Array.Empty<string>(), "C:\\X", 80, 24);
+        var (id2, t2) = await mgr.CreateSessionAsync("powershell.exe", Array.Empty<string>(), "C:\\X", 80, 24);
+        var (_,   t3) = await mgr.CreateSessionAsync("powershell.exe", Array.Empty<string>(), "C:\\X", 80, 24);
+
+        t1.Should().Be("Pwsh - 1");
+        t2.Should().Be("Pwsh - 2");
+        t3.Should().Be("Pwsh - 3");
+
+        // Close #2 → next new tab should fill the #2 slot, not become #4.
+        mgr.Close(id2);
+        var (_, t4) = await mgr.CreateSessionAsync("powershell.exe", Array.Empty<string>(), "C:\\X", 80, 24);
+        t4.Should().Be("Pwsh - 2");
+
+        // Close all three → next tab is #1 again.
+        mgr.Close(id1);
+        mgr.Close(mgr.ListSessions()[0].TabId);
+        mgr.Close(mgr.ListSessions()[0].TabId);
+        var (_, t5) = await mgr.CreateSessionAsync("powershell.exe", Array.Empty<string>(), "C:\\X", 80, 24);
+        t5.Should().Be("Pwsh - 1");
     }
 
     [Fact]
@@ -27,7 +71,7 @@ public class TerminalSessionManagerTests
     {
         var fake = new FakePtyFactory();
         var mgr = new TerminalSessionManager(fake);
-        var id = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\Y", 80, 24);
+        var (id, _) = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\Y", 80, 24);
 
         mgr.Close(id);
 
@@ -40,7 +84,7 @@ public class TerminalSessionManagerTests
     {
         var fake = new FakePtyFactory();
         var mgr = new TerminalSessionManager(fake);
-        var id = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\X", 80, 24);
+        var (id, _) = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\X", 80, 24);
 
         mgr.Write(id, new byte[] { 0x68, 0x69 });  // "hi"
 
@@ -52,7 +96,7 @@ public class TerminalSessionManagerTests
     {
         var fake = new FakePtyFactory();
         var mgr = new TerminalSessionManager(fake);
-        var id = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\X", 80, 24);
+        var (id, _) = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\X", 80, 24);
 
         mgr.Resize(id, 120, 40);
 

@@ -4,6 +4,7 @@ using Mendix.StudioPro.ExtensionsAPI.Model.Projects;
 using Mendix.StudioPro.ExtensionsAPI.UI.DockablePane;
 using Mendix.StudioPro.ExtensionsAPI.UI.WebView;
 using Terminal.Messages;
+using System.Reflection;
 using System.Text.Json;
 
 namespace Terminal;
@@ -46,7 +47,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         // Allow right-click → Inspect inside the WebView for diagnostics.
         try { ((dynamic)webView).AllowedDevTools = true; } catch { /* best-effort */ }
         try { ((dynamic)webView).AllowReload    = true; } catch { /* best-effort */ }
-        log.Info($"InitWebView build=v0.1.1+paste-fix at {webIndexUri}");
+        log.Info($"InitWebView build={ResolveBuildVersion()} at {webIndexUri}");
 
         outputHandler = (tabId, bytes) => Post("output", new OutputPayload(tabId, Convert.ToBase64String(bytes)));
         exitedHandler = (tabId, code) => Post("exit", new ExitPayload(tabId, code));
@@ -170,6 +171,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             var newActionsEnabled  = p.ActionsServerEnabled ?? current.ActionsServerEnabled;
             var newActionsPort     = p.ActionsServerPort    ?? current.ActionsServerPort;
             var newRefreshHotkey   = p.RefreshFromDiskHotkey ?? current.RefreshFromDiskHotkey;
+            var newRestoreTabs     = p.RestoreTabsOnReopen ?? current.RestoreTabsOnReopen;
 
             // 1. Probe Studio Pro's primary MCP server (existing behaviour).
             if (newEnabled)
@@ -228,6 +230,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 ActionsServerEnabled = newActionsEnabled,
                 ActionsServerPort = newActionsPort,
                 RefreshFromDiskHotkey = newRefreshHotkey,
+                RestoreTabsOnReopen = newRestoreTabs,
             };
 
             // 3. Apply file changes BEFORE saving settings.
@@ -353,8 +356,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             var args = p.Args ?? settings.Args;
             var cwd = p.Cwd ?? dir;
 
-            var tabId = await manager.CreateSessionAsync(shell, args, cwd, p.Cols, p.Rows);
-            Post("tabCreated", new TabCreatedPayload(tabId, Path.GetFileNameWithoutExtension(shell), shell, cwd));
+            var (tabId, title) = await manager.CreateSessionAsync(shell, args, cwd, p.Cols, p.Rows);
+            Post("tabCreated", new TabCreatedPayload(tabId, title, shell, cwd));
         }
         catch (Exception ex)
         {
@@ -388,6 +391,20 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
 
     private string? GetProjectDir() => (getCurrentApp()?.Root as IProject)?.DirectoryPath;
 
+    /// <summary>
+    /// Pulls the build version from assembly metadata so logs (and the
+    /// future "About" surface in the settings modal) read a single source
+    /// of truth set in Terminal.csproj's &lt;InformationalVersion&gt;.
+    /// </summary>
+    private static string ResolveBuildVersion()
+    {
+        var asm = Assembly.GetExecutingAssembly();
+        var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        if (!string.IsNullOrEmpty(info)) return $"v{info}";
+        var v = asm.GetName().Version;
+        return v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "v?";
+    }
+
     private static SettingsPayload BuildSettingsPayload(TerminalSettings s) => new(
         ShellPath: s.ShellPath,
         Args: s.Args,
@@ -402,5 +419,6 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         McpClients: s.McpClients,
         ActionsServerEnabled: s.ActionsServerEnabled,
         ActionsServerPort: s.ActionsServerPort,
-        RefreshFromDiskHotkey: s.RefreshFromDiskHotkey);
+        RefreshFromDiskHotkey: s.RefreshFromDiskHotkey,
+        RestoreTabsOnReopen: s.RestoreTabsOnReopen);
 }

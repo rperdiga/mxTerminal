@@ -33,7 +33,8 @@ public sealed record SettingsPayload(
     string[] McpClients,
     bool ActionsServerEnabled,
     int ActionsServerPort,
-    string RefreshFromDiskHotkey);
+    string RefreshFromDiskHotkey,
+    bool RestoreTabsOnReopen);
 
 /// <summary>
 /// Sent on save when MCP-related work succeeded or failed. The JS side

@@ -1,6 +1,7 @@
 import { Bridge, encodeBase64, decodeBase64 } from "./bridge.js";
 import { XtermTab } from "./xterm-tab.js";
-import { ThemeName } from "./theme.js";
+import { ThemeName, applyTheme, resolveTheme } from "./theme.js";
+import { icon } from "./icons.js";
 
 interface TabState {
   tabId: string;
@@ -13,21 +14,29 @@ export class TabManager {
   private tabs = new Map<string, TabState>();
   private activeTabId: string | null = null;
   private scrollbackLines = 10000;
-  private theme: ThemeName = "dark";
+  // Initial value is "auto" so the FIRST xterm spawned (before settings come
+  // back from C#) picks up the right theme via the URL ?theme= param. If
+  // initial were "dark", a race could leave xterm rendering dark on a light
+  // host until a theme-update forced refresh.
+  private theme: ThemeName = "auto";
 
   constructor(
     private bridge: Bridge,
     private tabsContainer: HTMLDivElement,
     private terminalsContainer: HTMLDivElement,
   ) {
-    bridge.on("tabsList", (d: { tabs: { tabId: string; title: string; alive: boolean }[] }) => {
-      // On reattach: rebuild tabs we don't have yet, then request replay for each.
-      for (const t of d.tabs) {
-        if (!this.tabs.has(t.tabId)) this.attachExistingTab(t.tabId, t.title);
-        this.bridge.send("replay", { tabId: t.tabId });
-      }
-      if (d.tabs.length > 0 && !this.activeTabId) this.activate(d.tabs[0]!.tabId);
-    });
+    bridge.on(
+      "tabsList",
+      (d: { tabs: { tabId: string; title: string; alive: boolean }[] }) => {
+        // On reattach: rebuild tabs we don't have yet, then request replay for each.
+        for (const t of d.tabs) {
+          if (!this.tabs.has(t.tabId)) this.attachExistingTab(t.tabId, t.title);
+          this.bridge.send("replay", { tabId: t.tabId });
+        }
+        if (d.tabs.length > 0 && !this.activeTabId)
+          this.activate(d.tabs[0]!.tabId);
+      },
+    );
 
     bridge.on("tabCreated", (d: { tabId: string; title: string }) => {
       this.attachExistingTab(d.tabId, d.title);
@@ -58,7 +67,9 @@ export class TabManager {
     window.addEventListener("resize", () => this.resizeActive());
   }
 
-  setScrollbackLines(n: number) { this.scrollbackLines = n; }
+  setScrollbackLines(n: number) {
+    this.scrollbackLines = n;
+  }
 
   /**
    * Mendix's WebView postMessage has a per-message size limit (≈ 1 MB in
@@ -76,14 +87,31 @@ export class TabManager {
     }
     for (let off = 0; off < bytes.length; off += TabManager.INPUT_CHUNK_BYTES) {
       const end = Math.min(off + TabManager.INPUT_CHUNK_BYTES, bytes.length);
-      this.bridge.send("input", { tabId, dataB64: encodeBase64(bytes.subarray(off, end)) });
+      this.bridge.send("input", {
+        tabId,
+        dataB64: encodeBase64(bytes.subarray(off, end)),
+      });
     }
   }
 
   setTheme(theme: ThemeName): void {
     this.theme = theme;
-    // Live-update existing xterm instances.
+    // Single source of truth: apply body theme (resolves "auto") and
+    // live-update every existing xterm instance.
+    const resolved = applyTheme(theme);
+    const mq =
+      typeof window !== "undefined" && window.matchMedia
+        ? `pcs-dark=${window.matchMedia("(prefers-color-scheme: dark)").matches}`
+        : "no-matchMedia";
+    this.bridge.send("diag", {
+      msg: `setTheme setting=${theme} resolved=${resolved} ${mq} html.class=${document.documentElement.className}`,
+    });
+    void resolveTheme; // keep import alive across future refactors
     for (const t of this.tabs.values()) t.xterm.setTheme(theme);
+  }
+
+  getTheme(): ThemeName {
+    return this.theme;
   }
 
   newTab(): void {
@@ -97,7 +125,8 @@ export class TabManager {
   }
 
   closeActiveTab(): void {
-    if (this.activeTabId) this.bridge.send("closeTab", { tabId: this.activeTabId });
+    if (this.activeTabId)
+      this.bridge.send("closeTab", { tabId: this.activeTabId });
   }
 
   private attachExistingTab(tabId: string, title: string) {
@@ -113,16 +142,27 @@ export class TabManager {
       host,
       scrollbackLines: this.scrollbackLines,
       theme: this.theme,
-      onInput: bytes => this.sendInputChunked(tabId, bytes),
-      onResize: (cols, rows) => this.bridge.send("resize", { tabId, cols, rows }),
-      diag: msg => this.bridge.send("diag", { msg }),
+      onInput: (bytes) => this.sendInputChunked(tabId, bytes),
+      onResize: (cols, rows) =>
+        this.bridge.send("resize", { tabId, cols, rows }),
+      diag: (msg) => this.bridge.send("diag", { msg }),
     });
 
     const tabEl = document.createElement("div");
     tabEl.className = "tab";
-    tabEl.innerHTML = `<span class="tab-title">${title}</span><span class="tab-close">×</span>`;
-    tabEl.addEventListener("click", e => {
-      if ((e.target as HTMLElement).classList.contains("tab-close")) {
+    // Title is text-content, not innerHTML, so it's safe against shell-name
+    // characters that could form HTML. Close uses a Lucide x SVG.
+    const titleEl = document.createElement("span");
+    titleEl.className = "tab-title";
+    titleEl.textContent = title;
+    const closeEl = document.createElement("span");
+    closeEl.className = "tab-close";
+    closeEl.setAttribute("role", "button");
+    closeEl.setAttribute("aria-label", "Close tab");
+    closeEl.innerHTML = icon("x");
+    tabEl.append(titleEl, closeEl);
+    tabEl.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).closest(".tab-close")) {
         this.bridge.send("closeTab", { tabId });
       } else {
         this.activate(tabId);

@@ -9,12 +9,19 @@ public sealed class TerminalSessionManager : IDisposable
     private readonly IPtyFactory factory;
     private readonly int ringBufferBytes;
     private readonly ConcurrentDictionary<string, SessionState> sessions = new();
+    private readonly object ordinalGate = new();
     private bool disposed;
     private StudioProActionServer? actionServer;
     private readonly object actionServerGate = new();
 
     public event Action<string, byte[]>? Output;
     public event Action<string, int?>? Exited;
+    /// <summary>Fires after sessions dict mutates (create/close/exit).
+    /// Listeners typically persist the new tab state to disk.</summary>
+    public event Action? SessionsChanged;
+
+    /// <summary>Tabs that exited cleanly (code 0). Cross-session restore skips these.</summary>
+    private readonly HashSet<int> exitedCleanOrdinals = new();
 
     public TerminalSessionManager(IPtyFactory factory, int ringBufferBytes = 4 * 1024 * 1024)
     {
@@ -23,7 +30,7 @@ public sealed class TerminalSessionManager : IDisposable
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
     }
 
-    public async Task<string> CreateSessionAsync(
+    public async Task<(string TabId, string Title)> CreateSessionAsync(
         string shellPath, string[] args, string cwd, int cols, int rows, CancellationToken ct = default)
     {
         if (disposed) throw new ObjectDisposedException(nameof(TerminalSessionManager));
@@ -31,18 +38,42 @@ public sealed class TerminalSessionManager : IDisposable
         var env = BuildEnvironment();
         var pty = await factory.SpawnAsync(shellPath, args, cwd, cols, rows, env, ct);
         var tabId = Guid.NewGuid().ToString("N");
-        var state = new SessionState(tabId, shellPath, args, cwd, cols, rows, pty, new RingBuffer(ringBufferBytes));
+        // Pick the smallest unused positive integer among currently-active tabs.
+        // This keeps the visible numbers tight (close #2, next new tab fills #2)
+        // and means the first tab is always #1 — Neo's "the number should be
+        // based on the current count, not a lifetime counter".
+        var ordinal = NextOrdinal();
+        var title = TitleFor(shellPath, ordinal);
+        var state = new SessionState(tabId, shellPath, args, cwd, cols, rows, pty, new RingBuffer(ringBufferBytes), title, ordinal);
         state.AttachTimer(_ => FlushPending(state));
         pty.Exited += (_, code) => OnPtyExited(tabId, code);
 
         sessions[tabId] = state;
         _ = Task.Run(() => ReadLoopAsync(state, state.Cts.Token));
-        return tabId;
+        SessionsChanged?.Invoke();
+        return (tabId, title);
     }
+
+    /// <summary>
+    /// Snapshot the current tabs in a form suitable for persistence to
+    /// terminal-state.json. Includes only tabs whose PTY is still alive — we
+    /// don't carry "exited cleanly" tabs across restart.
+    /// </summary>
+    public TerminalState SnapshotState()
+    {
+        var tabs = sessions.Values
+            .Where(s => s.Pty.ExitCode is null && !exitedCleanOrdinals.Contains(s.Ordinal))
+            .OrderBy(s => s.Ordinal)
+            .Select(s => new TerminalState.Tab(s.Title, s.ShellPath, s.Args, s.Ordinal))
+            .ToList();
+        return new TerminalState(tabs, ActiveTabOrdinal: tabs.FirstOrDefault()?.Ordinal);
+    }
+
+    public int SessionCount => sessions.Count;
 
     public IReadOnlyList<SessionInfo> ListSessions() =>
         sessions.Values.Select(s => new SessionInfo(
-            s.TabId, TitleFor(s.ShellPath), s.ShellPath, s.Cwd, s.Pty.ExitCode is null
+            s.TabId, s.Title, s.ShellPath, s.Cwd, s.Pty.ExitCode is null
         )).ToList();
 
     public byte[] SnapshotBuffer(string tabId)
@@ -73,6 +104,7 @@ public sealed class TerminalSessionManager : IDisposable
         {
             s.Cts.Cancel();
             s.Pty.Dispose();
+            SessionsChanged?.Invoke();
         }
     }
 
@@ -102,8 +134,8 @@ public sealed class TerminalSessionManager : IDisposable
         foreach (var snap in snapshots)
         {
             Close(snap.TabId);
-            var newId = await CreateSessionAsync(snap.ShellPath, snap.Args, snap.Cwd, snap.Cols, snap.Rows, ct);
-            recycled.Add(new RecycledSession(snap.TabId, newId, TitleFor(snap.ShellPath), snap.ShellPath, snap.Cwd));
+            var (newId, newTitle) = await CreateSessionAsync(snap.ShellPath, snap.Args, snap.Cwd, snap.Cols, snap.Rows, ct);
+            recycled.Add(new RecycledSession(snap.TabId, newId, newTitle, snap.ShellPath, snap.Cwd));
         }
         return recycled;
     }
@@ -153,7 +185,12 @@ public sealed class TerminalSessionManager : IDisposable
         if (sessions.TryRemove(tabId, out var s))
         {
             s.Cts.Cancel();
+            // Track exit-clean tabs so we don't try to restore them across
+            // Studio Pro restart. Exit code 0 means user explicitly exited
+            // (e.g. typed `exit`) — bringing it back would be surprising.
+            if (code == 0) exitedCleanOrdinals.Add(s.Ordinal);
             Exited?.Invoke(tabId, code);
+            SessionsChanged?.Invoke();
         }
     }
 
@@ -216,8 +253,50 @@ public sealed class TerminalSessionManager : IDisposable
         Output?.Invoke(s.TabId, toEmit);
     }
 
-    private static string TitleFor(string shellPath) =>
-        Path.GetFileNameWithoutExtension(shellPath);
+    /// <summary>
+    /// Tab title format: "&lt;Shell&gt; - &lt;ordinal&gt;" (Title-cased shell + hyphen + count).
+    /// Examples: "Pwsh - 1", "Bash - 2", "Cmd - 3". Ordinal is the smallest unused
+    /// positive integer among currently-open tabs (gap-filling).
+    /// </summary>
+    private static string TitleFor(string shellPath, int ordinal) =>
+        $"{ShellLabel(shellPath)} - {ordinal}";
+
+    /// <summary>
+    /// Map a shell exe path to a friendly Title-cased label.
+    /// powershell.exe / pwsh.exe → "Pwsh", bash.exe → "Bash", cmd.exe → "Cmd",
+    /// zsh / fish stay verbatim (Title-cased).
+    /// Anything else falls back to Title-cased file-name-without-extension.
+    /// </summary>
+    internal static string ShellLabel(string shellPath)
+    {
+        var name = Path.GetFileNameWithoutExtension(shellPath).ToLowerInvariant();
+        var canonical = name switch
+        {
+            "powershell" or "pwsh" => "pwsh",
+            "cmd"                  => "cmd",
+            "bash"                 => "bash",
+            "wsl"                  => "wsl",
+            _                      => name,
+        };
+        return canonical.Length > 0
+            ? char.ToUpperInvariant(canonical[0]) + canonical.Substring(1)
+            : canonical;
+    }
+
+    /// <summary>
+    /// Returns the smallest positive integer not currently used by any active
+    /// session's Ordinal. Thread-safe via ordinalGate so two concurrent
+    /// CreateSessionAsync calls don't race to the same number.
+    /// </summary>
+    private int NextOrdinal()
+    {
+        lock (ordinalGate)
+        {
+            var used = new HashSet<int>(sessions.Values.Select(s => s.Ordinal));
+            for (int i = 1; ; i++)
+                if (!used.Contains(i)) return i;
+        }
+    }
 
     private static IDictionary<string, string> BuildEnvironment()
     {
@@ -243,16 +322,18 @@ public sealed class TerminalSessionManager : IDisposable
         public int Rows { get; set; }
         public IPtySession Pty { get; }
         public RingBuffer Ring { get; }
+        public string Title { get; }
+        public int Ordinal { get; }
         public List<byte[]> Pending { get; } = new();
         public bool TimerArmed { get; set; }
         public Timer Timer { get; private set; } = null!;
         public CancellationTokenSource Cts { get; } = new();
         public object Gate { get; } = new();
 
-        public SessionState(string tabId, string shellPath, string[] args, string cwd, int cols, int rows, IPtySession pty, RingBuffer ring)
+        public SessionState(string tabId, string shellPath, string[] args, string cwd, int cols, int rows, IPtySession pty, RingBuffer ring, string title, int ordinal)
         {
             TabId = tabId; ShellPath = shellPath; Args = args; Cwd = cwd;
-            Cols = cols; Rows = rows; Pty = pty; Ring = ring;
+            Cols = cols; Rows = rows; Pty = pty; Ring = ring; Title = title; Ordinal = ordinal;
         }
 
         public void AttachTimer(TimerCallback cb) => Timer = new Timer(cb);

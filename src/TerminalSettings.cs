@@ -13,20 +13,26 @@ public sealed record TerminalSettings(
     string[] McpClients,
     bool ActionsServerEnabled,
     int ActionsServerPort,
-    string RefreshFromDiskHotkey)
+    string RefreshFromDiskHotkey,
+    bool RestoreTabsOnReopen)
 {
     public static TerminalSettings Defaults() => new(
         ShellPath: "powershell.exe",
         Args: Array.Empty<string>(),
         RingBufferKB: 4096,
         XtermScrollbackLines: 10000,
-        Theme: "dark",
+        // "auto" follows Studio Pro's WebView host theme via the page's
+        // prefers-color-scheme query. Users can pin to "dark" or "light".
+        Theme: "auto",
         McpEnabled: false,
         McpPort: 7782,
         McpClients: Array.Empty<string>(),
         ActionsServerEnabled: false,
         ActionsServerPort: 7783,
-        RefreshFromDiskHotkey: "F4");
+        RefreshFromDiskHotkey: "F4",
+        // Restore last session's tabs on Studio Pro restart. State persists
+        // to <project>/resources/terminal-state.json. See TerminalState.cs.
+        RestoreTabsOnReopen: true);
 
     private const string FileName = "terminal-settings.json";
     private const string SubDir = "resources";
@@ -60,7 +66,8 @@ public sealed record TerminalSettings(
                 McpClients: dto.McpClients ?? def.McpClients,
                 ActionsServerEnabled: dto.ActionsServerEnabled ?? def.ActionsServerEnabled,
                 ActionsServerPort: dto.ActionsServerPort ?? def.ActionsServerPort,
-                RefreshFromDiskHotkey: dto.RefreshFromDiskHotkey ?? def.RefreshFromDiskHotkey);
+                RefreshFromDiskHotkey: dto.RefreshFromDiskHotkey ?? def.RefreshFromDiskHotkey,
+                RestoreTabsOnReopen: dto.RestoreTabsOnReopen ?? def.RestoreTabsOnReopen);
         }
         catch (JsonException)
         {
@@ -73,7 +80,7 @@ public sealed record TerminalSettings(
         var dir = System.IO.Path.Combine(projectDir, SubDir);
         Directory.CreateDirectory(dir);
         var path = System.IO.Path.Combine(dir, FileName);
-        var dto = new Dto(ShellPath, Args, RingBufferKB, XtermScrollbackLines, Theme, McpEnabled, McpPort, McpClients, ActionsServerEnabled, ActionsServerPort, RefreshFromDiskHotkey);
+        var dto = new Dto(ShellPath, Args, RingBufferKB, XtermScrollbackLines, Theme, McpEnabled, McpPort, McpClients, ActionsServerEnabled, ActionsServerPort, RefreshFromDiskHotkey, RestoreTabsOnReopen);
         File.WriteAllText(path, JsonSerializer.Serialize(dto, Json));
     }
 
@@ -88,5 +95,6 @@ public sealed record TerminalSettings(
         string[]? McpClients,
         bool? ActionsServerEnabled,
         int? ActionsServerPort,
-        string? RefreshFromDiskHotkey);
+        string? RefreshFromDiskHotkey,
+        bool? RestoreTabsOnReopen);
 }
