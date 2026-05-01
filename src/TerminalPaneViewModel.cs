@@ -405,20 +405,31 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         return v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "v?";
     }
 
-    private static SettingsPayload BuildSettingsPayload(TerminalSettings s) => new(
-        ShellPath: s.ShellPath,
-        Args: s.Args,
-        RingBufferKB: s.RingBufferKB,
-        XtermScrollbackLines: s.XtermScrollbackLines,
-        Theme: s.Theme,
-        AvailableShells: ShellDetector.Detect()
-            .Select(o => new ShellOptionPayload(o.Name, o.Path))
-            .ToList(),
-        McpEnabled: s.McpEnabled,
-        McpPort: s.McpPort,
-        McpClients: s.McpClients,
-        ActionsServerEnabled: s.ActionsServerEnabled,
-        ActionsServerPort: s.ActionsServerPort,
-        RefreshFromDiskHotkey: s.RefreshFromDiskHotkey,
-        RestoreTabsOnReopen: s.RestoreTabsOnReopen);
+    private SettingsPayload BuildSettingsPayload(TerminalSettings s)
+    {
+        var dir = GetProjectDir();
+        var settingsPath = dir != null
+            ? System.IO.Path.Combine(dir, "resources", "terminal-settings.json")
+            : null;
+        return new SettingsPayload(
+            ShellPath: s.ShellPath,
+            Args: s.Args,
+            RingBufferKB: s.RingBufferKB,
+            XtermScrollbackLines: s.XtermScrollbackLines,
+            Theme: s.Theme,
+            AvailableShells: ShellDetector.Detect()
+                .Select(o => new ShellOptionPayload(o.Name, o.Path))
+                .ToList(),
+            McpEnabled: s.McpEnabled,
+            McpPort: s.McpPort,
+            McpClients: s.McpClients,
+            ActionsServerEnabled: s.ActionsServerEnabled,
+            ActionsServerPort: s.ActionsServerPort,
+            RefreshFromDiskHotkey: s.RefreshFromDiskHotkey,
+            RestoreTabsOnReopen: s.RestoreTabsOnReopen,
+            About: new AboutInfoPayload(
+                Version: ResolveBuildVersion(),
+                LogPath: log?.Path,
+                SettingsPath: settingsPath));
+    }
 }

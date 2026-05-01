@@ -34,7 +34,14 @@ public sealed record SettingsPayload(
     bool ActionsServerEnabled,
     int ActionsServerPort,
     string RefreshFromDiskHotkey,
-    bool RestoreTabsOnReopen);
+    bool RestoreTabsOnReopen,
+    AboutInfoPayload About);
+
+/// <summary>Read-only metadata shown in the settings modal's About section.</summary>
+public sealed record AboutInfoPayload(
+    string Version,
+    string? LogPath,
+    string? SettingsPath);
 
 /// <summary>
 /// Sent on save when MCP-related work succeeded or failed. The JS side

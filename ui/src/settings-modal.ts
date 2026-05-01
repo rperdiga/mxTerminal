@@ -31,6 +31,13 @@ interface SettingsPayload {
   actionsServerPort: number;
   refreshFromDiskHotkey: string;
   restoreTabsOnReopen: boolean;
+  about: AboutInfo;
+}
+
+interface AboutInfo {
+  version: string;
+  logPath: string | null;
+  settingsPath: string | null;
 }
 
 interface McpResult {
@@ -261,6 +268,19 @@ export class SettingsModal {
     this.inpActionsPort.value = String(d.actionsServerPort);
     this.inpRefreshHotkey.value = d.refreshFromDiskHotkey;
     this.onMcpEnabledChange(); // also flips actions enabled state
+
+    // About section
+    this.populateAbout(d.about);
+  }
+
+  private populateAbout(a: AboutInfo | undefined): void {
+    const set = (id: string, value: string) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    };
+    set("about-version", a?.version ?? "—");
+    set("about-log", a?.logPath ?? "—");
+    set("about-settings", a?.settingsPath ?? "—");
   }
 
   private rebuildShellSelect(currentPath: string) {

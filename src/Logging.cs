@@ -21,13 +21,16 @@ public sealed class Logger
         catch { /* best-effort */ }
     }
 
+    /// <summary>Public so the About panel can show the current log path.</summary>
+    public string? Path => LogPath();
+
     private string? LogPath()
     {
         try
         {
-            var dir = Path.Combine(projectDir, "resources");
+            var dir = System.IO.Path.Combine(projectDir, "resources");
             Directory.CreateDirectory(dir);
-            return Path.Combine(dir, "terminal.log");
+            return System.IO.Path.Combine(dir, "terminal.log");
         }
         catch
         {
