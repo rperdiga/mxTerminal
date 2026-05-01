@@ -180,7 +180,7 @@ public sealed class StudioProActionServer : IDisposable
             ToolDef("refresh_project",
                 "Reload the project model from disk. Use after editing model files (e.g. microflow XML) outside Studio Pro to make the IDE pick up the changes."),
             ToolDef("save_all",
-                "Save all unsaved changes in Studio Pro (Ctrl+S). Use before triggering a run or external CLI op so disk and the in-memory model agree."),
+                "Best-effort save: posts Ctrl+S to Studio Pro's main window. Works when the active document tab has focus; if the user's focus is elsewhere (e.g. inside this terminal), Studio Pro routes the keystroke to the focused child instead and the save may not fire. For guaranteed save, ask the user to click the document tab once first."),
             ToolDef("get_active_run_configuration",
                 "Read-only: returns the currently selected local run configuration (id, name, applicationRootUrl). Useful for confirming which environment a run/stop will affect."),
             ToolDef("get_app_status",
