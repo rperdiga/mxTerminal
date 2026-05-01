@@ -1,6 +1,7 @@
 import { Bridge } from "./bridge.js";
 import { ThemeName } from "./theme.js";
 import { mountIcon, IconName } from "./icons.js";
+import { mountLogo } from "./logo.js";
 
 const SECTIONS = [
   "general",
@@ -356,6 +357,8 @@ export class SettingsModal {
       `is enabled with a port set, then reopen this pane.`;
   }
 
+  private aboutLogoMounted = false;
+
   private populateAbout(a: AboutInfo | undefined): void {
     const set = (id: string, value: string) => {
       const el = document.getElementById(id);
@@ -364,6 +367,15 @@ export class SettingsModal {
     set("about-version", a?.version ?? "—");
     set("about-log", a?.logPath ?? "—");
     set("about-settings", a?.settingsPath ?? "—");
+    // Mount the spinning OneSource logo once — re-mounting on every settings
+    // reload would restart the CSS animation and look glitchy.
+    if (!this.aboutLogoMounted) {
+      const host = document.getElementById("about-logo");
+      if (host) {
+        mountLogo(host, 64, true);
+        this.aboutLogoMounted = true;
+      }
+    }
   }
 
   private rebuildShellSelect(currentPath: string) {

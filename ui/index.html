@@ -441,6 +441,49 @@
       color: var(--text-muted);
     }
 
+    /* OneSource logo — built by the OneSource Center of Excellence.
+       Spins slowly when shown in About; static when used elsewhere. */
+    .os-logo {
+      display: inline-block;
+      line-height: 0;
+      will-change: transform;
+    }
+    .os-logo svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .os-logo-spin svg {
+      animation: os-logo-spin 24s linear infinite;
+      transform-origin: 50% 50%;
+    }
+    @keyframes os-logo-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* About header — logo + product credit row above the info rows. */
+    .about-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin: 4px 0 22px;
+      padding: 14px 16px;
+      background: var(--surface-1);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+    }
+    .about-header .meta { flex: 1; min-width: 0; }
+    .about-header .product-name {
+      font: var(--fw-semibold) var(--fs-lg) var(--font-chrome);
+      color: var(--text-primary);
+      margin: 0 0 2px;
+    }
+    .about-header .product-credit {
+      font: var(--fw-regular) var(--fs-sm) var(--font-body);
+      color: var(--text-muted);
+      margin: 0;
+    }
+
     /* About-section info row */
     .info-row {
       display: flex;
@@ -816,6 +859,13 @@
           <section class="settings-section" data-section="about" role="tabpanel">
             <h4>About</h4>
             <p class="section-desc">Build details and useful paths.</p>
+            <div class="about-header">
+              <div id="about-logo" class="about-logo-host" aria-hidden="true"></div>
+              <div class="meta">
+                <p class="product-name">Mendix Terminal</p>
+                <p class="product-credit">Crafted by the Siemens OneSource Center of Excellence.</p>
+              </div>
+            </div>
             <div class="info-row"><span class="label">Version</span><span id="about-version">—</span></div>
             <div class="info-row"><span class="label">Log file</span><code id="about-log">—</code></div>
             <div class="info-row"><span class="label">Settings file</span><code id="about-settings">—</code></div>
