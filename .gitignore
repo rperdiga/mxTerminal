@@ -23,3 +23,12 @@ Directory.Build.props
 
 # Local skill suggestion staging (machine-local, not part of the repo)
 skill-candidates/
+
+# Add-on module wrapper exports (binaries; attached to GitHub releases instead)
+modules/
+marketing/dist/
+
+# Marketing source captures (full-res screenshots showing real project state).
+# Rendered/redacted outputs in marketing/screenshots/ are committed; raw
+# captures stay local — recapture per machine if regenerating.
+marketing/source/

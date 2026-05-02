@@ -1,5 +1,7 @@
-// OneSource logo — vendored from ui/src/assets/onesource-logo.svg.
-// Built by the Siemens OneSource Center of Excellence team. Spins slowly
+// Brand mark — vendored from ui/src/assets/onesource-logo.svg.
+// Concord is built by the Siemens CoE Team. (The asset filename
+// reflects its origin in the OneSource portal — a separate Siemens
+// product — but functions here as the CoE Team's mark.) Spins slowly
 // in the About panel. Inlines as raw SVG (esbuild text loader) so it
 // inherits CSS transforms cleanly and avoids an extra HTTP fetch.
 

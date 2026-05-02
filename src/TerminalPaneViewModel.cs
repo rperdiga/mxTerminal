@@ -171,23 +171,33 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
 
             var newClients         = p.McpClients ?? current.McpClients;
             var newEnabled         = p.McpEnabled ?? current.McpEnabled;
-            var newPort            = p.McpPort    ?? current.McpPort;
+            // Always derive the MCP port from Studio Pro's live Settings.sqlite
+            // (via ProbeStudioProMcp) — never trust the user-supplied / saved
+            // value, which can drift when the user opens the same Concord on a
+            // project that hasn't enabled Studio Pro's MCP yet (legacy default
+            // 7782 from TerminalSettings.Defaults causes the connection-timeout
+            // banner Neo hit on ConcordPublisher 2026-05-02). Fall back to the
+            // saved port only if the probe fails entirely (e.g. SQLite locked).
+            var probed = ProbeStudioProMcp();
+            var newPort = probed?.Port ?? p.McpPort ?? current.McpPort;
             var newActionsEnabled  = p.ActionsServerEnabled ?? current.ActionsServerEnabled;
             var newActionsPort     = p.ActionsServerPort    ?? current.ActionsServerPort;
             var newRefreshHotkey   = p.RefreshFromDiskHotkey ?? current.RefreshFromDiskHotkey;
             var newRestoreTabs     = p.RestoreTabsOnReopen ?? current.RestoreTabsOnReopen;
 
-            // 1. Probe Studio Pro's primary MCP server (existing behaviour).
+            // 1. Probe Studio Pro's primary MCP server. If unreachable, surface
+            //    a notice but DO NOT abort the save — the user toggling MCP on
+            //    is an intent we should persist; the connectivity is a runtime
+            //    concern they can fix in Studio Pro Preferences without losing
+            //    their Concord settings.
             if (newEnabled)
             {
                 var probe = await McpProbe.ProbeAsync(newPort, log);
                 if (!probe.Ok)
                 {
                     Post("mcpResult", new McpResultPayload(false,
-                        $"{probe.Message}. Enable Studio Pro's MCP server in Preferences → Maia → MCP Server, then try again.",
+                        $"Settings saved, but Studio Pro's MCP server didn't answer on port {newPort}. Enable it in Preferences -> Maia -> MCP Server, then re-save to wire up the CLI configs.",
                         Array.Empty<string>()));
-                    Post("settings", BuildSettingsPayload(current));
-                    return;
                 }
             }
 
