@@ -92,11 +92,15 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 {
                     var p = GetData<InputPayload>(e);
                     var bytes = Convert.FromBase64String(p.DataB64);
-                    // DIAGNOSTIC — remove once paste duplication / truncation is resolved.
-                    var preview = bytes.Length <= 64
-                        ? Convert.ToHexString(bytes)
-                        : Convert.ToHexString(bytes.AsSpan(0, 32).ToArray()) + "..." + Convert.ToHexString(bytes.AsSpan(bytes.Length - 8).ToArray());
-                    log.Info($"input tab={p.TabId.Substring(0, 8)} len={bytes.Length} preview={preview}");
+                    // Diagnostic — only log non-keystroke inputs (paste, multi-byte sequences)
+                    // to avoid one-log-per-keypress flood during interactive typing.
+                    if (bytes.Length > 32)
+                    {
+                        var preview = bytes.Length <= 64
+                            ? Convert.ToHexString(bytes)
+                            : Convert.ToHexString(bytes.AsSpan(0, 32).ToArray()) + "..." + Convert.ToHexString(bytes.AsSpan(bytes.Length - 8).ToArray());
+                        log.Info($"input tab={p.TabId.Substring(0, 8)} len={bytes.Length} preview={preview}");
+                    }
                     manager.Write(p.TabId, bytes);
                     break;
                 }

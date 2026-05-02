@@ -11,8 +11,8 @@
     <RootNamespace>Terminal</RootNamespace>
     <LangVersion>preview</LangVersion>
     <IsPackable>false</IsPackable>
-    <Version>1.0.0</Version>
-    <InformationalVersion>1.0.0+concord</InformationalVersion>
+    <Version>1.1.0</Version>
+    <InformationalVersion>1.1.0+conpty-paste</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,28 +29,22 @@
   <ItemGroup>
     <PackageReference Include="Mendix.StudioPro.ExtensionsAPI" Version="11.6.2" />
     <PackageReference Include="Eto.Forms" Version="2.9.*" />
-    <PackageReference Include="Quick.PtyNet" Version="1.0.4" />
-    <PackageReference Include="Quick.PtyNet.WinPty" Version="1.0.2" />
     <PackageReference Include="System.Text.Json" Version="8.0.*" />
     <!-- For reading Studio Pro's theme preference from %LOCALAPPDATA%\Mendix\Settings.sqlite. -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*" />
+    <!--
+      PTY backend is hand-rolled kernel32 P/Invoke against CreatePseudoConsole
+      (see src/PtySession.cs). ConPTY ships in kernel32 on Win10 1809+ — no
+      native sidecar binary to deploy, no AssemblyLoadContext resolver hack.
+      Replaced Quick.PtyNet + Quick.PtyNet.WinPty (which forced WinPTY's
+      screen-scraping conhost backend that didn't faithfully proxy DECSET/
+      DECRST sequences like \x1b[?2004h bracketed-paste mode).
+    -->
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="manifest.json"><CopyToOutputDirectory>Always</CopyToOutputDirectory></Content>
     <Content Include="wwwroot\**\*">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <Visible>false</Visible>
-    </Content>
-    <!--
-      Quick.PtyNet.WinPty ships its native binaries under runtimes/win-x64/native/.
-      .NET's auto-resolver for runtimes/<rid>/native/ doesn't fire when our DLL is
-      loaded via MEF inside Studio Pro's host process, so P/Invoke can't find
-      winpty.dll. Flatten them into the output root where the default loader
-      search path will pick them up.
-    -->
-    <Content Include="$(NuGetPackageRoot)quick.ptynet.winpty\1.0.2\runtimes\win-x64\native\*">
-      <Link>%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>

@@ -2,6 +2,7 @@ import { Bridge, encodeBase64, decodeBase64 } from "./bridge.js";
 import { XtermTab } from "./xterm-tab.js";
 import { ThemeName, applyTheme, resolveTheme } from "./theme.js";
 import { icon } from "./icons.js";
+import { pasteChunkRanges } from "./paste.js";
 
 interface TabState {
   tabId: string;
@@ -46,7 +47,12 @@ export class TabManager {
     bridge.on("tabClosed", (d: { tabId: string }) => this.removeTab(d.tabId));
 
     bridge.on("output", (d: { tabId: string; dataB64: string }) => {
-      this.tabs.get(d.tabId)?.xterm.writeBytes(decodeBase64(d.dataB64));
+      const bytes = decodeBase64(d.dataB64);
+      // Phase-1.5 telemetry — does the running CLI ever enable bracketed-paste mode?
+      // ESC [ ? 2 0 0 4 h = 1B 5B 3F 32 30 30 34 68 (set), ...6C (reset).
+      // Logged once per occurrence so we can correlate with subsequent paste events.
+      this.scanForBracketedPasteToggle(d.tabId, bytes);
+      this.tabs.get(d.tabId)?.xterm.writeBytes(bytes);
     });
 
     bridge.on("replayData", (d: { tabId: string; dataB64: string }) => {
@@ -80,18 +86,99 @@ export class TabManager {
    */
   private static readonly INPUT_CHUNK_BYTES = 16 * 1024;
 
+  // Paced-paste tuning. When a paste lands in the input stream, slicing it
+  // into small chunks with delays gives Node/Ink-based TUI agents (Claude
+  // Code, Codex, Aider, Gemini CLI) time to drain their stdin tokenizer's
+  // ring buffer between bursts. Without pacing, large pastes overrun the
+  // buffer and lose chunks — claude-code #49337 / #50012 / #49673 / #50250.
+  //
+  // Tuning history:
+  //   2026-05-01 17:30 — VS Code's tuned numbers (512B / 10ms). 5 chunks
+  //     for a 2.4KB paste delivered in 47ms — Claude Code still dropped
+  //     middle chunks. Symptom: "providedsufficient" mid-sentence merge
+  //     (chunks 2+3 lost). Hypothesis: WinPTY's hidden conhost intermediate
+  //     buffer is the bottleneck, not Node's stdin tokenizer.
+  //   2026-05-01 18:30 — Tightened to 256B / 25ms. 10 chunks for the same
+  //     paste delivered in ~250ms (still imperceptible; well under any
+  //     reasonable typing speed). Conservative until ConPTY migration
+  //     replaces WinPTY entirely.
+  //
+  // Gate at 1KB so single-line typing and small pastes go through
+  // unsliced (zero added latency for the common case).
+  private static readonly PACED_CHUNK_THRESHOLD = 1024;
+  private static readonly PACED_CHUNK_BYTES = 256;
+  private static readonly PACED_CHUNK_DELAY_MS = 25;
+
+  // Pattern: ESC [ ? 2 0 0 4 (h|l)  -- xterm DECSET/DECRST 2004 (bracketed paste).
+  private static readonly BRACKET_SET = [
+    0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x68,
+  ];
+  private static readonly BRACKET_RESET = [
+    0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x30, 0x34, 0x6c,
+  ];
+
+  private scanForBracketedPasteToggle(tabId: string, bytes: Uint8Array): void {
+    const has = (needle: number[]): boolean => {
+      outer: for (let i = 0; i + needle.length <= bytes.length; i++) {
+        for (let j = 0; j < needle.length; j++) {
+          if (bytes[i + j] !== needle[j]) continue outer;
+        }
+        return true;
+      }
+      return false;
+    };
+    if (has(TabManager.BRACKET_SET)) {
+      this.bridge.send("diag", {
+        msg: `bracket-mode SET tab=${tabId.slice(0, 8)}`,
+      });
+    }
+    if (has(TabManager.BRACKET_RESET)) {
+      this.bridge.send("diag", {
+        msg: `bracket-mode RESET tab=${tabId.slice(0, 8)}`,
+      });
+    }
+  }
+
   private sendInputChunked(tabId: string, bytes: Uint8Array) {
-    if (bytes.length <= TabManager.INPUT_CHUNK_BYTES) {
+    // Common case: small input (typing, single-line paste) — send unsliced.
+    if (bytes.length < TabManager.PACED_CHUNK_THRESHOLD) {
       this.bridge.send("input", { tabId, dataB64: encodeBase64(bytes) });
       return;
     }
-    for (let off = 0; off < bytes.length; off += TabManager.INPUT_CHUNK_BYTES) {
-      const end = Math.min(off + TabManager.INPUT_CHUNK_BYTES, bytes.length);
+    // Paced path: slice into 512-byte chunks with 10ms gaps. Fire-and-forget
+    // — we don't await this from the caller because the xterm onData callback
+    // is sync and the receiver doesn't care when we finish, only that bytes
+    // arrive in order. The C# WriteLock (per session) serializes per-tab so
+    // the chunks can't interleave even though they arrive on separate bridge
+    // dispatches.
+    void this.sendPaced(tabId, bytes);
+  }
+
+  private async sendPaced(tabId: string, bytes: Uint8Array): Promise<void> {
+    const total = bytes.length;
+    const t0 = performance.now();
+    let chunks = 0;
+    let prior = false;
+    for (const [off, end] of pasteChunkRanges(
+      total,
+      TabManager.PACED_CHUNK_BYTES,
+    )) {
+      if (prior) {
+        await new Promise((r) =>
+          setTimeout(r, TabManager.PACED_CHUNK_DELAY_MS),
+        );
+      }
       this.bridge.send("input", {
         tabId,
         dataB64: encodeBase64(bytes.subarray(off, end)),
       });
+      chunks += 1;
+      prior = true;
     }
+    const dt = Math.round(performance.now() - t0);
+    this.bridge.send("diag", {
+      msg: `paced-input tab=${tabId.slice(0, 8)} bytes=${total} chunks=${chunks} elapsed=${dt}ms`,
+    });
   }
 
   setTheme(theme: ThemeName): void {

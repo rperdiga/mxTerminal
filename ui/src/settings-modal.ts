@@ -1,6 +1,7 @@
 import { Bridge } from "./bridge.js";
 import { ThemeName } from "./theme.js";
 import { mountIcon, IconName } from "./icons.js";
+import { showNotice, hideNotice } from "./notice.js";
 import { mountLogo } from "./logo.js";
 
 const SECTIONS = [
@@ -98,17 +99,9 @@ export class SettingsModal {
   private inpRefreshHotkey = document.getElementById(
     "set-refresh-hotkey",
   ) as HTMLInputElement;
-  private banner = document.getElementById("banner") as HTMLDivElement;
-  private bannerIcon = document.getElementById(
-    "banner-icon",
-  ) as HTMLSpanElement;
-  private bannerMessage = document.getElementById(
-    "banner-message",
-  ) as HTMLSpanElement;
   private bannerClose = document.getElementById(
     "banner-close",
   ) as HTMLSpanElement;
-  private bannerTimer: number | undefined;
 
   private knownShells: ShellOption[] = [];
 
@@ -132,7 +125,7 @@ export class SettingsModal {
     this.chkActions.addEventListener("change", () =>
       this.onActionsEnabledChange(),
     );
-    this.bannerClose.addEventListener("click", () => this.hideBanner());
+    this.bannerClose.addEventListener("click", () => hideNotice());
 
     this.mountNavIcons();
     this.wireNavRail();
@@ -141,7 +134,7 @@ export class SettingsModal {
 
     bridge.on("settings", (d: SettingsPayload) => this.populate(d));
     bridge.on("mcpResult", (d: McpResult) =>
-      this.showBanner(d.ok ? "ok" : "err", d.message),
+      showNotice(d.ok ? "ok" : "err", d.message),
     );
   }
 
@@ -227,25 +220,6 @@ export class SettingsModal {
 
   private onActionsEnabledChange() {
     // No port input to disable anymore — bridge auto-binds when enabled.
-  }
-
-  private showBanner(kind: "ok" | "err", message: string) {
-    mountIcon(this.bannerIcon, kind === "ok" ? "checkCircle" : "alertCircle");
-    this.bannerMessage.textContent = message;
-    this.banner.className = `visible ${kind}`;
-    if (this.bannerTimer !== undefined) window.clearTimeout(this.bannerTimer);
-    this.bannerTimer = window.setTimeout(
-      () => this.hideBanner(),
-      kind === "ok" ? 6000 : 12000,
-    );
-  }
-
-  private hideBanner() {
-    this.banner.classList.remove("visible");
-    if (this.bannerTimer !== undefined) {
-      window.clearTimeout(this.bannerTimer);
-      this.bannerTimer = undefined;
-    }
   }
 
   open() {

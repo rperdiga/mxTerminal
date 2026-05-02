@@ -3,6 +3,20 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import xtermCss from "@xterm/xterm/css/xterm.css";
 import { ThemeName, XtermThemes, resolveTheme } from "./theme.js";
+import { showNotice } from "./notice.js";
+import {
+  classifyPasteSize,
+  countLines,
+  estimatePasteDurationMs,
+  normalizePasteLineEndings,
+} from "./paste.js";
+
+// Paced-rate constants used to estimate user-visible paste duration. Must
+// match tab-manager.ts PACED_CHUNK_BYTES / PACED_CHUNK_DELAY_MS. Inlined
+// here (rather than imported) so xterm-tab and tab-manager stay
+// independently importable for tests.
+const PACED_RATE_CHUNK_BYTES = 256;
+const PACED_RATE_DELAY_MS = 25;
 
 let cssInjected = false;
 function ensureCssInjected() {
@@ -86,11 +100,92 @@ export class XtermTab {
       if (!focused || !this.host.contains(focused)) return;
       ev.preventDefault();
       ev.stopImmediatePropagation();
-      const text = ev.clipboardData?.getData("text/plain") ?? "";
+      const cd = ev.clipboardData;
+      const text = cd?.getData("text/plain") ?? "";
+      // Lightweight telemetry for paste-path regressions. We log shape, NEVER
+      // content — the clipboard may carry credentials, tokens, or other
+      // secrets and content-logging would write them to terminal.log.
+      const bracketed =
+        (this.term as unknown as { modes?: { bracketedPasteMode?: boolean } })
+          .modes?.bracketedPasteMode ?? "unknown";
+      const types = cd ? Array.from(cd.types) : [];
       this.diag(
-        `paste intercepted len=${text.length} target=${(ev.target as Element)?.tagName}`,
+        `paste bracketed=${bracketed} types=[${types.join(",")}] plainLen=${text.length}`,
       );
-      if (text) this.term.paste(text);
+      if (!text) return;
+
+      // When bracketed-paste mode is OFF and the text contains newlines,
+      // bypass xterm's term.paste() because its prepareTextForTerminal
+      // collapses every \r?\n into a bare \r. Bare CRs are interpreted by
+      // line-aware CLIs (Claude Code, vim, multi-line PSReadLine) as
+      // Enter/submit, so a 30-line paste becomes 30 separate submissions
+      // and the receiving prompt's input buffer overruns — only the tail
+      // survives. Symptom logged 2026-05-01: 2399-byte Teams paste, only
+      // ~13 lines reached Claude Code's prompt.
+      //
+      // Send LF instead via the same channel as keystrokes (onInput).
+      // Modern TUI prompts treat LF as line-continuation within the input
+      // field rather than submit. The user presses Enter explicitly when
+      // ready to submit. xterm-internal state stays consistent because
+      // we go through the same byte path as live typing.
+      const bracketedActive =
+        (this.term as unknown as { modes?: { bracketedPasteMode?: boolean } })
+          .modes?.bracketedPasteMode === true;
+      const hasNewline = /\n|\r/.test(text);
+
+      // Size-tiered UX so the user isn't staring at a "frozen" prompt during
+      // multi-second paced delivery. Hard limit prevents accidentally
+      // pasting a megabyte (e.g. an entire log file) which would tie up the
+      // input loop and probably overflow the receiving CLI's prompt buffer
+      // regardless of pacing.
+      const byteLen = new TextEncoder().encode(text).length;
+      const lineCount = countLines(text);
+      const tier = classifyPasteSize(byteLen);
+      if (tier === "block") {
+        showNotice(
+          "err",
+          `Paste too large (${(byteLen / 1024).toFixed(0)} KB). Save to a file and use a 'read this file' command instead.`,
+          15000,
+        );
+        return;
+      }
+      if (tier === "warn") {
+        const seconds = Math.ceil(
+          estimatePasteDurationMs(
+            byteLen,
+            PACED_RATE_CHUNK_BYTES,
+            PACED_RATE_DELAY_MS,
+          ) / 1000,
+        );
+        showNotice(
+          "info",
+          `Pasting ${(byteLen / 1024).toFixed(0)} KB / ${lineCount} lines (~${seconds}s). Some CLIs may have their own input limits.`,
+          Math.max(8000, seconds * 1000 + 2000),
+        );
+      } else if (tier === "notice") {
+        showNotice(
+          "info",
+          `Pasting ${lineCount} lines (${(byteLen / 1024).toFixed(1)} KB).`,
+          4000,
+        );
+      }
+
+      if (!bracketedActive && hasNewline) {
+        // When bracketed-paste mode is OFF and the text contains newlines,
+        // bypass xterm's term.paste() because its prepareTextForTerminal
+        // collapses every \r?\n into a bare \r. Bare CRs are interpreted by
+        // line-aware CLIs (Claude Code, vim, multi-line PSReadLine) as
+        // Enter/submit, so a 30-line paste becomes 30 separate submissions.
+        // Send LF instead via the same channel as keystrokes.
+        const bytes = new TextEncoder().encode(normalizePasteLineEndings(text));
+        this.diag(
+          `paste bypass-CR-coercion len=${bytes.length} (bracketed mode off + multi-line)`,
+        );
+        opts.onInput(bytes);
+        return;
+      }
+
+      this.term.paste(text);
     };
     document.addEventListener(
       "paste",
@@ -131,9 +226,12 @@ export class XtermTab {
     const enc = new TextEncoder();
     this.term.onData((s) => {
       const bytes = enc.encode(s);
-      this.diag(
-        `onData len=${bytes.length} preview=${s.length > 32 ? s.slice(0, 32) + "..." : s}`,
-      );
+      // Only log non-keystroke inputs (multi-byte sequences, paste residue).
+      // Single-character keystrokes flood the log with one entry per keypress
+      // and never preview content (secrets risk).
+      if (bytes.length > 4) {
+        this.diag(`onData len=${bytes.length}`);
+      }
       opts.onInput(bytes);
     });
     this.term.onResize(({ cols, rows }) => opts.onResize(cols, rows));

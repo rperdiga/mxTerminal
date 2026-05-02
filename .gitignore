@@ -19,4 +19,7 @@ Directory.Build.props
 # IDE
 .idea/
 .vscode/
-.claude/worktrees/
+.claude/
+
+# Local skill suggestion staging (machine-local, not part of the repo)
+skill-candidates/
