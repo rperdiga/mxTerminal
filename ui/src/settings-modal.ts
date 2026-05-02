@@ -130,7 +130,6 @@ export class SettingsModal {
     this.mountNavIcons();
     this.wireNavRail();
     this.mountRailLogo();
-    this.mountAboutLogo();
     this.activateSection("general");
 
     bridge.on("settings", (d: SettingsPayload) => this.populate(d));
@@ -153,13 +152,6 @@ export class SettingsModal {
   private mountRailLogo(): void {
     const host = document.getElementById("rail-logo");
     if (host && host.childElementCount === 0) mountLogo(host, 0, true);
-  }
-
-  /** Mount the OneSource logo into the About-section credit lockup.
-   *  Larger and accompanied by the CoE attribution text. */
-  private mountAboutLogo(): void {
-    const host = document.getElementById("about-logo");
-    if (host && host.childElementCount === 0) mountLogo(host, 0, false);
   }
 
   /** Wire click + keyboard nav on the rail (ARIA tablist pattern). */
