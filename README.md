@@ -2,6 +2,8 @@
 
 > *"The terminal Studio Pro was missing."*
 
+**Current version: 1.1.0** ([CHANGELOG](./CHANGELOG.md)) — paste pipeline overhaul: ConPTY backend (replaces WinPTY), bracketed-paste mode now works end-to-end with Claude Code, paced chunking + per-tab write lock, size-tiered paste UX, and ~290 LOC of hand-rolled `kernel32!CreatePseudoConsole` P/Invoke replacing the third-party PTY package + native sidecar.
+
 Concord is a Mendix Studio Pro 11.10+ extension that embeds a tabbed terminal as a dockable pane. The pane is the workspace where you run **Claude Code**, **Codex**, or **GitHub Copilot CLI** — and they talk directly to:
 
 - **Studio Pro's built-in MCP server** (model-tier — entities, microflows, pages, OQL, file ops on `/themes` + `/jsactions`, knowledge)
@@ -83,6 +85,19 @@ Modal title: "Concord Terminal Settings". Footer credit on every section: "A Sie
 ## Logs
 
 `<project>/resources/terminal.log` — thread-safe per-line append log. INFO / WARN / ERROR. Captures extension lifecycle, action server start/stop, MCP probe results, paste diagnostics. Path also visible in **Settings → About → Log file**.
+
+---
+
+## Paste handling
+
+Multi-line paste (e.g. from Teams chat) into a CLI prompt requires special care. xterm.js's default behavior collapses every newline to a bare CR, which line-aware prompts (Claude Code, vim, multi-line PSReadLine) interpret as Enter — turning a 30-line paste into 30 separate submissions and overflowing the input buffer.
+
+Concord routes paste based on whether the running CLI has enabled bracketed-paste mode (`\x1b[?2004h`):
+
+- **Bracketed-paste ON** → atomic round-trip via xterm.js's normal path
+- **Bracketed-paste OFF + multi-line text** → bypass xterm; send LF-normalized bytes through the keystroke channel so prompts treat newlines as line-continuation, not submit
+
+Full design rationale + diagnostic playbook: [docs/PASTE.md](./docs/PASTE.md).
 
 ---
 

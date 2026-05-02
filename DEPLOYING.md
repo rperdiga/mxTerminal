@@ -109,7 +109,31 @@ What happens:
 dotnet test
 ```
 
-86+ xunit tests cover the C# side (action server JSON-RPC, action state machine, run-state probe, MCP config emitters, session manager, ring buffer, settings, logging).
+88 xunit tests cover the C# side (action server JSON-RPC, action state machine, run-state probe, MCP config emitters, session manager, ring buffer, settings, logging, per-session write-lock serialization).
+
+```sh
+cd ui && npm test
+```
+
+33 vitest tests cover the UI side (paste pipeline pure helpers, base64 round-trip, bridge wiring).
+
+### Manual paste regression matrix
+
+The paste path has both a JS-side branch (xterm bracketed-paste-off bypass) and a paced-chunking layer (256B / 25ms intervals against WinPTY). Run this before shipping any change touching `paste.ts`, `xterm-tab.ts`, or `tab-manager.ts`:
+
+| Source        | Target              | Expected                                               |
+| ------------- | ------------------- | ------------------------------------------------------ |
+| Notepad       | PowerShell          | Multi-line paste; CRLF preserved                       |
+| Notepad       | `claude` (CC 2.1+)  | Full paste; no auto-submit per line                    |
+| Teams chat    | PowerShell          | Multi-line paste from `text/html`-only clipboard       |
+| Teams chat    | `claude` (CC 2.1+)  | Full paste lands as `[Pasted text +N lines]`           |
+| VS Code       | `claude` (CC 2.1+)  | Code block paste preserves indentation                 |
+| Single line   | any                 | Submits as single line (no LF added)                   |
+| 4 KB+ paste   | any                 | Brief notice "Pasting N lines (X KB)"                  |
+| 50 KB+ paste  | any                 | Stronger notice with duration estimate                 |
+| 1 MB+ paste   | any                 | Refused with "save to file" guidance                   |
+
+Capture the `paste bracketed=...` and `paced-input ...` log lines from each test in `<project>\resources\terminal.log` and diff against the prior run. Architecture rationale + diagnostic playbook: [docs/PASTE.md](./docs/PASTE.md).
 
 ### Iterate
 

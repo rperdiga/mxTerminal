@@ -85,8 +85,10 @@ public sealed class TerminalSessionManager : IDisposable
     public void Write(string tabId, byte[] data)
     {
         if (!sessions.TryGetValue(tabId, out var s)) return;
+        s.WriteLock.Wait();
         try { s.Pty.WriteAsync(data, CancellationToken.None).GetAwaiter().GetResult(); }
         catch { /* PTY may have died — Exited handler removes it */ }
+        finally { s.WriteLock.Release(); }
     }
 
     public void Resize(string tabId, int cols, int rows)
@@ -329,6 +331,11 @@ public sealed class TerminalSessionManager : IDisposable
         public Timer Timer { get; private set; } = null!;
         public CancellationTokenSource Cts { get; } = new();
         public object Gate { get; } = new();
+        // Serializes Write() calls for this tab. Chunked paste delivers multiple
+        // input messages in flight; without this they can interleave on the PTY
+        // writer because GetAwaiter().GetResult() only blocks the calling thread,
+        // not parallel callers from different bridge dispatch threads.
+        public SemaphoreSlim WriteLock { get; } = new(1, 1);
 
         public SessionState(string tabId, string shellPath, string[] args, string cwd, int cols, int rows, IPtySession pty, RingBuffer ring, string title, int ordinal)
         {
