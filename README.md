@@ -2,7 +2,7 @@
 
 > *"The terminal Studio Pro was missing."*
 
-**Current version: 1.1.0** ([CHANGELOG](./CHANGELOG.md)) — paste pipeline overhaul: ConPTY backend (replaces WinPTY), bracketed-paste mode now works end-to-end with Claude Code, paced chunking + per-tab write lock, size-tiered paste UX, and ~290 LOC of hand-rolled `kernel32!CreatePseudoConsole` P/Invoke replacing the third-party PTY package + native sidecar.
+**Current version: 1.1.1** ([CHANGELOG](./CHANGELOG.md)) — paste pipeline overhaul: ConPTY backend (replaces WinPTY), bracketed-paste mode now works end-to-end with Claude Code, paced chunking + per-tab write lock, size-tiered paste UX, and ~290 LOC of hand-rolled `kernel32!CreatePseudoConsole` P/Invoke replacing the third-party PTY package + native sidecar.
 
 Concord is a Mendix Studio Pro 11.10+ extension that embeds a tabbed terminal as a dockable pane. The pane is the workspace where you run **Claude Code**, **Codex**, or **GitHub Copilot CLI** — and they talk directly to:
 
@@ -12,7 +12,7 @@ Concord is a Mendix Studio Pro 11.10+ extension that embeds a tabbed terminal as
 
 The result: developer + Maia + CLI agent collaborate on Mendix apps from one workspace, with Concord wiring the integration plumbing automatically.
 
-A Siemens **OneSource Center of Excellence** extension.
+A **Siemens CoE Team** extension.
 
 ---
 
@@ -76,7 +76,7 @@ Left-rail navigator (the Microsoft Teams pattern, not Studio Pro's deep tree). S
 3. **Studio Pro MCP** — enable + per-CLI client list (Claude Code, Copilot CLI, Codex).
 4. **Action bridge** — enable + refresh-from-disk hotkey.
 5. **Skills** — placeholder. Coming feature: install prescriptive skill packs that Concord writes into your Mendix project tree to teach Studio Pro patterns it doesn't ship with.
-6. **About** — version, log file path, settings file path, the OneSource CoE logo (hover to spin).
+6. **About** — version, log file path, settings file path, the CoE Team logo (hover to spin).
 
 Modal title: "Concord Terminal Settings". Footer credit on every section: "A Siemens CoE extension for Studio Pro."
 
@@ -90,12 +90,14 @@ Modal title: "Concord Terminal Settings". Footer credit on every section: "A Sie
 
 ## Paste handling
 
-Multi-line paste (e.g. from Teams chat) into a CLI prompt requires special care. xterm.js's default behavior collapses every newline to a bare CR, which line-aware prompts (Claude Code, vim, multi-line PSReadLine) interpret as Enter — turning a 30-line paste into 30 separate submissions and overflowing the input buffer.
+**What it means for you:** paste a 50-line policy doc, a 5 KB code block, or a multi-page chat transcript directly into Claude Code's prompt. The whole thing lands as one paste — not 50 individual submissions, not truncated to the tail. When the receiving CLI supports it (Claude Code on this PTY backend does), pastes ≥ a few lines collapse to the native `[Pasted text +N lines]` placeholder so your prompt history stays scannable. Big pastes (≥ 4 KB) get a quiet status notice; very big ones (≥ 50 KB) show an estimated delivery time; anything ≥ 1 MB is refused with a "save to a file and read it" suggestion.
 
-Concord routes paste based on whether the running CLI has enabled bracketed-paste mode (`\x1b[?2004h`):
+**Why it works:** multi-line paste into a CLI prompt requires special care. xterm.js's default behavior collapses every newline to a bare CR, which line-aware prompts (Claude Code, vim, multi-line PSReadLine) interpret as Enter — turning a 30-line paste into 30 separate submissions and overflowing the input buffer. Concord routes paste based on whether the running CLI has enabled bracketed-paste mode (`\x1b[?2004h`):
 
-- **Bracketed-paste ON** → atomic round-trip via xterm.js's normal path
+- **Bracketed-paste ON** → atomic round-trip via xterm.js's normal path; the CLI receives the whole paste between `\x1b[200~ ... \x1b[201~` markers
 - **Bracketed-paste OFF + multi-line text** → bypass xterm; send LF-normalized bytes through the keystroke channel so prompts treat newlines as line-continuation, not submit
+
+ConPTY (the PTY backend introduced in 1.1.0) is what makes bracketed-paste mode actually negotiate end-to-end on Windows — the previous WinPTY backend silently dropped the negotiation handshake.
 
 Full design rationale + diagnostic playbook: [docs/PASTE.md](./docs/PASTE.md).
 

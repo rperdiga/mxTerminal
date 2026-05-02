@@ -11,8 +11,15 @@
     <RootNamespace>Terminal</RootNamespace>
     <LangVersion>preview</LangVersion>
     <IsPackable>false</IsPackable>
-    <Version>1.1.0</Version>
-    <InformationalVersion>1.1.0+conpty-paste</InformationalVersion>
+    <Version>1.1.1</Version>
+    <InformationalVersion>1.1.1+mcp-port-default-fix</InformationalVersion>
+    <Authors>Ricardo Perdigao, Kelly Seale</Authors>
+    <Company>Siemens Digital Industries Software — CoE Team</Company>
+    <Product>Concord — Terminal for Studio Pro</Product>
+    <Description>A tabbed PTY terminal embedded as a dockable pane inside Mendix Studio Pro 11.10+. The workspace where developers run Claude Code, Codex, or GitHub Copilot CLI alongside Studio Pro's MCP server, Maia, and Concord's own Action Bridge.</Description>
+    <Copyright>Copyright © 2026 Siemens Digital Industries Software — CoE Team</Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/rperdiga/mxTerminal</PackageProjectUrl>
   </PropertyGroup>
 
   <ItemGroup>

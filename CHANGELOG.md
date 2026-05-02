@@ -1,8 +1,39 @@
 # Changelog
 
+## 1.1.1 — 2026-05-02
+
+### MCP probe + save fixes (fresh-project regression)
+
+Two bugs surfaced when opening Concord on a fresh Mendix project that had
+no prior `terminal-settings.json`:
+
+- **Wrong default MCP port (7782).** `TerminalSettings.Defaults()` used a
+  legacy port, so a fresh project's "Enable Studio Pro MCP" toggle would
+  probe `localhost:7782` and time out. Default is now `8100` (Studio Pro's
+  standard MCP port). The runtime always re-probes Studio Pro's actual
+  port from `%LOCALAPPDATA%\Mendix\Settings.sqlite` at save time; the
+  default only applies when the SQLite probe fails entirely.
+- **Settings didn't persist when MCP probe failed.** Toggling "Enable
+  Studio Pro MCP" and clicking Save would silently revert if the probe
+  timed out. The probe failure now surfaces a notice but the save
+  proceeds — the user's intent (toggle ON) is preserved; they fix the
+  Studio Pro Preferences and re-save to wire up the CLI configs.
+
+These regressions existed in 1.1.0 but were latent because the testbed
+project (TestOSApp3) had a pre-existing settings file with the right port.
+
 ## 1.1.0 — 2026-05-01
 
 ### Paste pipeline overhaul
+
+**What this means in practice:** users can now paste multi-page content
+(policy docs, code blocks, chat transcripts — anything up to 1 MB)
+directly into Claude Code's prompt and have it land as one paste, not
+as 50+ individual submissions. When the receiving CLI supports it,
+big pastes collapse to the native `[Pasted text +N lines]` placeholder
+in the prompt history. Pastes ≥ 4 KB show a quiet status notice;
+≥ 50 KB show an estimated delivery time; ≥ 1 MB are refused with a
+"save to a file" guidance.
 
 Multi-line paste into a CLI prompt (notably Claude Code) used to truncate
 above ~30 lines on Windows. Fixed end-to-end with a four-layer approach.

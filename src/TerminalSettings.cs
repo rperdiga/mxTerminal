@@ -25,7 +25,11 @@ public sealed record TerminalSettings(
         // prefers-color-scheme query. Users can pin to "dark" or "light".
         Theme: "auto",
         McpEnabled: false,
-        McpPort: 7782,
+        // Studio Pro's standard MCP server port (HKLM\SOFTWARE\Mendix...).
+        // The runtime always re-probes Studio Pro's actual port from
+        // %LOCALAPPDATA%\Mendix\Settings.sqlite at save time — this is just
+        // the fallback when the probe fails (e.g. locked DB).
+        McpPort: 8100,
         McpClients: Array.Empty<string>(),
         ActionsServerEnabled: false,
         ActionsServerPort: 7783,

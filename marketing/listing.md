@@ -1,0 +1,203 @@
+# Concord — Marketplace listing copy
+
+Reference for the Mendix Marketplace Publish Component form.
+Copy/paste sections into the matching form fields.
+
+---
+
+## Component name (max 50 chars)
+
+```
+Concord — Terminal for Studio Pro
+```
+
+(34 chars — under the 50 limit.)
+
+## Component type
+
+**Module** (Studio Pro Extensions are published as add-on modules per
+[Mendix docs](https://docs.mendix.com/appstore/modules/).)
+
+## Visibility
+
+**Public** (under MxLabs publisher; ask MxLabs admin if you need
+publisher-private during draft review.)
+
+## Short pitch (≤140 chars — for the tile / search results)
+
+```
+A real terminal pane in Studio Pro. Run Claude Code, Codex, or Copilot CLI alongside Studio Pro's MCP server, Maia, and Concord's Action Bridge.
+```
+
+(143 chars — trim "Concord's" if needed: "and the Action Bridge" = 138.)
+
+## Long description (Markdown supported; goes in the Content step)
+
+```markdown
+**Concord is the terminal Studio Pro was missing.**
+
+A tabbed PTY terminal embedded as a dockable pane inside Studio Pro
+11.10+. The pane is the workspace where developers run modern CLI
+agents — **Claude Code**, **Codex**, **GitHub Copilot CLI** — and
+those agents talk directly to:
+
+- **Studio Pro's built-in MCP server** (entities, microflows, pages,
+  OQL, file ops on `/themes` + `/jsactions`, knowledge base)
+- **Maia** (Studio Pro's in-IDE AI assistant)
+- **Concord's own Action Bridge** (six MCP tools — run / stop /
+  refresh / save / get active run config / get app status — exposed
+  to whatever CLI agent you have running)
+
+The result: developer + Maia + CLI agent collaborate on Mendix apps
+from one workspace, with Concord wiring the integration plumbing
+automatically.
+
+## Why Concord exists
+
+Studio Pro 11 ships an extensibility API but no terminal of its own.
+Modern Mendix workflows increasingly involve AI agent CLIs (Claude
+Code, Codex, Copilot CLI) that need a real PTY to run inside —
+xterm-grade rendering, a working clipboard, paste-aware input
+handling, theme-matched chrome. Without that, developers
+context-switch between Studio Pro and a separate terminal app every
+time the agent needs to be invoked, and the integration between
+Studio Pro's MCP server and the running agent has to be wired up
+by hand on every project.
+
+Concord makes the agent-augmented Mendix workflow first-class.
+
+## What's in the pane
+
+### Tabbed PTY terminal
+- Multiple tabs per pane. Each tab spawns a real shell rooted at the
+  open Mendix project's directory.
+- Default shell **PowerShell**; pick from detected shells (`bash`,
+  `cmd`, etc.) in **Settings → Shell**.
+- Tab names follow `Pwsh - 1`, `Bash - 2`, `Cmd - 3` — gap-filling
+  ordinals so the visible numbers stay tight.
+
+### Persistent tabs
+- On Studio Pro restart, Concord re-spawns your last session's tabs
+  silently. State persists per-project at
+  `<project>/resources/terminal-state.json`.
+- Tabs that exited cleanly are NOT restored. Tabs killed by a crash
+  or by closing Studio Pro ARE restored.
+
+### Theme follows Studio Pro
+- Auto-matches Studio Pro's dark / light theme by reading the host's
+  preference from `%LOCALAPPDATA%\Mendix\Settings.sqlite` at pane
+  open. No setting to keep in sync.
+- The pane chrome inherits Studio Pro's exact surfaces; the xterm
+  canvas blends seamlessly with the pane background.
+
+### Studio Pro MCP integration
+- **Settings → Studio Pro MCP** — enable to write `.mcp.json`
+  (Claude Code, Copilot CLI) and `~/.codex/config.toml` (Codex)
+  entries that point each CLI at Studio Pro's MCP server.
+- One toggle, three CLI configs in sync.
+
+### Action Bridge
+- A second MCP server hosted by Concord on port 7783, exposing six
+  tools to your running CLI agent: `run_app`, `stop_app`,
+  `refresh_app`, `save_all`, `get_active_run_configuration`,
+  `get_app_status`.
+- Lets the CLI drive Studio Pro itself, not just the model.
+
+### Paste pipeline that actually works
+
+Paste a 50-line policy doc, a 5 KB code block, or a multi-page chat
+transcript directly into Claude Code's prompt. The whole thing lands
+as one paste — not 50 individual submissions, not truncated to the
+tail. Big pastes collapse to Claude Code's native `[Pasted text +N
+lines]` placeholder so your prompt history stays scannable. Pastes
+≥ 4 KB show a quiet notice; ≥ 50 KB show an estimated delivery time;
+≥ 1 MB are refused with a "save to a file" suggestion.
+
+Under the hood, v1.1.0 ships a four-layer paste pipeline that fixes
+the multi-line paste truncation that affects every Node/Ink-based TUI
+agent on Windows ([claude-code #49337](https://github.com/anthropics/claude-code/issues/49337) and siblings):
+
+1. **ConPTY backend** — hand-rolled `kernel32!CreatePseudoConsole`
+   P/Invoke replaces WinPTY. Bracketed-paste mode now negotiates
+   end-to-end with Claude Code.
+2. **Paced chunking** with per-tab write lock — defense in depth
+   for non-bracketed receivers and very large pastes.
+3. **LF-bypass branch** for receivers that don't enable
+   bracketed-paste (cmd.exe, older CLIs).
+4. **Size-tiered UX** — notice ≥ 4 KB, warn + duration estimate
+   ≥ 50 KB, refuse with "save to file" guidance ≥ 1 MB.
+
+## What's new in 1.1.0
+
+See [CHANGELOG.md](https://github.com/rperdiga/mxTerminal/blob/main/CHANGELOG.md).
+
+- **PTY backend WinPTY → ConPTY** (~290 LOC of hand-rolled
+  `kernel32!CreatePseudoConsole` P/Invoke replacing the third-party
+  PTY package + native sidecar)
+- **Paste pipeline overhaul** — multi-line paste into Claude Code
+  works reliably for the first time on Windows
+- **Per-tab write serialization** via `SemaphoreSlim`
+- **Size-tiered paste UX** with notice / warn / refuse thresholds
+- **Defense-in-depth LF-bypass branch** for non-bracketed receivers
+- **121 tests passing** (33 vitest UI + 88 xunit C#)
+
+## Compatibility
+
+- **Studio Pro:** 11.10.0 or newer
+- **Operating system:** Windows 10 1809 (build 17763) or newer —
+  ConPTY is part of `kernel32` from this release
+- **.NET runtime:** 8.0 (bundled with Studio Pro 11)
+
+## Documentation
+
+- **README + architecture:** https://github.com/rperdiga/mxTerminal
+- **Paste pipeline rationale:** [docs/PASTE.md](https://github.com/rperdiga/mxTerminal/blob/main/docs/PASTE.md)
+- **Deploying / building from source:** [DEPLOYING.md](https://github.com/rperdiga/mxTerminal/blob/main/DEPLOYING.md)
+- **Changelog:** [CHANGELOG.md](https://github.com/rperdiga/mxTerminal/blob/main/CHANGELOG.md)
+
+## License
+
+Apache 2.0. Source available at https://github.com/rperdiga/mxTerminal.
+
+## Built by
+
+The **Siemens CoE Team**.
+
+- Ricardo Perdigao — `ricardo.perdigao@siemens.com`
+- Kelly Seale — `kelly.seale@siemens.com`
+
+Published via **MxLabs**.
+```
+
+## Authors (form fields)
+
+| Field            | Value                          |
+| ---------------- | ------------------------------ |
+| First author     | Ricardo Perdigao               |
+| First author email | ricardo.perdigao@siemens.com |
+| Second author    | Kelly Seale                    |
+| Second author email | kelly.seale@siemens.com     |
+
+## License (form field)
+
+Apache License 2.0 — link to `LICENSE` file in the repo or paste full
+text if marketplace requires it inline.
+
+## Source / GitHub URL
+
+```
+https://github.com/rperdiga/mxTerminal
+```
+
+Use the **GitHub Link** option on the upload form. Concord's release
+flow attaches `Concord.mxmodule` to the `v1.1.0` GitHub release tag;
+marketplace auto-syncs from the release attachment.
+
+## Thumbnail (600×420 PNG, ≤1 MB)
+
+`marketing/concord-thumbnail-600x420.png`
+
+## Screenshots (≤10 images, 600×420 PNG / JPG / SVG)
+
+To be captured by Neo. See `marketing/SCREENSHOTS.md` for the shot
+list with framing instructions.

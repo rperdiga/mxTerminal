@@ -26,7 +26,7 @@ public class TerminalSettingsTests : IDisposable
         settings.XtermScrollbackLines.Should().Be(10000);
         settings.Theme.Should().Be("auto");
         settings.McpEnabled.Should().BeFalse();
-        settings.McpPort.Should().Be(7782);
+        settings.McpPort.Should().Be(8100);
         settings.McpClients.Should().BeEmpty();
     }
 
