@@ -519,49 +519,6 @@
       padding: 0 4px;
     }
 
-    /* About-section credit block — OneSource logo lockup below the info rows.
-       This is where CoE marketing lives; the small rail icon is decoration,
-       this is the formal attribution. Hover-to-spin on the logo. */
-    .about-credit {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      margin-top: 28px;
-      padding: 18px 16px;
-      background: var(--surface-1);
-      border: 1px solid var(--border-subtle);
-      border-radius: 6px;
-    }
-    .about-logo {
-      flex: 0 0 auto;
-      width: 72px;
-      height: 72px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .about-logo .os-logo {
-      width: 72px;
-      height: 72px;
-      opacity: 0.92;
-      transition: transform 12s linear;
-    }
-    .about-credit:hover .os-logo { transform: rotate(360deg); }
-    .about-credit-text {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .about-credit-line {
-      font: var(--fw-regular) var(--fs-sm)/1.4 var(--font-body);
-      color: var(--text-secondary);
-      letter-spacing: 0.02em;
-    }
-    .about-credit-name {
-      font: var(--fw-semibold) var(--fs-md)/1.4 var(--font-body);
-      color: var(--text-primary);
-      letter-spacing: -0.01em;
-    }
 
     /* About-section info row */
     .info-row {
@@ -902,13 +859,6 @@
             <div class="info-row"><span class="label">Version</span><span id="about-version">—</span></div>
             <div class="info-row"><span class="label">Log file</span><code id="about-log">—</code></div>
             <div class="info-row"><span class="label">Settings file</span><code id="about-settings">—</code></div>
-            <div class="about-credit">
-              <div class="about-logo" id="about-logo" aria-hidden="true" title="Built by the Siemens OneSource Center of Excellence"></div>
-              <div class="about-credit-text">
-                <div class="about-credit-line">Built by the</div>
-                <div class="about-credit-name">Siemens OneSource Center of Excellence</div>
-              </div>
-            </div>
           </section>
         </div>
       </div>
