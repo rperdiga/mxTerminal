@@ -50,21 +50,23 @@ public class TerminalSessionManagerWriteLockTests
         var (idB, _) = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\", 80, 24);
         var sessionB = fake.LastSession;
 
-        var sw = System.Diagnostics.Stopwatch.StartNew();
         await Task.WhenAll(
             mgr.Write(idA, new byte[] { 1 }),
             mgr.Write(idB, new byte[] { 2 })
         );
-        sw.Stop();
 
-        // Two parallel 50ms writes on independent sessions should complete
-        // in ~50ms (parallel), not ~100ms (serialized). Allow generous
-        // overhead for CI/Mac variance — anything under the serialized
-        // floor of ~100ms still proves the sessions ran in parallel.
-        sw.ElapsedMilliseconds.Should().BeLessThan(95,
-            "writes to different sessions must not share a lock");
         sessionA.WriteSpans.Should().HaveCount(1);
         sessionB.WriteSpans.Should().HaveCount(1);
+
+        // Deterministic check: prove the two writes' time-intervals overlapped
+        // rather than relying on a wall-clock threshold (which is flaky under
+        // load / on slow runners / on Mac warmup). Two intervals [aS,aE] and
+        // [bS,bE] overlap iff aS < bE AND bS < aE.
+        var a = sessionA.WriteSpans[0];
+        var b = sessionB.WriteSpans[0];
+        (a.Start < b.End && b.Start < a.End).Should().BeTrue(
+            "writes to different sessions must not share a lock — their write " +
+            "intervals must overlap in time, not serialize");
     }
 }
 
