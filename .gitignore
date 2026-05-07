@@ -32,3 +32,9 @@ marketing/dist/
 # Rendered/redacted outputs in marketing/screenshots/ are committed; raw
 # captures stay local — recapture per machine if regenerating.
 marketing/source/
+
+# Local debug artifacts from Mac bring-up — Playwright traces, ad-hoc PTY
+# probes, scratch screenshots. Recreate as needed; not part of the repo.
+.playwright-mcp/
+debug/
+concord-pane.png

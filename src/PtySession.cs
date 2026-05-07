@@ -27,17 +27,28 @@ public sealed class PtyNetFactory : IPtyFactory
         string shellPath, string[] args, string cwd, int cols, int rows,
         IDictionary<string, string> environment, CancellationToken ct)
     {
-        if (!ConPty.IsSupported)
-            throw new PlatformNotSupportedException(
-                "ConPTY requires Windows 10 1809 (build 17763) or newer.");
-        return Task.FromResult<IPtySession>(
-            ConPtySession.Spawn(shellPath, args, cwd, cols, rows, environment));
+        if (OperatingSystem.IsWindows())
+        {
+            if (!ConPty.IsSupported)
+                throw new PlatformNotSupportedException(
+                    "ConPTY requires Windows 10 1809 (build 17763) or newer.");
+            return Task.FromResult<IPtySession>(
+                ConPtySession.Spawn(shellPath, args, cwd, cols, rows, environment));
+        }
+        if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
+            return Task.FromResult<IPtySession>(
+                UnixPtySession.Spawn(shellPath, args, cwd, cols, rows, environment));
+        throw new PlatformNotSupportedException(
+            $"Unsupported OS: {RuntimeInformation.OSDescription}");
     }
 }
 
 internal static class ConPty
 {
-    public static readonly bool IsSupported = Probe();
+    // Guard the static initializer — on non-Windows, LoadLibraryW would throw
+    // DllNotFoundException at type-load time, blowing up before any of our
+    // OS-dispatch logic can kick in.
+    public static readonly bool IsSupported = OperatingSystem.IsWindows() && Probe();
 
     private static bool Probe()
     {

@@ -40,7 +40,13 @@ public sealed record TerminalState(
         {
             using var stream = File.OpenRead(path);
             var dto = JsonSerializer.Deserialize<TerminalState>(stream, Json);
-            return dto ?? Empty();
+            if (dto is null) return Empty();
+            // Migrate per-tab shell paths so a project moved across OSes (Windows
+            // ↔ Mac) doesn't fail every tab restore with posix_spawnp(cmd.exe).
+            var migrated = dto.Tabs
+                .Select(t => t with { ShellPath = TerminalSettings.MigrateShellPathForPlatform(t.ShellPath) })
+                .ToList();
+            return dto with { Tabs = migrated };
         }
         catch (JsonException) { return Empty(); }
         catch (IOException)   { return Empty(); }

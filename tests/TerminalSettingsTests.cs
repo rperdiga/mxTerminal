@@ -20,7 +20,12 @@ public class TerminalSettingsTests : IDisposable
     public void Load_NoFile_ReturnsDefaults()
     {
         var settings = TerminalSettings.Load(tmpDir);
-        settings.ShellPath.Should().Be("powershell.exe");
+        // Default shell is OS-aware: powershell.exe on Windows; the user's
+        // login shell or a POSIX fallback elsewhere.
+        if (OperatingSystem.IsWindows())
+            settings.ShellPath.Should().Be("powershell.exe");
+        else
+            settings.ShellPath.Should().NotBeNullOrEmpty();
         settings.Args.Should().BeEmpty();
         settings.RingBufferKB.Should().Be(4096);
         settings.XtermScrollbackLines.Should().Be(10000);
@@ -33,7 +38,10 @@ public class TerminalSettingsTests : IDisposable
     [Fact]
     public void Save_ThenLoad_PreservesAllFields()
     {
-        var original = new TerminalSettings("bash.exe", new[] { "--login" }, 8192, 20000, "light",
+        // Use a shell path appropriate for the current OS so the platform-
+        // migration logic in TerminalSettings.Load doesn't rewrite it.
+        var shell = OperatingSystem.IsWindows() ? "bash.exe" : "/bin/bash";
+        var original = new TerminalSettings(shell, new[] { "--login" }, 8192, 20000, "light",
             McpEnabled: true, McpPort: 7782, McpClients: new[] { "claude", "codex" },
             ActionsServerEnabled: false, ActionsServerPort: 7783, RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true);
         original.Save(tmpDir);
@@ -45,12 +53,14 @@ public class TerminalSettingsTests : IDisposable
     [Fact]
     public void Load_PartialJson_FillsMissingWithDefaults()
     {
+        // Use a path that survives the platform-migration check (a bare command
+        // name without path separator or .exe suffix passes through on any OS).
         var resourcesDir = Path.Combine(tmpDir, "resources");
         Directory.CreateDirectory(resourcesDir);
-        File.WriteAllText(Path.Combine(resourcesDir, "terminal-settings.json"), """{"shellPath":"cmd.exe"}""");
+        File.WriteAllText(Path.Combine(resourcesDir, "terminal-settings.json"), """{"shellPath":"customshell"}""");
 
         var loaded = TerminalSettings.Load(tmpDir);
-        loaded.ShellPath.Should().Be("cmd.exe");
+        loaded.ShellPath.Should().Be("customshell");
         loaded.Args.Should().BeEmpty();
         loaded.RingBufferKB.Should().Be(4096);
     }
@@ -63,7 +73,7 @@ public class TerminalSettingsTests : IDisposable
         File.WriteAllText(Path.Combine(resourcesDir, "terminal-settings.json"), "{ this is not json");
 
         var loaded = TerminalSettings.Load(tmpDir);
-        loaded.ShellPath.Should().Be("powershell.exe");
+        loaded.ShellPath.Should().Be(TerminalSettings.Defaults().ShellPath);
     }
 
     [Fact]

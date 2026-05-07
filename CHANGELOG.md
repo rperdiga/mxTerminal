@@ -1,5 +1,115 @@
 # Changelog
 
+## 1.2.0 — 2026-05-07
+
+### macOS support
+
+Concord now runs on Studio Pro for Mac in addition to Windows. The C#
+extension, the WebView UI, and the test suite all branch on
+`OperatingSystem.IsMacOS()` / `IsWindows()` so a single build of
+`Concord.dll` works on either host.
+
+**POSIX PTY backend (`src/UnixPtySession.cs`).** Mirrors the
+`IPtySession` surface of `ConPtySession` but built directly on
+`libSystem.dylib` — `openpty(3)` to allocate the pty pair,
+`posix_spawn_file_actions_*` + `posix_spawnp` to wire the slave fd to
+stdin/stdout/stderr, `posix_spawn_file_actions_addchdir_np` (macOS
+10.15+) to chdir before exec so shells start in the project root rather
+than the Studio Pro `.app` bundle. EOF on the master fd is signaled by
+`EIO` rather than a 0-byte read on Darwin — caught and surfaced as EOF
+to preserve the cross-platform `IPtySession` contract. Dispose order is
+SIGHUP → bounded waitpid → SIGKILL → close, with a watchdogged
+`close()` call (a stuck close on a pending master read can otherwise
+freeze the UI thread for minutes — verified during bring-up).
+
+**WKWebView bridge (`ui/src/bridge.ts`).** Detects WebView family at
+runtime and dispatches accordingly: `window.chrome.webview` for
+WebView2 on Windows, `window.webkit.messageHandlers.studioPro` +
+`window.WKPostMessage` for WKWebView on Mac. WKWebView requires JSON
+string payloads; WebView2 accepts objects directly.
+
+**WKWebView focus + keyboard fixes (`ui/src/xterm-tab.ts`).**
+WKWebView refuses programmatic focus on the off-screen helper
+`<textarea>` xterm.js relies on for input; we reposition the helper
+on-screen with `opacity: 0` and walk the focus chain on mousedown.
+A document-level keydown→VT100-bytes fallback fires when the textarea
+doesn't receive first-responder, mapping arrows / function keys / Enter /
+Backspace / Ctrl-letter combos to the byte sequences a TUI expects.
+
+**Settings.sqlite probe — Mac path (`src/StudioProThemeProbe.cs`).**
+Studio Pro on Mac persists its preferences at
+`~/Library/Application Support/Mendix/Settings.sqlite`, not the XDG
+`~/.local/share` path that .NET's `LocalApplicationData` resolves to on
+Darwin. The probe branches explicitly. New
+`tests/StudioProThemeProbeTests.cs` covers both Windows and Mac path
+resolution.
+
+**Shell handling.** `ShellDetector` returns `$SHELL` (typically zsh on
+modern macOS), `/bin/zsh`, `/bin/bash`, `/bin/sh`, plus `pwsh` if on
+PATH. `TerminalSettings.MigrateShellPathForPlatform` rewrites obviously
+incompatible saved values (`cmd.exe` on Mac, `/bin/zsh` on Windows) to
+the OS default at load time, so `terminal-settings.json` files survive
+moving a project between hosts. `TerminalSessionManager` injects a
+zsh `ZDOTDIR` override (Mac: `~/Library/Application Support/Concord/zsh`)
+and a bash rcfile that prepends `/opt/homebrew/{bin,sbin}` and
+`/usr/local/bin` to PATH so `claude`, `codex`, and `gh` resolve out of
+the box without the user's `.zshrc` having loaded yet.
+
+**Action bridge (`src/StudioProActionServer.cs`).** Switched from
+`HttpListener` to a hand-rolled HTTP/1.1 dispatcher over `TcpListener`
+(~150 LOC). HttpListener on macOS does not properly isolate prefixes
+by port — probes to `localhost:55169` were being answered by Studio
+Pro's own HttpListener on `7782` with a `Microsoft-NetCore/2.0`
+404 — and HttpListener is also not officially supported on Mac by
+.NET. TcpListener is cross-platform, well-supported, and our HTTP
+needs are tiny (POST `/mcp`, JSON in/out). The four hotkey-based
+tools (`run_app` / `stop_app` / `refresh_project` / `save_all`) silently
+no-op on Mac via `OperatingSystem.IsWindows()` guards in
+`StudioProUiAutomation.Send` — they require Win32 `PostMessage` with
+no equivalent that works on Mac without prompting for accessibility
+permissions. The two service-based tools
+(`get_active_run_configuration`, `get_app_status`) work on both
+platforms.
+
+**WKWebView main-thread offload (`src/TerminalSessionManager.cs`).**
+Studio Pro's WKScriptMessage handler delivers JS→C# messages on the
+main UI thread on Mac. Synchronously taking `WriteLock` and writing to
+the PTY would block the main thread — visible as the rainbow
+beachball on every keystroke. `Write(tabId, data)` now offloads the
+lock-acquire + PTY write to the thread pool. Per-tab order is still
+preserved by the `SemaphoreSlim` semaphore. WebView2 on Windows
+happens to dispatch off-thread, which masked the issue on the original
+code path; the offload helps both platforms.
+
+**Build target (`Terminal.csproj`).** `DeployToMendix` already had
+cross-platform branches; this release adds an `extensions-cache`
+overlay step so Mac builds also refresh the per-project Studio Pro
+snapshot at `<project>/.mendix-cache/extensions-cache/<guid>/`.
+Without this, Studio Pro on Mac kept serving the cached `wwwroot/`
+across iterations.
+
+### Tests + tooling
+
+- `StudioProThemeProbeTests.cs` — verifies path resolution branches
+  cleanly to Windows (`%LOCALAPPDATA%\Mendix\Settings.sqlite`) on Win
+  and to `~/Library/Application Support/Mendix/Settings.sqlite` on Mac
+- Cross-platform `Spawn_Echo_ProducesExpectedOutput_CrossPlatform`
+  exercises the `PtyNetFactory` dispatch end-to-end on whichever OS
+  the test runs on (cmd.exe / `/bin/echo`)
+- `TerminalSettings` tests now use OS-aware shell paths so the
+  platform-migration logic doesn't rewrite the test fixture under us
+- 95 xunit tests passing on Mac + Windows (was 88 on 1.1.1)
+
+### Known caveats on Mac
+
+- The four hotkey-based Action Bridge tools (`run_app`, `stop_app`,
+  `refresh_project`, `save_all`) are no-ops on Mac. Use Studio Pro's
+  own keyboard shortcuts directly.
+- Studio Pro's per-project `.mendix-cache/extensions-cache/` snapshot
+  means a manual drop-in of a new `Concord/` folder requires a full
+  Studio Pro restart (or a manual cache clear) before the new bits are
+  served. The developer-path build handles this automatically.
+
 ## 1.1.1 — 2026-05-02
 
 ### MCP probe + save fixes (fresh-project regression)

@@ -56,6 +56,7 @@ export class XtermTab {
   private term: Terminal;
   private fit: FitAddon;
   private docPasteHandler?: (ev: ClipboardEvent) => void;
+  private windowKeyHandler?: (ev: KeyboardEvent) => void;
   private diag: (msg: string) => void;
 
   constructor(opts: XtermTabOptions) {
@@ -87,6 +88,41 @@ export class XtermTab {
     this.term.loadAddon(this.fit);
     this.term.loadAddon(new WebLinksAddon());
     this.term.open(this.host);
+
+    // WKWebView (Mendix Studio Pro on macOS) won't grant keyboard focus to
+    // xterm's hidden textarea — by default xterm puts it at top:-9999em off-
+    // screen, and WebKit refuses programmatic focus() on elements that are
+    // outside the viewport. Result: the user can click, the focus call runs,
+    // but no keyboard event ever fires. WebView2 on Windows is permissive and
+    // doesn't have this restriction. Two-part fix:
+    //   1. After term.open, find xterm's helper textarea and force it to a
+    //      tiny on-screen position with opacity 0 (focusable, invisible).
+    //   2. mousedown on the host walks the focus chain explicitly so WebKit's
+    //      "user gesture" policy is satisfied for the programmatic focus.
+    const textarea = this.host.querySelector(
+      ".xterm-helper-textarea",
+    ) as HTMLTextAreaElement | null;
+    if (textarea) {
+      textarea.style.position = "absolute";
+      textarea.style.left = "0";
+      textarea.style.top = "0";
+      textarea.style.width = "1px";
+      textarea.style.height = "1px";
+      textarea.style.opacity = "0";
+      textarea.style.pointerEvents = "none";
+      textarea.style.zIndex = "-1";
+    }
+    this.host.addEventListener("mousedown", () => {
+      textarea?.focus();
+      this.term.focus();
+    });
+    // First-show focus: when the pane mounts, the user hasn't clicked yet but
+    // expects to type immediately. Schedule on the next microtask so xterm's
+    // own ready-state has settled.
+    queueMicrotask(() => {
+      textarea?.focus();
+      this.term.focus();
+    });
 
     // Paste interceptor — attached at document level with capture: true so
     // it runs BEFORE any other paste listener anywhere in the DOM (including
@@ -224,6 +260,38 @@ export class XtermTab {
 
     // xterm gives strings; convert to UTF-8 bytes for the C# side
     const enc = new TextEncoder();
+
+    // WKWebView (Studio Pro on macOS) bypass — when the host doesn't grant
+    // first-responder status to the WKWebView's content, xterm's hidden
+    // textarea never receives keydown events even though clicks reach the
+    // canvas. We capture keydown at the document level (capture phase) and
+    // map to terminal byte sequences ourselves, routing through the same
+    // onInput channel as xterm.onData. Active only when this tab's host is
+    // marked .active by TabManager — multiple XtermTab instances coexist
+    // safely. Skip when an input/textarea/select is focused so the settings
+    // modal still works.
+    this.windowKeyHandler = (e: KeyboardEvent) => {
+      if (!this.host.classList.contains("active")) return;
+      const a = document.activeElement;
+      // If ANY input/textarea/select has focus, the normal browser path handles
+      // it (xterm's helper textarea or the settings modal). Only fire when no
+      // native input element holds focus — that's the WKWebView failure mode
+      // we're patching. Without this guard, every keystroke is delivered twice
+      // when focus IS working.
+      if (
+        a &&
+        (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.tagName === "SELECT")
+      ) {
+        return;
+      }
+      const bytes = keyEventToTerminalBytes(e);
+      if (!bytes) return;
+      e.preventDefault();
+      this.diag(`win-keydown key=${e.key.length === 1 ? "*" : e.key} bytes=${bytes.length}`);
+      opts.onInput(bytes);
+    };
+    document.addEventListener("keydown", this.windowKeyHandler, /* capture */ true);
+
     this.term.onData((s) => {
       const bytes = enc.encode(s);
       // Only log non-keystroke inputs (multi-byte sequences, paste residue).
@@ -267,7 +335,86 @@ export class XtermTab {
       );
       this.docPasteHandler = undefined;
     }
+    if (this.windowKeyHandler) {
+      document.removeEventListener(
+        "keydown",
+        this.windowKeyHandler,
+        /* capture */ true,
+      );
+      this.windowKeyHandler = undefined;
+    }
     this.term.dispose();
     this.host.remove();
   }
+}
+
+/**
+ * Convert a DOM KeyboardEvent into the byte sequence a Unix-style terminal
+ * would receive. Used as a fallback path on macOS WKWebView where xterm's
+ * hidden textarea never receives focus and its built-in keymap can't fire.
+ *
+ * Mapping is the standard VT100/xterm vocabulary:
+ *   - Printable: UTF-8 bytes of the character
+ *   - Enter / Tab / Backspace / Esc: 0x0D, 0x09, 0x7F, 0x1B
+ *   - Arrows / Home / End / PgUp / PgDn / Delete / Insert: ESC[ … sequences
+ *   - F1-F4: ESC O P/Q/R/S, F5-F12: ESC [ <num> ~
+ *   - Ctrl+letter: control character (Ctrl+C → 0x03, etc.)
+ * Returns null for modifier-only presses or unsupported combos so the caller
+ * doesn't preventDefault on keys it can't handle.
+ */
+function keyEventToTerminalBytes(e: KeyboardEvent): Uint8Array | null {
+  // Modifier-only keys: skip
+  if (e.key === "Control" || e.key === "Shift" || e.key === "Alt" || e.key === "Meta") return null;
+  // Don't intercept system shortcuts (Cmd+Q, Cmd+W, etc.)
+  if (e.metaKey) return null;
+
+  const enc = new TextEncoder();
+
+  switch (e.key) {
+    case "Enter":     return new Uint8Array([0x0D]);
+    case "Tab":       return new Uint8Array([0x09]);
+    case "Backspace": return new Uint8Array([0x7F]);
+    case "Escape":    return new Uint8Array([0x1B]);
+    case "ArrowUp":    return enc.encode("\x1b[A");
+    case "ArrowDown":  return enc.encode("\x1b[B");
+    case "ArrowRight": return enc.encode("\x1b[C");
+    case "ArrowLeft":  return enc.encode("\x1b[D");
+    case "Home":       return enc.encode("\x1b[H");
+    case "End":        return enc.encode("\x1b[F");
+    case "PageUp":     return enc.encode("\x1b[5~");
+    case "PageDown":   return enc.encode("\x1b[6~");
+    case "Delete":     return enc.encode("\x1b[3~");
+    case "Insert":     return enc.encode("\x1b[2~");
+  }
+
+  const fMatch = /^F([1-9]|1[0-2])$/.exec(e.key);
+  if (fMatch) {
+    const n = parseInt(fMatch[1]!, 10);
+    if (n <= 4) return enc.encode(`\x1bO${"PQRS"[n - 1]}`);
+    const codes = [15, 17, 18, 19, 20, 21, 23, 24];
+    return enc.encode(`\x1b[${codes[n - 5]}~`);
+  }
+
+  // Ctrl+letter (Ctrl+A=0x01, …, Ctrl+Z=0x1A)
+  if (e.ctrlKey && !e.altKey && e.key.length === 1) {
+    const c = e.key.toLowerCase().charCodeAt(0);
+    if (c >= 0x61 && c <= 0x7a) return new Uint8Array([c - 0x60]);
+    // Ctrl+Space → NUL
+    if (e.key === " ") return new Uint8Array([0x00]);
+  }
+
+  // Printable single character
+  if (!e.ctrlKey && !e.altKey && e.key.length === 1) {
+    return enc.encode(e.key);
+  }
+
+  // Alt+letter → ESC + letter (meta-prefixed input convention)
+  if (e.altKey && !e.ctrlKey && e.key.length === 1) {
+    const buf = new Uint8Array(2);
+    buf[0] = 0x1b;
+    buf[1] = e.key.charCodeAt(0);
+    return buf;
+  }
+
+  return null;
 }

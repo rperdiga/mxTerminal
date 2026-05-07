@@ -32,6 +32,32 @@ public class PtySessionTests
     }
 
     [Fact]
+    public async Task Spawn_Echo_ProducesExpectedOutput_CrossPlatform()
+    {
+        var factory = new PtyNetFactory();
+        await using var ctx = TestContext.Create();
+        var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (System.Collections.DictionaryEntry e in Environment.GetEnvironmentVariables())
+            env[(string)e.Key] = (string)(e.Value ?? "");
+
+        // Pick the right echo for the platform — exercises the factory dispatch
+        // end-to-end on whichever OS the test happens to run on.
+        var (shell, args) = OperatingSystem.IsWindows()
+            ? ("cmd.exe", new[] { "/c", "echo hello-from-pty" })
+            : ("/bin/echo", new[] { "hello-from-pty" });
+
+        var session = await factory.SpawnAsync(
+            shellPath: shell, args: args,
+            cwd: Environment.CurrentDirectory,
+            cols: 80, rows: 24,
+            environment: env,
+            ct: ctx.Token);
+
+        var output = await ReadAllAsync(session, ctx.Token);
+        Encoding.UTF8.GetString(output).Should().Contain("hello-from-pty");
+    }
+
+    [Fact]
     public async Task Spawn_InvalidExecutable_Throws()
     {
         if (!OperatingSystem.IsWindows()) return;

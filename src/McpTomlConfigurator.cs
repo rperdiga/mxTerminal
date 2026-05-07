@@ -4,8 +4,11 @@ namespace Terminal;
 
 /// <summary>
 /// Manages the <c>[mcp_servers.&lt;name&gt;]</c> sections of the user-level
-/// Codex config at <c>~/.codex/config.toml</c>. Codex's MCP support is stdio-only
-/// so we wire it through the npx <c>mcp-remote</c> bridge.
+/// Codex config at <c>~/.codex/config.toml</c>. Codex 0.128+ natively supports
+/// streamable HTTP transport — we just write <c>url = "..."</c> directly,
+/// no stdio bridge. Earlier versions of this configurator used the npx
+/// <c>mcp-remote</c> bridge, which was both fragile (depended on Node + a
+/// healthy npm cache) and unnecessary now.
 ///
 /// Hand-rolled TOML editing — no need for a full parser since we own a fixed
 /// set of well-known sections and never touch anything else.
@@ -44,8 +47,7 @@ public sealed class McpTomlConfigurator
         var newSection = new[]
         {
             header,
-            "command = \"npx\"",
-            $"args = [\"-y\", \"mcp-remote\", \"{url}\"]",
+            $"url = \"{url}\"",
         };
 
         if (start < 0)

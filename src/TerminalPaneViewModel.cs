@@ -20,8 +20,14 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     private readonly Func<string?> getApplicationRootUrl;
 
     private IWebView? webView;
-    private Action<string, byte[]>? outputHandler;
-    private Action<string, int?>?  exitedHandler;
+    /// <summary>
+    /// Last project dir we successfully resolved from the Mendix API.
+    /// Used as a fallback in HandleCreateTab when the live lookup
+    /// momentarily returns null — without this we'd silently fall through
+    /// to Environment.CurrentDirectory (Studio Pro's .app bundle on Mac),
+    /// which is wrong for shell sessions.
+    /// </summary>
+    private string? lastKnownProjectDir;
 
     public TerminalPaneViewModel(
         string title,
@@ -49,18 +55,43 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         try { ((dynamic)webView).AllowReload    = true; } catch { /* best-effort */ }
         log.Info($"InitWebView build={ResolveBuildVersion()} at {webIndexUri}");
 
-        outputHandler = (tabId, bytes) => Post("output", new OutputPayload(tabId, Convert.ToBase64String(bytes)));
-        exitedHandler = (tabId, code) => Post("exit", new ExitPayload(tabId, code));
-        manager.Output += outputHandler;
-        manager.Exited += exitedHandler;
+        // Manager output / exit subscriptions are owned by TerminalPaneExtension
+        // — see EnsureManagerForwardingHooked there. The extension forwards each
+        // event to whichever view model is currently active via PostOutput /
+        // PostExit. We deliberately do NOT subscribe to OnClosed here:
+        // Mendix's DockablePane DisposeWindow walks OnClosed subscribers
+        // during shutdown, and any delegate pointing into our (about-to-be-
+        // unloaded) IL has triggered BadImageFormatException ("Bad IL range")
+        // popups — even when the body itself was wrapped in try/catches.
+        // With no subscription, Mendix has nothing of ours to invoke.
+    }
 
-        OnClosed += () =>
-        {
-            if (outputHandler != null) manager.Output -= outputHandler;
-            if (exitedHandler != null) manager.Exited -= exitedHandler;
-            outputHandler = null;
-            exitedHandler = null;
-        };
+    /// <summary>
+    /// Forward a PTY output frame to the JS side. Called by
+    /// <c>TerminalPaneExtension</c>'s manager-event forwarder.
+    /// No-op once the WebView has been disposed.
+    /// </summary>
+    public void PostOutput(string tabId, byte[] bytes) =>
+        Post("output", new OutputPayload(tabId, Convert.ToBase64String(bytes)));
+
+    /// <summary>
+    /// Forward a PTY exit notice to the JS side. Called by
+    /// <c>TerminalPaneExtension</c>'s manager-event forwarder.
+    /// No-op once the WebView has been disposed.
+    /// </summary>
+    public void PostExit(string tabId, int? code) =>
+        Post("exit", new ExitPayload(tabId, code));
+
+    /// <summary>
+    /// Mark this view model as no longer the active forwarding target.
+    /// After this returns, <see cref="Post"/> short-circuits because
+    /// <c>webView</c> is null, so any straggling event from the manager
+    /// silently no-ops instead of touching a disposed WebView.
+    /// </summary>
+    public void DetachLifecycleHooks()
+    {
+        try { if (webView != null) webView.MessageReceived -= OnWebViewMessage; } catch { /* ignore */ }
+        webView = null;
     }
 
     private void OnWebViewMessage(object? sender, MessageReceivedEventArgs e)
@@ -101,7 +132,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                             : Convert.ToHexString(bytes.AsSpan(0, 32).ToArray()) + "..." + Convert.ToHexString(bytes.AsSpan(bytes.Length - 8).ToArray());
                         log.Info($"input tab={p.TabId.Substring(0, 8)} len={bytes.Length} preview={preview}");
                     }
-                    manager.Write(p.TabId, bytes);
+                    _ = manager.Write(p.TabId, bytes);
                     break;
                 }
 
@@ -318,11 +349,21 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         var toml = new McpTomlConfigurator();
         var touched = new List<string>();
 
-        if (jsonNeeded) { json.Upsert(url); touched.Add(LabelForJson(nextClients)); }
-        else if (jsonHadIt) { json.Remove(); touched.Add(LabelForJson(prevClients) + " (removed)"); }
+        log.Info($"[mcp-config] primary diff jsonNeeded={jsonNeeded} jsonHadIt={jsonHadIt} tomlNeeded={tomlNeeded} tomlHadIt={tomlHadIt} url={url}");
 
-        if (tomlNeeded) { toml.Upsert(url); touched.Add("Codex"); }
-        else if (tomlHadIt) { toml.Remove(); touched.Add("Codex (removed)"); }
+        try
+        {
+            if (jsonNeeded) { json.Upsert(url); log.Info($"[mcp-config-json] upserted {McpJsonConfigurator.ServerName} -> {url}"); touched.Add(LabelForJson(nextClients)); }
+            else if (jsonHadIt) { json.Remove(); log.Info($"[mcp-config-json] removed {McpJsonConfigurator.ServerName}"); touched.Add(LabelForJson(prevClients) + " (removed)"); }
+        }
+        catch (Exception ex) { log.Error("[mcp-config-json] primary write failed", ex); }
+
+        try
+        {
+            if (tomlNeeded) { toml.Upsert(url); log.Info($"[mcp-config-toml] upserted {McpTomlConfigurator.ServerName} -> {url} at {toml.FilePath}"); touched.Add("Codex"); }
+            else if (tomlHadIt) { toml.Remove(); log.Info($"[mcp-config-toml] removed {McpTomlConfigurator.ServerName}"); touched.Add("Codex (removed)"); }
+        }
+        catch (Exception ex) { log.Error("[mcp-config-toml] primary write failed", ex); }
 
         return touched.ToArray();
     }
@@ -354,11 +395,21 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         var toml = new McpTomlConfigurator();
         var touched = new List<string>();
 
-        if (jsonNeeded) { json.UpsertActions(url); touched.Add(LabelForJson(nextClients) + " actions"); }
-        else if (jsonHadIt) { json.RemoveActions(); touched.Add(LabelForJson(prevClients) + " actions (removed)"); }
+        log.Info($"[mcp-config] actions diff jsonNeeded={jsonNeeded} jsonHadIt={jsonHadIt} tomlNeeded={tomlNeeded} tomlHadIt={tomlHadIt} url={url} live-port={manager.CurrentActionServerPort?.ToString() ?? "null"}");
 
-        if (tomlNeeded) { toml.UpsertActions(url); touched.Add("Codex actions"); }
-        else if (tomlHadIt) { toml.RemoveActions(); touched.Add("Codex actions (removed)"); }
+        try
+        {
+            if (jsonNeeded) { json.UpsertActions(url); log.Info($"[mcp-config-json] upserted {McpJsonConfigurator.ActionsServerName} -> {url}"); touched.Add(LabelForJson(nextClients) + " actions"); }
+            else if (jsonHadIt) { json.RemoveActions(); log.Info($"[mcp-config-json] removed {McpJsonConfigurator.ActionsServerName}"); touched.Add(LabelForJson(prevClients) + " actions (removed)"); }
+        }
+        catch (Exception ex) { log.Error("[mcp-config-json] actions write failed", ex); }
+
+        try
+        {
+            if (tomlNeeded) { toml.UpsertActions(url); log.Info($"[mcp-config-toml] upserted {McpTomlConfigurator.ActionsServerName} -> {url} at {toml.FilePath}"); touched.Add("Codex actions"); }
+            else if (tomlHadIt) { toml.RemoveActions(); log.Info($"[mcp-config-toml] removed {McpTomlConfigurator.ActionsServerName}"); touched.Add("Codex actions (removed)"); }
+        }
+        catch (Exception ex) { log.Error("[mcp-config-toml] actions write failed", ex); }
 
         return touched.ToArray();
     }
@@ -375,12 +426,28 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     {
         try
         {
-            var dir = GetProjectDir() ?? Environment.CurrentDirectory;
-            var settings = TerminalSettings.Load(GetProjectDir() ?? "");
+            // Resolve the cwd in priority order: explicit JS payload, live
+            // project dir, last-known project dir (cached when Mendix has
+            // briefly dropped the model), HOME. NEVER fall through to
+            // Environment.CurrentDirectory — on macOS that is Studio Pro's
+            // .app bundle, and a shell started there causes Claude/Codex
+            // to register the .app as the "project" so .mcp.json (which
+            // lives in the real project root) is invisible. Verified
+            // 2026-05-07: claude.json had a project key
+            // /Applications/Mendix Studio Pro 11.10.0 Beta.app from a
+            // previous bad cwd.
+            var liveDir = GetProjectDir();
+            var dir = p.Cwd
+                      ?? liveDir
+                      ?? lastKnownProjectDir
+                      ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (liveDir != null) lastKnownProjectDir = liveDir;
+            var settings = TerminalSettings.Load(liveDir ?? lastKnownProjectDir ?? "");
             var shell = p.ShellPath ?? settings.ShellPath;
             var args = p.Args ?? settings.Args;
-            var cwd = p.Cwd ?? dir;
+            var cwd = dir;
 
+            log.Info($"[create-tab] cwd={cwd} (live={liveDir ?? "null"} cached={lastKnownProjectDir ?? "null"} payload={p.Cwd ?? "null"}) shell={shell}");
             var (tabId, title) = await manager.CreateSessionAsync(shell, args, cwd, p.Cols, p.Rows);
             Post("tabCreated", new TabCreatedPayload(tabId, title, shell, cwd));
         }
@@ -474,18 +541,25 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     /// so the JS side can warn when our saved port differs from what Studio Pro
     /// is actually serving on. Returns null on any probe failure.
     /// </summary>
-    private static StudioProMcpInfoPayload? ProbeStudioProMcp()
+    private StudioProMcpInfoPayload? ProbeStudioProMcp()
     {
         try
         {
-            var sp = System.Diagnostics.Process.GetCurrentProcess();
-            var exePath = sp.MainModule?.FileName;
-            if (string.IsNullOrEmpty(exePath)) return null;
-            var versionDir = new FileInfo(exePath).Directory?.Parent?.Name;
-            if (string.IsNullOrEmpty(versionDir)) return null;
-            var info = StudioProThemeProbe.ReadMcpServer(versionDir);
+            var version = TerminalPaneExtension.StudioProVersionFromExePath();
+            if (string.IsNullOrEmpty(version))
+            {
+                log.Info("[mcp-probe] version not detected from exe path");
+                return null;
+            }
+            var info = StudioProThemeProbe.ReadMcpServer(version);
+            log.Info($"[mcp-probe] sp-version={version} {info.Diagnostic}");
             return new StudioProMcpInfoPayload(info.Enabled, info.Port);
         }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            log.Warn($"[mcp-probe] outer exception: {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
     }
+
 }

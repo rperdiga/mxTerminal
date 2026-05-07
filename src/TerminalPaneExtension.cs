@@ -22,10 +22,16 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
     private bool subscribed;
     private bool stateRestored;          // first-Open guard for cross-session restore
     private bool sessionsChangedHooked;  // first-Open guard for persistence hook
+    private bool managerForwardingHooked; // first-Open guard for output/exit forwarding
     // Captured on UI-thread during Open(); SaveStateBestEffort runs from the
     // SessionsChanged event which may fire on a non-UI thread where
     // CurrentApp can return null.
     private string? cachedProjectDir;
+    // Track the most recently opened view model so we can detach its
+    // event subscriptions during ExtensionUnloading — before our IL gets
+    // unloaded and Mendix's later DisposeWindow tries to invoke handlers
+    // that no longer have valid method bodies.
+    private TerminalPaneViewModel? activeViewModel;
 
     [ImportingConstructor]
     public TerminalPaneExtension(ILocalRunConfigurationsService localRunConfigs)
@@ -42,6 +48,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         cachedProjectDir = (CurrentApp?.Root as IProject)?.DirectoryPath ?? cachedProjectDir;
         EnsureLifecycleSubscribed();
         EnsureStatePersistenceHooked();
+        EnsureManagerForwardingHooked();
         TryAutoStartActionServer();
         TryRestoreTabsOnFirstOpen();
 
@@ -53,7 +60,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         if (themeQuery != null)
             indexUri = new Uri($"{indexUri}?theme={themeQuery}");
         log?.Info($"InitWebView indexUri={indexUri} theme-from-probe={themeQuery ?? "<none>"}");
-        return new TerminalPaneViewModel(
+        var vm = new TerminalPaneViewModel(
             title: "Concord",
             manager: manager,
             getCurrentApp: () => CurrentApp,
@@ -66,6 +73,8 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 try { return localRunConfigs.GetActiveConfiguration(model)?.ApplicationRootUrl; }
                 catch (Exception ex) { log?.Warn($"GetActiveConfiguration threw: {ex.Message}"); return null; }
             });
+        activeViewModel = vm;
+        return vm;
     }
 
     private void EnsureLogger()
@@ -80,8 +89,19 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         subscribed = true;
         Subscribe<ExtensionUnloading>(() =>
         {
-            try { log.Info("ExtensionUnloading — disposing all PTYs and action server"); manager.Dispose(); }
-            catch (Exception ex) { log.Error("Dispose on unload failed", ex); }
+            // Bulletproof unload — Mendix's host catches anything that escapes
+            // and surfaces it as a popup/error. During ALC teardown the JIT can
+            // throw BadImageFormatException when re-resolving any P/Invoke
+            // whose native lib has already been unloaded; we don't want that to
+            // reach the host. Independent try/catches so a failing log call
+            // doesn't suppress disposal, and disposal failure doesn't leak.
+            try { log?.Info("ExtensionUnloading — disposing all PTYs and action server"); } catch { /* ignore */ }
+            // Null out the active view model so any in-flight Output/Exited
+            // event from the manager (now being torn down) short-circuits in
+            // the forwarder and never reaches into a half-disposed VM.
+            try { activeViewModel?.DetachLifecycleHooks(); } catch { /* ignore */ }
+            activeViewModel = null;
+            try { manager.Dispose(); } catch { /* ignore — best-effort cleanup */ }
         });
     }
 
@@ -96,6 +116,37 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         if (sessionsChangedHooked) return;
         sessionsChangedHooked = true;
         manager.SessionsChanged += SaveStateBestEffort;
+    }
+
+    /// <summary>
+    /// Subscribe once to manager.Output and manager.Exited at the extension
+    /// level — NOT in TerminalPaneViewModel. The view model used to do this
+    /// itself and unsubscribe via OnClosed, but during Studio Pro shutdown
+    /// Mendix's DockablePane DisposeWindow walks OnClosed subscribers and
+    /// any delegate pointing into our (about-to-be-unloaded) IL surfaced
+    /// BadImageFormatException popups. Owning the subscription here keeps
+    /// the delegate target inside the extension (which lives across
+    /// pane-open/close cycles); the view model just exposes
+    /// PostOutput / PostExit and is treated as a passive forwarding target.
+    /// </summary>
+    private void EnsureManagerForwardingHooked()
+    {
+        if (managerForwardingHooked) return;
+        managerForwardingHooked = true;
+        manager.Output += ForwardOutput;
+        manager.Exited += ForwardExit;
+    }
+
+    private void ForwardOutput(string tabId, byte[] bytes)
+    {
+        try { activeViewModel?.PostOutput(tabId, bytes); }
+        catch (Exception ex) { log?.Warn($"[forward-output] {ex.GetType().Name}: {ex.Message}"); }
+    }
+
+    private void ForwardExit(string tabId, int? code)
+    {
+        try { activeViewModel?.PostExit(tabId, code); }
+        catch (Exception ex) { log?.Warn($"[forward-exit] {ex.GetType().Name}: {ex.Message}"); }
     }
 
     private void SaveStateBestEffort()
@@ -223,21 +274,14 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
     {
         try
         {
-            // Studio Pro's process file path looks like:
-            //   C:\DevTools\Mendix\11.10.0\modeler\studiopro.exe
-            // The version dir is the parent of "modeler" — most reliable signal.
-            var sp = System.Diagnostics.Process.GetCurrentProcess();
-            var exePath = sp.MainModule?.FileName;
-            if (string.IsNullOrEmpty(exePath)) return null;
-            // ...\Mendix\<version>\modeler\studiopro.exe → grandparent's name = "<version>"
-            var versionDir = new FileInfo(exePath).Directory?.Parent?.Name;
-            if (string.IsNullOrEmpty(versionDir))
+            var version = StudioProVersionFromExePath();
+            if (string.IsNullOrEmpty(version))
             {
-                log?.Info("[theme-probe] version-dir not detected from exe path");
+                log?.Info("[theme-probe] version not detected from exe path");
                 return null;
             }
-            var result = StudioProThemeProbe.Read(versionDir);
-            log?.Info($"[theme-probe] sp-version={versionDir} {result.Diagnostic}");
+            var result = StudioProThemeProbe.Read(version);
+            log?.Info($"[theme-probe] sp-version={version} {result.Diagnostic}");
             return result.Theme is null ? null : StudioProThemeProbe.ToUrlValue(result.Theme.Value);
         }
         catch (Exception ex)
@@ -245,5 +289,19 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
             log?.Warn($"[theme-probe] outer exception: {ex.GetType().Name}: {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Extracts a "<c>major.minor.patch</c>" version from Studio Pro's process exe path.
+    /// Works for both Windows (<c>...\Mendix\11.10.0\modeler\studiopro.exe</c>) and the
+    /// Mac bundle layout (e.g. <c>/Applications/Mendix Studio Pro 11.10.0.app/...</c>).
+    /// Returns null if the path doesn't contain a version triple.
+    /// </summary>
+    internal static string? StudioProVersionFromExePath()
+    {
+        var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+        if (string.IsNullOrEmpty(exePath)) return null;
+        var match = System.Text.RegularExpressions.Regex.Match(exePath, @"\d+\.\d+\.\d+");
+        return match.Success ? match.Value : null;
     }
 }

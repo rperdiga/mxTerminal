@@ -7,6 +7,8 @@ Two paths. Pick whichever matches your situation.
 
 Both paths have the same Studio Pro one-time setup: see [§ Studio Pro setup](#studio-pro-setup) below.
 
+Concord runs on **Windows** (Studio Pro 11.10+ on Win10 1809+) and **macOS** (Studio Pro 11.10+). Path examples in this doc use Windows separators by default; Mac equivalents are called out inline (e.g. `<project>/extensions/Concord/`).
+
 If you're upgrading from the older "**Terminal**" extension (the original `mxTerminal`), see [§ Migrating from Terminal](#migrating-from-terminal-the-old-name) at the bottom.
 
 ---
@@ -36,29 +38,31 @@ Two ways:
 
 ### Install into your Mendix project
 
-1. Open the project folder in Explorer (e.g. `C:\Workspace\MendixApps\YourProject`).
-2. If an `extensions\` folder doesn't exist at the project root, create it.
-3. Copy the entire `Concord` folder you received into `extensions\`. You should end up with:
+1. Open the project folder (e.g. Windows: `C:\Workspace\MendixApps\YourProject`; macOS: `~/Mendix/YourProject`).
+2. If an `extensions/` folder doesn't exist at the project root, create it.
+3. Copy the entire `Concord` folder you received into `extensions/`. You should end up with:
 
 ```
-YourProject\
-   extensions\
-      Concord\
+YourProject/
+   extensions/
+      Concord/
          Concord.dll
          manifest.json
-         wwwroot\
+         wwwroot/
          (...other DLLs and assets)
 ```
 
 4. Make sure **Studio Pro setup** above is done.
 5. Start Studio Pro and open the project. Studio Pro will:
-   - Scan `extensions\` and find Concord.
+   - Scan `extensions/` and find Concord.
    - Show a one-time **"Trust this extension"** prompt (per Mendix's extension-trust flow). Approve it.
 6. Open the pane: **Extensions → Concord → Open Pane**. The pane appears in the right-side pane strip (next to Properties / Toolbox / Maia). Click the **Concord** tab in that strip to focus it.
 
 To install in additional projects, repeat steps 1–6 in each.
 
-To remove: delete the `extensions\Concord\` folder. Restart Studio Pro.
+To remove: delete the `extensions/Concord/` folder. Restart Studio Pro.
+
+> **macOS note:** Studio Pro on Mac snapshots `extensions/` into `<project>/.mendix-cache/extensions-cache/<guid>/` at first load and serves `wwwroot/` from there. If you replace `extensions/Concord/` with a newer build while Studio Pro is running, Studio Pro will keep serving the old cached copy until restart. Either fully quit Studio Pro before swapping the folder, or also overlay the cache-snapshot directory (the developer-path build does this automatically).
 
 ---
 
@@ -71,9 +75,10 @@ To remove: delete the `extensions\Concord\` folder. Restart Studio Pro.
 | Node.js | 18 or newer | `node --version` |
 | .NET SDK | 8.x **or** 10.x with the `net8.0` reference pack present | `dotnet --version` and `dotnet --list-runtimes` should show `Microsoft.NETCore.App 8.0.x` |
 | Git | any recent version | `git --version` |
-| Studio Pro | 11.10.0 or newer | check **Help → About** in Studio Pro |
+| Studio Pro | 11.10.0 or newer (Windows or macOS) | check **Help → About** in Studio Pro |
+| OS | Windows 10 1809 (build 17763)+ for ConPTY, **or** macOS 10.15+ for `posix_spawn_file_actions_addchdir_np` | — |
 
-The .NET 10 SDK can target `net8.0` if the .NET 8 runtime + reference pack is installed (which it usually is on a Windows dev box that's seen any .NET work). If a build fails with "no reference pack for net8.0", install the .NET 8 SDK from https://dotnet.microsoft.com/.
+The .NET 10 SDK can target `net8.0` if the .NET 8 runtime + reference pack is installed (which it usually is on a Windows or Mac dev box that's seen any .NET work). If a build fails with "no reference pack for net8.0", install the .NET 8 SDK from https://dotnet.microsoft.com/.
 
 ### One-time setup
 
@@ -82,12 +87,20 @@ git clone https://github.com/rperdiga/mxTerminal.git
 cd mxTerminal
 
 # Per-developer deploy config (gitignored — your machine's paths)
+# Windows:
 copy Directory.Build.props.example Directory.Build.props
-# Edit Directory.Build.props and set MendixDeployTarget to your Mendix project root, e.g.:
+# macOS / Linux:
+cp Directory.Build.props.example Directory.Build.props
+
+# Edit Directory.Build.props and set MendixDeployTarget to your Mendix project root.
+#
+# Windows:
 #   <MendixDeployTarget>C:\Workspace\MendixApps\YourProject</MendixDeployTarget>
+# macOS:
+#   <MendixDeployTarget>/Users/you/Mendix/YourProject</MendixDeployTarget>
 #
 # To deploy to MULTIPLE projects on each build, semicolon-separate them:
-#   <MendixDeployTarget>C:\Projects\AppOne;C:\Projects\AppTwo</MendixDeployTarget>
+#   <MendixDeployTarget>/Users/you/Mendix/AppOne;/Users/you/Mendix/AppTwo</MendixDeployTarget>
 ```
 
 ### Build
@@ -99,7 +112,7 @@ dotnet build
 What happens:
 1. The csproj's `BuildUi` target runs `npm install` (first build only — about 30 seconds) and `node esbuild.mjs` to bundle the xterm.js TypeScript UI.
 2. C# compiles `Concord.dll`.
-3. The `DeployToMendix` target `xcopy`s the build output into each `MendixDeployTarget`'s `extensions\Concord\` directory.
+3. The `DeployToMendix` target copies the build output into each `MendixDeployTarget`'s `extensions/Concord/` directory — `xcopy` on Windows, `cp -R` on macOS/Linux. On Mac it also overlays Studio Pro's `<project>/.mendix-cache/extensions-cache/<guid>/` snapshot, since Studio Pro on Mac serves `wwwroot/` from the cache rather than from `extensions/` directly.
 
 **First-build gotcha:** the csproj's `<Content Include="wwwroot\**\*">` copies the UI bundle into the output, but on a fresh clone `wwwroot/` doesn't exist yet — esbuild creates it during the BuildUi step, AFTER MSBuild has already evaluated the Content glob. **Workaround: run `dotnet build` a second time on the very first build of a fresh clone.** Subsequent builds work the first time. (See `LEARNINGS.md` if it lands in repo for the eventual proper fix.)
 
@@ -109,7 +122,7 @@ What happens:
 dotnet test
 ```
 
-88 xunit tests cover the C# side (action server JSON-RPC, action state machine, run-state probe, MCP config emitters, session manager, ring buffer, settings, logging, per-session write-lock serialization).
+95 xunit tests cover the C# side (action server JSON-RPC, action state machine, run-state probe, MCP config emitters, session manager, ring buffer, settings, logging, per-session write-lock serialization, Settings.sqlite probe on both Windows and Mac paths).
 
 ```sh
 cd ui && npm test
@@ -147,11 +160,15 @@ Then **fully close and reopen Studio Pro.** .NET assemblies loaded into Studio P
 
 If you're only changing TypeScript UI files (xterm tab manager, settings modal, etc.), the rebuild is fast (~3-5 seconds), but Studio Pro still needs a restart because it loaded the old `wwwroot/index.html` into the WebView at pane-open time.
 
+> **macOS iteration tip:** the build copies fresh assets into both `<project>/extensions/Concord/` and the per-project Studio Pro cache snapshot at `<project>/.mendix-cache/extensions-cache/<guid>/`, so `dotnet build` followed by a full Studio Pro restart picks up your changes without manually clearing the cache.
+
 ### Logs (build + runtime)
 
 - **Build log:** stdout/stderr of `dotnet build`.
-- **Extension runtime log:** `<MendixProject>\resources\terminal.log` — every extension lifecycle event, action server start/stop, MCP probe result, paste byte trace.
-- **Studio Pro's own log:** `%APPDATA%\Mendix\Studio Pro <version>\log\` — extension load failures, MEF errors. Find the path via Studio Pro's `Help → About → Open log folder`.
+- **Extension runtime log:** `<MendixProject>/resources/terminal.log` — every extension lifecycle event, action server start/stop, MCP probe result, paste byte trace.
+- **Studio Pro's own log:** extension load failures, MEF errors. Find the path via Studio Pro's `Help → About → Open log folder`.
+  - Windows: `%APPDATA%\Mendix\Studio Pro <version>\log\`
+  - macOS: `~/Library/Application Support/Mendix/Studio Pro <version>/log/`
 
 ---
 
@@ -204,3 +221,10 @@ If you previously had a `terminal-settings.json` in `<project>\resources\`, Conc
 ### "save_all worked / didn't work"
 
 `save_all` is best-effort. It posts Ctrl+S to Studio Pro's main window, which routes the keystroke to whichever child window has focus. If the user's focus is in the terminal pane (typical when Claude is calling tools), Ctrl+S goes to OUR pane and Studio Pro's documents don't save. Workaround: click the document tab once first, then ask Claude. Or just save manually — it's one keystroke. F5 (run), Shift+F5 (stop), F4 (refresh) are global hotkeys and work regardless of focus.
+
+### macOS-specific issues
+
+- **"Action bridge tools `run_app` / `stop_app` / `refresh_project` / `save_all` don't fire on Mac."** That's expected. Those four tools require Win32 `PostMessage`, which has no equivalent on Mac that works without prompting for accessibility permissions. Use Studio Pro's own keyboard shortcuts (F5 / Shift+F5 / F4) directly. The two service-based tools (`get_active_run_configuration`, `get_app_status`) work on both platforms.
+- **"My new build doesn't show up after a Studio Pro restart."** Studio Pro on Mac caches `extensions/` into `<project>/.mendix-cache/extensions-cache/<guid>/` at first load and serves `wwwroot/` from there. The developer-path build refreshes this cache automatically; the consumer-path drop-in does NOT — quit Studio Pro fully before swapping the folder, or delete the matching `.mendix-cache/extensions-cache/<guid>/` directory.
+- **"Theme probe fails with `db-not-found`."** Studio Pro on Mac stores its settings at `~/Library/Application Support/Mendix/Settings.sqlite`. If the file is missing, you've never opened Studio Pro Preferences with this user account. Open **Studio Pro → Preferences**, change something trivial, save — that creates the SQLite file.
+- **"Studio Pro freezes / shows the spinning beachball after I type a character."** This was the symptom of the WKWebView main-thread write blocking; fixed in 1.2.0 by offloading PTY writes to the thread pool. Make sure you're on `Concord 1.2.0` or newer.

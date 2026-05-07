@@ -127,25 +127,29 @@ agent on Windows ([claude-code #49337](https://github.com/anthropics/claude-code
 4. **Size-tiered UX** — notice ≥ 4 KB, warn + duration estimate
    ≥ 50 KB, refuse with "save to file" guidance ≥ 1 MB.
 
-## What's new in 1.1.0
+## What's new in 1.2.0
 
 See [CHANGELOG.md](https://github.com/rperdiga/mxTerminal/blob/main/CHANGELOG.md).
 
-- **PTY backend WinPTY → ConPTY** (~290 LOC of hand-rolled
-  `kernel32!CreatePseudoConsole` P/Invoke replacing the third-party
-  PTY package + native sidecar)
-- **Paste pipeline overhaul** — multi-line paste into Claude Code
-  works reliably for the first time on Windows
-- **Per-tab write serialization** via `SemaphoreSlim`
-- **Size-tiered paste UX** with notice / warn / refuse thresholds
-- **Defense-in-depth LF-bypass branch** for non-bracketed receivers
-- **121 tests passing** (33 vitest UI + 88 xunit C#)
+- **macOS support** — Studio Pro on Mac is now a first-class host
+  alongside Windows. Hand-rolled POSIX PTY backend (`openpty` +
+  `posix_spawnp` against `libSystem.dylib`), WKWebView bridge with
+  focus + keyboard fixes, Mac Settings.sqlite probe path, Homebrew-aware
+  shell init, platform-aware shell-path migration.
+- **128 tests passing** (33 vitest UI + 95 xunit C#)
+- **1.1.0 highlights still shipping:** ConPTY backend on Windows
+  (~290 LOC of `kernel32!CreatePseudoConsole` P/Invoke), four-layer
+  paste pipeline with bracketed-paste, paced chunking, LF-bypass, and
+  size-tiered UX
 
 ## Compatibility
 
 - **Studio Pro:** 11.10.0 or newer
-- **Operating system:** Windows 10 1809 (build 17763) or newer —
-  ConPTY is part of `kernel32` from this release
+- **Operating system:**
+  - **Windows 10 1809 (build 17763)** or newer — ConPTY is part of
+    `kernel32` from this release
+  - **macOS 10.15 (Catalina)** or newer — `posix_spawn_file_actions_addchdir_np`
+    available from this release
 - **.NET runtime:** 8.0 (bundled with Studio Pro 11)
 
 ## Documentation

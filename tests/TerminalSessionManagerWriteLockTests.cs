@@ -21,7 +21,7 @@ public class TerminalSessionManagerWriteLockTests
 
         const int writers = 10;
         var tasks = Enumerable.Range(0, writers)
-            .Select(i => Task.Run(() => mgr.Write(id, new[] { (byte)i })))
+            .Select(i => mgr.Write(id, new[] { (byte)i }))
             .ToArray();
         await Task.WhenAll(tasks);
 
@@ -52,15 +52,16 @@ public class TerminalSessionManagerWriteLockTests
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
         await Task.WhenAll(
-            Task.Run(() => mgr.Write(idA, new byte[] { 1 })),
-            Task.Run(() => mgr.Write(idB, new byte[] { 2 }))
+            mgr.Write(idA, new byte[] { 1 }),
+            mgr.Write(idB, new byte[] { 2 })
         );
         sw.Stop();
 
         // Two parallel 50ms writes on independent sessions should complete
         // in ~50ms (parallel), not ~100ms (serialized). Allow generous
-        // overhead for CI variance.
-        sw.ElapsedMilliseconds.Should().BeLessThan(90,
+        // overhead for CI/Mac variance — anything under the serialized
+        // floor of ~100ms still proves the sessions ran in parallel.
+        sw.ElapsedMilliseconds.Should().BeLessThan(95,
             "writes to different sessions must not share a lock");
         sessionA.WriteSpans.Should().HaveCount(1);
         sessionB.WriteSpans.Should().HaveCount(1);
