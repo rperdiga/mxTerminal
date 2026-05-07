@@ -114,6 +114,17 @@ public sealed class StudioProUiAutomation : IStudioProUiAutomation
     /// Hotkey is parsed via the existing <see cref="TryParse"/> (Win VK
     /// codes), then mapped to macOS HIToolbox key codes for the AppleScript
     /// "key code N" form.
+    /// <para>
+    /// Before invoking osascript, we clear the WebView's first-responder
+    /// grip via AppKit's <c>[[NSApp keyWindow] makeFirstResponder:nil]</c>.
+    /// Without this, the xterm.js terminal inside Concord's pane absorbs F5
+    /// (and friends) before Studio Pro's accelerator handler sees them —
+    /// observed as "<c>JS: onData len=5</c>" landing in the log a few ms
+    /// after every "<c>sent F5</c>". Clearing first responder is a no-op for
+    /// non-Concord WebViews, so it's safe to do unconditionally on every
+    /// keystroke send. AppKit must be touched on the main thread; we marshal
+    /// via Eto.Forms's <c>Application.Instance.Invoke</c> when available.
+    /// </para>
     /// </summary>
     private bool SendMac(string hotkeyText)
     {
@@ -128,6 +139,18 @@ public sealed class StudioProUiAutomation : IStudioProUiAutomation
             lastFailureReason = $"UI automation: no macOS key-code mapping for hotkey '{hotkeyText}' (Win VK 0x{vk:X}).";
             log?.Warn(lastFailureReason);
             return false;
+        }
+
+        // Defocus the WebView so xterm.js doesn't swallow the keystroke.
+        try
+        {
+            bool cleared = ClearWebViewFirstResponder();
+            log?.Info($"[actions] (mac) cleared first responder before {hotkeyText}: {cleared}");
+        }
+        catch (Exception ex)
+        {
+            // Best-effort — fall through and try the keystroke anyway.
+            log?.Warn($"UI automation (Mac): clear-first-responder failed: {ex.GetType().Name}: {ex.Message}");
         }
 
         // Build "using {control down, shift down, option down}" clause.
@@ -293,5 +316,77 @@ public sealed class StudioProUiAutomation : IStudioProUiAutomation
         }
         mac = 0;
         return false;
+    }
+
+    // ---- AppKit first-responder reset (Mac only) --------------------------
+    //
+    // Concord's pane lives in a WKWebView, which becomes the NSWindow's first
+    // responder when the user clicks into it. From that point on, any
+    // keystroke routed through System Events lands in the WebView (and is
+    // consumed by xterm.js) instead of reaching Studio Pro's main accelerator
+    // handler. We fix this by calling `[[NSApp keyWindow] makeFirstResponder:nil]`
+    // — equivalent to AppKit's "Stop Editing" — right before sending F5.
+    //
+    // Threading: AppKit insists on the main thread. The action HTTP server
+    // runs on the thread pool, so we marshal through Eto.Forms's main-thread
+    // dispatcher (Concord already depends on Eto). If Eto isn't initialized
+    // for some reason, fall through and call directly — undefined behavior in
+    // theory, but tends to work for these read-only NSApp accessors in
+    // practice and the alternative is to skip the defocus entirely.
+
+    private static bool ClearWebViewFirstResponder()
+    {
+        var instance = Eto.Forms.Application.Instance;
+        if (instance is null)
+            return MacAppKit.ClearFirstResponderOnKeyWindow();
+
+        bool result = false;
+        instance.Invoke(() => { result = MacAppKit.ClearFirstResponderOnKeyWindow(); });
+        return result;
+    }
+
+    private static class MacAppKit
+    {
+        // libobjc is part of /usr/lib on every Mac; no path needed for the
+        // dlopen behavior P/Invoke uses internally.
+        private const string LibObjc = "/usr/lib/libobjc.A.dylib";
+
+        [DllImport(LibObjc)]
+        private static extern IntPtr objc_getClass([MarshalAs(UnmanagedType.LPStr)] string name);
+
+        [DllImport(LibObjc)]
+        private static extern IntPtr sel_registerName([MarshalAs(UnmanagedType.LPStr)] string name);
+
+        // [obj selector]  → returns id, no extra args
+        [DllImport(LibObjc, EntryPoint = "objc_msgSend")]
+        private static extern IntPtr objc_msgSend_id(IntPtr receiver, IntPtr selector);
+
+        // [obj selector:nilOrId]  → returns BOOL (1 byte on Darwin), one id arg
+        [DllImport(LibObjc, EntryPoint = "objc_msgSend")]
+        private static extern byte objc_msgSend_bool_arg(IntPtr receiver, IntPtr selector, IntPtr arg);
+
+        /// <summary>
+        /// Sends <c>[[NSApp keyWindow] makeFirstResponder:nil]</c>. Returns
+        /// <c>true</c> if the call succeeded; <c>false</c> if any of the
+        /// objc lookups failed or no key window exists. Safe to call on
+        /// non-macOS — the DllImport will throw, caller catches.
+        /// </summary>
+        public static bool ClearFirstResponderOnKeyWindow()
+        {
+            var nsAppCls = objc_getClass("NSApplication");
+            if (nsAppCls == IntPtr.Zero) return false;
+
+            var nsApp = objc_msgSend_id(nsAppCls, sel_registerName("sharedApplication"));
+            if (nsApp == IntPtr.Zero) return false;
+
+            var win = objc_msgSend_id(nsApp, sel_registerName("keyWindow"));
+            // keyWindow can be nil if the app isn't in front or no window has
+            // key status; fall back to mainWindow (the document-level window).
+            if (win == IntPtr.Zero)
+                win = objc_msgSend_id(nsApp, sel_registerName("mainWindow"));
+            if (win == IntPtr.Zero) return false;
+
+            return objc_msgSend_bool_arg(win, sel_registerName("makeFirstResponder:"), IntPtr.Zero) != 0;
+        }
     }
 }

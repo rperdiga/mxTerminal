@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.2.2 — 2026-05-07
+
+### Action bridge keystrokes now reach Studio Pro on Mac
+
+In 1.2.1, `osascript` was successfully sending F5 / Shift+F5 to Studio
+Pro — but the keystrokes landed in the xterm inside the Concord pane,
+not in Studio Pro's main accelerator handler. Visible in the log as a
+`JS: onData len=5` entry firing within milliseconds of every
+`[actions] sent F5` entry: F5's VT escape sequence was being absorbed
+by xterm.js because the WKWebView held first-responder status.
+
+Fixed in `src/StudioProUiAutomation.cs` by clearing the WebView's
+first-responder grip via AppKit P/Invoke before each Mac keystroke
+send:
+
+```objc
+[[[NSApplication sharedApplication] keyWindow] makeFirstResponder:nil]
+```
+
+Marshalled via Eto.Forms's `Application.Instance.Invoke` so the AppKit
+call lands on the main thread — the action HTTP server otherwise runs
+on the thread pool. Falls back to `mainWindow` if `keyWindow` is nil,
+and falls through silently if AppKit can't be reached (best-effort:
+worst case is the previous broken behavior, not a crash).
+
+After 1.2.2, the keystroke reaches Studio Pro's main UI and triggers
+Run / Stop / Refresh as expected. Side-effect: the user needs to click
+back into the Concord pane after the action fires if they want to type
+more — first responder isn't restored.
+
+### Files touched
+
+- `src/StudioProUiAutomation.cs` — `ClearWebViewFirstResponder` helper
+  + private `MacAppKit` static class with `objc_getClass` /
+  `sel_registerName` / `objc_msgSend` P/Invoke. Called from `SendMac`
+  before invoking osascript.
+
 ## 1.2.1 — 2026-05-07
 
 ### Action bridge now works on macOS
