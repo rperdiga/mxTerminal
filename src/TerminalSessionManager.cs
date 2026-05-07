@@ -36,6 +36,7 @@ public sealed class TerminalSessionManager : IDisposable
         if (disposed) throw new ObjectDisposedException(nameof(TerminalSessionManager));
 
         var env = BuildEnvironment();
+        args = InjectShellInitArgs(shellPath, args);
         var pty = await factory.SpawnAsync(shellPath, args, cwd, cols, rows, env, ct);
         var tabId = Guid.NewGuid().ToString("N");
         // Pick the smallest unused positive integer among currently-active tabs.
@@ -82,13 +83,24 @@ public sealed class TerminalSessionManager : IDisposable
         lock (s.Gate) return s.Ring.Snapshot();
     }
 
-    public void Write(string tabId, byte[] data)
+    public Task Write(string tabId, byte[] data)
     {
-        if (!sessions.TryGetValue(tabId, out var s)) return;
-        s.WriteLock.Wait();
-        try { s.Pty.WriteAsync(data, CancellationToken.None).GetAwaiter().GetResult(); }
-        catch { /* PTY may have died — Exited handler removes it */ }
-        finally { s.WriteLock.Release(); }
+        if (!sessions.TryGetValue(tabId, out var s)) return Task.CompletedTask;
+        // Always offload to the thread pool. On macOS, Mendix's WKScriptMessage
+        // handler delivers JS→C# messages on the main UI thread, so blocking on
+        // WriteLock followed by sync PTY write would freeze Studio Pro (rainbow
+        // beachball) on every keystroke. WebView2 on Windows happens to dispatch
+        // off-thread, which masked this on the original code. Returning a Task
+        // lets tests await for-deterministic completion; the production caller
+        // discards it (fire-and-forget). Per-tab order is preserved by the
+        // WriteLock semaphore.
+        return Task.Run(async () =>
+        {
+            await s.WriteLock.WaitAsync();
+            try { await s.Pty.WriteAsync(data, CancellationToken.None); }
+            catch { /* PTY may have died — Exited handler removes it */ }
+            finally { s.WriteLock.Release(); }
+        });
     }
 
     public void Resize(string tabId, int cols, int rows)
@@ -311,7 +323,219 @@ public sealed class TerminalSessionManager : IDisposable
         env["COLORTERM"] = "truecolor";
         env["TERM"] = "xterm-256color";
         env["MCP_TIMEOUT"] = "15000";
+
+        // Override the zsh prompt to a short form (current dir + %), avoiding
+        // macOS's verbose default `user@host dirname %`. We do this via
+        // ZDOTDIR: zsh reads its rc files from $ZDOTDIR if set, so we point
+        // at a Concord-owned dir whose .zshrc sources the user's real
+        // config and then overrides PROMPT. Non-zsh shells ignore ZDOTDIR.
+        if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
+        {
+            try
+            {
+                var zdotdir = EnsureZshConfigDir();
+                if (zdotdir != null) env["ZDOTDIR"] = zdotdir;
+            }
+            catch { /* best-effort — non-fatal if we can't write the dotfiles */ }
+
+            // POSIX sh / dash / bash-as-sh read $ENV for interactive shells —
+            // there is no rcfile flag for them. Point at a sh-compatible
+            // init file so /bin/sh tabs also pick up PATH and a short prompt.
+            try
+            {
+                var envFile = EnsurePosixShInitFile();
+                if (envFile != null) env["ENV"] = envFile;
+            }
+            catch { /* best-effort */ }
+        }
         return env;
+    }
+
+    /// <summary>
+    /// Inject shell-specific init flags so the spawned shell loads the user's
+    /// real environment (PATH, aliases, etc.) and gets the Concord short
+    /// prompt. zsh is handled via <c>ZDOTDIR</c> in <see cref="BuildEnvironment"/>;
+    /// bash needs <c>--rcfile</c> on the command line because it has no
+    /// equivalent env var for interactive shells. Other shells pass through
+    /// unchanged.
+    /// </summary>
+    private static string[] InjectShellInitArgs(string shellPath, string[] args)
+    {
+        if (!OperatingSystem.IsMacOS() && !OperatingSystem.IsLinux()) return args;
+        var name = Path.GetFileName(shellPath);
+        if (!string.Equals(name, "bash", StringComparison.OrdinalIgnoreCase)) return args;
+
+        // If the user (or a previous tab restore) already passed --rcfile or
+        // --init-file, respect that.
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--rcfile" || args[i] == "--init-file") return args;
+        }
+
+        try
+        {
+            var rc = EnsureBashInitFile();
+            if (rc == null) return args;
+            // bash requires the rcfile flag to come before any other args; we
+            // also need --rcfile to actually take effect, the shell must be
+            // interactive (which a PTY-backed shell is by default), so no -i.
+            return new[] { "--rcfile", rc }.Concat(args).ToArray();
+        }
+        catch { return args; }
+    }
+
+    /// <summary>
+    /// Materialize a Concord-owned <c>$ENV</c> init file for POSIX shells
+    /// (/bin/sh, dash, bash-as-sh). Adds the same PATH augmentations as the
+    /// bash rcfile — but in pure POSIX syntax, with no bash-specific PS1
+    /// escapes. Sets a plain <c>$ </c> prompt because POSIX sh has no
+    /// per-prompt expansion equivalent to bash <c>\W</c>; the shorter form
+    /// is still less noisy than the system default.
+    /// </summary>
+    private static string? EnsurePosixShInitFile()
+    {
+        string baseDir;
+        if (OperatingSystem.IsMacOS())
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            baseDir = Path.Combine(home, "Library", "Application Support", "Concord", "sh");
+        }
+        else
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            baseDir = Path.Combine(home, ".config", "concord", "sh");
+        }
+        Directory.CreateDirectory(baseDir);
+
+        var rc = Path.Combine(baseDir, "concord_shrc");
+        File.WriteAllText(rc,
+            "# Concord-managed POSIX-sh init (read via $ENV).\n" +
+            "# Source the user's bash login files in case they keep PATH there.\n" +
+            "[ -f /etc/profile ]          && . /etc/profile\n" +
+            "[ -f \"$HOME/.profile\" ]      && . \"$HOME/.profile\"\n" +
+            "[ -f \"$HOME/.bash_profile\" ] && . \"$HOME/.bash_profile\"\n" +
+            "[ -f \"$HOME/.bashrc\" ]       && . \"$HOME/.bashrc\"\n" +
+            "\n" +
+            "# Same PATH augmentation as concord_bashrc — covers the case where\n" +
+            "# the user keeps no sh/bash files and configures PATH only in\n" +
+            "# zsh-specific files.\n" +
+            "_concord_path_prepend() {\n" +
+            "  case \":$PATH:\" in *\":$1:\"*) ;; *) [ -d \"$1\" ] && PATH=\"$1:$PATH\" ;; esac\n" +
+            "}\n" +
+            "_concord_path_prepend \"/opt/homebrew/bin\"\n" +
+            "_concord_path_prepend \"/opt/homebrew/sbin\"\n" +
+            "_concord_path_prepend \"/usr/local/bin\"\n" +
+            "_concord_path_prepend \"$HOME/.npm-global/bin\"\n" +
+            "_concord_path_prepend \"$HOME/.local/bin\"\n" +
+            "unset -f _concord_path_prepend\n" +
+            "export PATH\n" +
+            "\n" +
+            "PS1='$ '\n");
+        return rc;
+    }
+
+    /// <summary>
+    /// Materialize a Concord-owned bash init file that sources the user's
+    /// real bash config (in the order an interactive login bash would) and
+    /// then trims <c>PS1</c> to <c>\W \$ </c>. Returns the path, or null on
+    /// failure. Idempotent.
+    /// </summary>
+    private static string? EnsureBashInitFile()
+    {
+        string baseDir;
+        if (OperatingSystem.IsMacOS())
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            baseDir = Path.Combine(home, "Library", "Application Support", "Concord", "bash");
+        }
+        else
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            baseDir = Path.Combine(home, ".config", "concord", "bash");
+        }
+        Directory.CreateDirectory(baseDir);
+
+        var rc = Path.Combine(baseDir, "concord_bashrc");
+        File.WriteAllText(rc,
+            "# Concord-managed bash init.\n" +
+            "# Source the user's real init files in the order an interactive login\n" +
+            "# bash would, so PATH, aliases, and brew/node setup all apply.\n" +
+            "[ -f /etc/profile ] && . /etc/profile\n" +
+            "[ -f \"$HOME/.bash_profile\" ] && . \"$HOME/.bash_profile\"\n" +
+            "[ -f \"$HOME/.bashrc\" ] && . \"$HOME/.bashrc\"\n" +
+            "\n" +
+            "# Many users keep no bash files and rely on zsh-only PATH exports —\n" +
+            "# in that case the sources above are a no-op and bash sees only the\n" +
+            "# launchd-default PATH (no ~/.local/bin, no homebrew, no npm globals).\n" +
+            "# Prepend the common locations so user-installed CLIs (claude, codex,\n" +
+            "# copilot, brew-installed tools) resolve. Each entry is added only\n" +
+            "# if the dir exists AND isn't already on PATH.\n" +
+            "_concord_path_prepend() {\n" +
+            "  case \":$PATH:\" in *\":$1:\"*) ;; *) [ -d \"$1\" ] && PATH=\"$1:$PATH\" ;; esac\n" +
+            "}\n" +
+            "_concord_path_prepend \"/opt/homebrew/bin\"\n" +
+            "_concord_path_prepend \"/opt/homebrew/sbin\"\n" +
+            "_concord_path_prepend \"/usr/local/bin\"\n" +
+            "_concord_path_prepend \"$HOME/.npm-global/bin\"\n" +
+            "_concord_path_prepend \"$HOME/.local/bin\"\n" +
+            "unset -f _concord_path_prepend\n" +
+            "export PATH\n" +
+            "\n" +
+            "PS1='\\W \\$ '\n");
+        return rc;
+    }
+
+    /// <summary>
+    /// Materialize a Concord-owned ZDOTDIR with minimal zsh init files that
+    /// source the user's real config and then trim the prompt to
+    /// <c>%1~ %# </c>. Returns the directory path, or null if creation fails.
+    /// Idempotent — overwrites the rc files each time so prompt edits ship
+    /// with new builds without stale caches.
+    /// </summary>
+    private static string? EnsureZshConfigDir()
+    {
+        // ~/Library/Application Support/Concord/zsh on Mac;
+        // ~/.config/concord/zsh on Linux (XDG-ish — close enough).
+        string baseDir;
+        if (OperatingSystem.IsMacOS())
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            baseDir = Path.Combine(home, "Library", "Application Support", "Concord", "zsh");
+        }
+        else
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            baseDir = Path.Combine(home, ".config", "concord", "zsh");
+        }
+        Directory.CreateDirectory(baseDir);
+
+        // .zshenv runs for ALL invocations (login, interactive, scripts).
+        // Source the user's real .zshenv if it exists so PATH etc. still works.
+        // We must NOT set ZDOTDIR here, or we'd loop.
+        File.WriteAllText(Path.Combine(baseDir, ".zshenv"),
+            "# Concord-managed — sources the user's real .zshenv\n" +
+            "[ -f \"$HOME/.zshenv\" ] && . \"$HOME/.zshenv\"\n");
+
+        // .zprofile runs for login shells (before .zshrc). Same forwarding.
+        File.WriteAllText(Path.Combine(baseDir, ".zprofile"),
+            "# Concord-managed — sources the user's real .zprofile\n" +
+            "[ -f \"$HOME/.zprofile\" ] && . \"$HOME/.zprofile\"\n");
+
+        // .zshrc runs for interactive shells. Source the user's then trim
+        // PROMPT. Use %1~ for the deepest path component (~ for home), and
+        // %# for $/% based on privilege.
+        File.WriteAllText(Path.Combine(baseDir, ".zshrc"),
+            "# Concord-managed — sources the user's real .zshrc, then trims PROMPT.\n" +
+            "[ -f \"$HOME/.zshrc\" ] && . \"$HOME/.zshrc\"\n" +
+            "PROMPT='%1~ %# '\n" +
+            "RPROMPT=''\n");
+
+        // .zlogin runs after .zshrc for login shells. Forward to user's.
+        File.WriteAllText(Path.Combine(baseDir, ".zlogin"),
+            "# Concord-managed — sources the user's real .zlogin\n" +
+            "[ -f \"$HOME/.zlogin\" ] && . \"$HOME/.zlogin\"\n");
+
+        return baseDir;
     }
 
     private sealed class SessionState

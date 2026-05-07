@@ -44,6 +44,11 @@ public sealed class StudioProUiAutomation : IStudioProUiAutomation
 
     private bool Send(string hotkeyText)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            log?.Info($"[actions] UI automation not supported on this platform; ignoring {hotkeyText}");
+            return false;
+        }
         var hwnd = Process.GetCurrentProcess().MainWindowHandle;
         if (hwnd == IntPtr.Zero)
         {

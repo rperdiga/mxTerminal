@@ -4,10 +4,10 @@ using Microsoft.Data.Sqlite;
 namespace Terminal;
 
 /// <summary>
-/// Reads Studio Pro's user-set theme preference from
-/// <c>%LOCALAPPDATA%\Mendix\Settings.sqlite</c>.
+/// Reads Studio Pro's user-set theme preference from Settings.sqlite.
+/// Path differs by platform — see <see cref="GetSettingsDbPath"/>.
 /// <para>
-/// Schema (verified 2026-05-01):
+/// Schema (verified 2026-05-01 on Win, 2026-05-07 on Mac):
 /// <c>CREATE TABLE ModelerSettings(Version TEXT PRIMARY KEY NOT NULL, Settings TEXT NOT NULL)</c>
 /// where <c>Version</c> is the Studio Pro version (e.g. "11.10.0") and <c>Settings</c> is
 /// a JSON blob containing a root-level <c>ThemeName</c> integer.
@@ -15,7 +15,7 @@ namespace Terminal;
 /// </para>
 /// <para>
 /// We do this because <c>matchMedia('(prefers-color-scheme: dark)')</c> inside
-/// Studio Pro's WebView2 follows the Windows OS app theme, NOT Studio Pro's own
+/// Studio Pro's WebView follows the OS app theme, NOT Studio Pro's own
 /// theme preference. Reading the SQLite directly is the most reliable signal we
 /// have until Mendix exposes a theme service via the Extensibility API.
 /// </para>
@@ -28,6 +28,32 @@ public static class StudioProThemeProbe
     public readonly record struct ProbeResult(Theme? Theme, string Diagnostic);
 
     /// <summary>
+    /// Resolve the path to Studio Pro's Settings.sqlite for the current OS.
+    /// Returns null on unsupported platforms.
+    /// <list type="bullet">
+    ///   <item>Windows: <c>%LOCALAPPDATA%\Mendix\Settings.sqlite</c></item>
+    ///   <item>macOS: <c>~/Library/Application Support/Mendix/Settings.sqlite</c></item>
+    /// </list>
+    /// On Mac, <see cref="Environment.SpecialFolder.LocalApplicationData"/> resolves to
+    /// <c>~/.local/share</c> (XDG) which is NOT where Studio Pro writes — hence
+    /// the explicit Mac branch.
+    /// </summary>
+    public static string? GetSettingsDbPath()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            return Path.Combine(local, "Mendix", "Settings.sqlite");
+        }
+        if (OperatingSystem.IsMacOS())
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return Path.Combine(home, "Library", "Application Support", "Mendix", "Settings.sqlite");
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Probe Studio Pro's persisted theme. Returns a result that includes a
     /// short diagnostic string the caller can log (success path includes the
     /// resolved value; failure path includes the reason).
@@ -35,15 +61,22 @@ public static class StudioProThemeProbe
     /// <param name="studioProVersion">e.g. "11.10.0".</param>
     public static ProbeResult Read(string studioProVersion)
     {
-        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var dbPath = Path.Combine(local, "Mendix", "Settings.sqlite");
+        var dbPath = GetSettingsDbPath();
+        if (dbPath is null)
+            return new ProbeResult(null, $"theme-probe-skipped: unsupported platform ({Environment.OSVersion.Platform})");
+        return ReadFromDb(dbPath, studioProVersion);
+    }
+
+    /// <summary>Test seam: read the theme from an explicit DB path.</summary>
+    internal static ProbeResult ReadFromDb(string dbPath, string studioProVersion)
+    {
         if (!File.Exists(dbPath))
             return new ProbeResult(null, $"db-not-found at {dbPath}");
 
-        // Studio Pro holds an exclusive lock on Settings.sqlite while running,
-        // and Microsoft.Data.Sqlite's ReadOnly mode is NOT enough to bypass it
-        // on every Windows configuration. Copy the file to temp first — Mendix
-        // settings are tiny (~100 KB), so the copy is free.
+        // Studio Pro can hold a write lock on Settings.sqlite (Windows is
+        // strict about this; Mac is more permissive but WAL state can still
+        // surprise readers). Copy the file to temp first — Mendix settings
+        // are tiny (~100 KB), so the copy is free.
         string tempCopy;
         try
         {
@@ -110,8 +143,15 @@ public static class StudioProThemeProbe
     /// </summary>
     public static McpServerInfo ReadMcpServer(string studioProVersion)
     {
-        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var dbPath = Path.Combine(local, "Mendix", "Settings.sqlite");
+        var dbPath = GetSettingsDbPath();
+        if (dbPath is null)
+            return new McpServerInfo(null, null, $"mcp-probe-skipped: unsupported platform ({Environment.OSVersion.Platform})");
+        return ReadMcpServerFromDb(dbPath, studioProVersion);
+    }
+
+    /// <summary>Test seam: read MCP info from an explicit DB path.</summary>
+    internal static McpServerInfo ReadMcpServerFromDb(string dbPath, string studioProVersion)
+    {
         if (!File.Exists(dbPath))
             return new McpServerInfo(null, null, $"db-not-found at {dbPath}");
 

@@ -17,7 +17,7 @@ public sealed record TerminalSettings(
     bool RestoreTabsOnReopen)
 {
     public static TerminalSettings Defaults() => new(
-        ShellPath: "powershell.exe",
+        ShellPath: DefaultShellPath(),
         Args: Array.Empty<string>(),
         RingBufferKB: 4096,
         XtermScrollbackLines: 10000,
@@ -41,6 +41,35 @@ public sealed record TerminalSettings(
     private const string FileName = "terminal-settings.json";
     private const string SubDir = "resources";
 
+    private static string DefaultShellPath()
+    {
+        if (OperatingSystem.IsWindows()) return "powershell.exe";
+        // Prefer the user's login shell on POSIX. Fall back to /bin/zsh
+        // (macOS default since Catalina) or /bin/sh (POSIX-mandated).
+        var loginShell = Environment.GetEnvironmentVariable("SHELL");
+        if (!string.IsNullOrEmpty(loginShell) && File.Exists(loginShell)) return loginShell;
+        if (File.Exists("/bin/zsh")) return "/bin/zsh";
+        return "/bin/sh";
+    }
+
+    /// <summary>
+    /// If the persisted shell path is obviously incompatible with the current
+    /// OS (e.g. <c>cmd.exe</c> after the project moves from a Windows dev box
+    /// to a Mac one), swap it for the OS-aware default. A bare command name
+    /// without a path separator (<c>bash</c>, <c>zsh</c>) passes through and
+    /// will be resolved against PATH at spawn time.
+    /// </summary>
+    internal static string MigrateShellPathForPlatform(string saved)
+    {
+        if (string.IsNullOrEmpty(saved)) return DefaultShellPath();
+        bool looksWindows = saved.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                          || saved.Contains('\\');
+        bool looksUnix = saved.StartsWith("/");
+        if (OperatingSystem.IsWindows() && looksUnix) return DefaultShellPath();
+        if (!OperatingSystem.IsWindows() && looksWindows) return DefaultShellPath();
+        return saved;
+    }
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
@@ -60,7 +89,7 @@ public sealed record TerminalSettings(
             if (dto is null) return Defaults();
             var def = Defaults();
             return new TerminalSettings(
-                ShellPath: dto.ShellPath ?? def.ShellPath,
+                ShellPath: MigrateShellPathForPlatform(dto.ShellPath ?? def.ShellPath),
                 Args: dto.Args ?? def.Args,
                 RingBufferKB: dto.RingBufferKB ?? def.RingBufferKB,
                 XtermScrollbackLines: dto.XtermScrollbackLines ?? def.XtermScrollbackLines,

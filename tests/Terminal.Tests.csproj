@@ -7,6 +7,12 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <RootNamespace>Terminal.Tests</RootNamespace>
+    <!--
+      Allow the xunit test host to run on a newer major .NET runtime when the
+      net8.0 runtime isn't installed locally (e.g. dev box only has .NET 10).
+      On Windows where .NET 8 is typically present, this stays on net8.0.
+    -->
+    <RollForward>LatestMajor</RollForward>
   </PropertyGroup>
 
   <ItemGroup>

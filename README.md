@@ -2,9 +2,9 @@
 
 > *"The terminal Studio Pro was missing."*
 
-**Current version: 1.1.1** ([CHANGELOG](./CHANGELOG.md)) — paste pipeline overhaul: ConPTY backend (replaces WinPTY), bracketed-paste mode now works end-to-end with Claude Code, paced chunking + per-tab write lock, size-tiered paste UX, and ~290 LOC of hand-rolled `kernel32!CreatePseudoConsole` P/Invoke replacing the third-party PTY package + native sidecar.
+**Current version: 1.2.0** ([CHANGELOG](./CHANGELOG.md)) — **macOS support**. Concord now runs on both Windows and Mac: hand-rolled POSIX PTY backend (`openpty` + `posix_spawnp`) that mirrors the ConPTY surface, WKWebView bridge for Studio Pro on Mac, Settings.sqlite probe under `~/Library/Application Support/Mendix/`, Homebrew-aware shell init, and platform-aware shell-path migration when projects move between OS hosts.
 
-Concord is a Mendix Studio Pro 11.10+ extension that embeds a tabbed terminal as a dockable pane. The pane is the workspace where you run **Claude Code**, **Codex**, or **GitHub Copilot CLI** — and they talk directly to:
+Concord is a Mendix Studio Pro 11.10+ extension (Windows and macOS) that embeds a tabbed terminal as a dockable pane. The pane is the workspace where you run **Claude Code**, **Codex**, or **GitHub Copilot CLI** — and they talk directly to:
 
 - **Studio Pro's built-in MCP server** (model-tier — entities, microflows, pages, OQL, file ops on `/themes` + `/jsactions`, knowledge)
 - **Maia** (Studio Pro's in-IDE AI assistant)
@@ -32,7 +32,8 @@ It also covers migrating from the old "Terminal" extension (clean up the orphan 
 ### Tabbed terminal
 
 - Multiple PTY tabs per pane. Each tab spawns a real shell rooted at the open Mendix project's directory.
-- Default shell `powershell.exe`; pick from detected shells (`bash`, `cmd`, etc.) in **Settings → Shell**.
+- Default shell — Windows: `powershell.exe`; macOS / Linux: your `$SHELL` (typically `zsh`), with `/bin/zsh` and `/bin/sh` as fallbacks. Pick from detected shells (`bash`, `cmd`, `pwsh`, etc.) in **Settings → Shell**.
+- On macOS, Homebrew (`/opt/homebrew/bin`, `/usr/local/bin`) is prepended to the shell's PATH so `claude`, `codex`, and `gh` resolve out of the box without your `.zshrc` having run yet.
 - Tab names follow the format `Pwsh - 1`, `Bash - 2`, `Cmd - 3` — Title-case lowercase-canonical shell label, hyphen, gap-filling ordinal. Close `Pwsh - 2`, the next new tab fills slot `2`, not `4`.
 
 ### Persistent tabs
@@ -43,7 +44,9 @@ It also covers migrating from the old "Terminal" extension (clean up the orphan 
 
 ### Theme follows Studio Pro
 
-- Auto-matches Studio Pro's dark / light theme by reading the host's preference from `%LOCALAPPDATA%\Mendix\Settings.sqlite` at pane open. No setting to keep in sync.
+- Auto-matches Studio Pro's dark / light theme by reading the host's preference from Studio Pro's `Settings.sqlite` at pane open. No setting to keep in sync.
+  - Windows: `%LOCALAPPDATA%\Mendix\Settings.sqlite`
+  - macOS: `~/Library/Application Support/Mendix/Settings.sqlite`
 - The pane chrome inherits Studio Pro's exact surfaces; the xterm canvas blends seamlessly with the pane background.
 - Same restart-to-apply behavior as Studio Pro itself: change theme in **Edit → Preferences**, restart Studio Pro, the terminal follows.
 
@@ -66,6 +69,8 @@ A second MCP server inside Concord (port 7783 by default; auto-fallback to a fre
 | `get_app_status` | Composite snapshot — project path/name + run state + active config | Composite |
 
 The first 4 use Win32 `PostMessage` to Studio Pro's main window. The last 2 read Mendix services directly. Enable the bridge in **Settings → Action bridge**.
+
+> **macOS note:** the four hotkey-based tools (`run_app`, `stop_app`, `refresh_project`, `save_all`) silently no-op on Mac — they require Win32 `PostMessage`, which has no Mac equivalent that works without accessibility-permission prompts. The two service-based tools (`get_active_run_configuration`, `get_app_status`) work on both platforms. Run / stop / refresh on Mac: use Studio Pro's own keyboard shortcuts (F5 / Shift+F5 / F4) directly, or click the toolbar.
 
 ### Settings panel
 
@@ -97,7 +102,7 @@ Modal title: "Concord Terminal Settings". Footer credit on every section: "A Sie
 - **Bracketed-paste ON** → atomic round-trip via xterm.js's normal path; the CLI receives the whole paste between `\x1b[200~ ... \x1b[201~` markers
 - **Bracketed-paste OFF + multi-line text** → bypass xterm; send LF-normalized bytes through the keystroke channel so prompts treat newlines as line-continuation, not submit
 
-ConPTY (the PTY backend introduced in 1.1.0) is what makes bracketed-paste mode actually negotiate end-to-end on Windows — the previous WinPTY backend silently dropped the negotiation handshake.
+The PTY backend negotiates bracketed-paste end-to-end on both platforms: ConPTY (`kernel32!CreatePseudoConsole`) on Windows, and `openpty` + `posix_spawnp` against `libSystem.dylib` on macOS. The previous WinPTY backend on Windows silently dropped the negotiation handshake; both current backends proxy DECSET/DECRST sequences faithfully.
 
 Full design rationale + diagnostic playbook: [docs/PASTE.md](./docs/PASTE.md).
 
@@ -128,8 +133,11 @@ The csproj's `BuildUi` target runs `npm install` (first build only) + `node esbu
 ## Project layout
 
 ```
-src/                    C# extension code (MEF, Pty.Net, action server, theme probe)
+src/                    C# extension code (MEF, action server, theme probe)
+src/PtySession.cs       ConPTY backend — Windows (kernel32!CreatePseudoConsole)
+src/UnixPtySession.cs   POSIX PTY backend — macOS (openpty + posix_spawnp via libSystem)
 ui/src/                 TypeScript UI (xterm.js, settings modal, bridge, icons, logo)
+ui/src/bridge.ts        WebView2 (Windows) and WKWebView (Mac) transport
 ui/index.html           Single-page UI bundled into the extension
 tests/                  xunit test suite
 docs/superpowers/       Original design docs (specs + plans)
@@ -141,4 +149,4 @@ Terminal.csproj         Project file (assembly name = Concord)
 
 ## License
 
-[TBD — set by the owner.]
+Apache 2.0 — see [LICENSE](./LICENSE).

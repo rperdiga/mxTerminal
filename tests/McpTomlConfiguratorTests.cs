@@ -27,8 +27,9 @@ public class McpTomlConfiguratorTests : IDisposable
         File.Exists(filePath).Should().BeTrue();
         var content = File.ReadAllText(filePath);
         content.Should().Contain("[mcp_servers.mendix-studio-pro]");
-        content.Should().Contain("command = \"npx\"");
-        content.Should().Contain("\"http://localhost:7782/mcp\"");
+        content.Should().Contain("url = \"http://localhost:7782/mcp\"");
+        content.Should().NotContain("npx");
+        content.Should().NotContain("mcp-remote");
     }
 
     [Fact]

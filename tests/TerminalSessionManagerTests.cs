@@ -86,7 +86,7 @@ public class TerminalSessionManagerTests
         var mgr = new TerminalSessionManager(fake);
         var (id, _) = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\X", 80, 24);
 
-        mgr.Write(id, new byte[] { 0x68, 0x69 });  // "hi"
+        await mgr.Write(id, new byte[] { 0x68, 0x69 });  // "hi"
 
         fake.LastSession.WrittenBytes.Should().Equal(0x68, 0x69);
     }
