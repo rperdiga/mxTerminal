@@ -70,7 +70,7 @@ A second MCP server inside Concord (port 7783 by default; auto-fallback to a fre
 
 The first 4 use Win32 `PostMessage` to Studio Pro's main window. The last 2 read Mendix services directly. Enable the bridge in **Settings → Action bridge**.
 
-> **macOS note:** the four hotkey-based tools (`run_app`, `stop_app`, `refresh_project`, `save_all`) silently no-op on Mac — they require Win32 `PostMessage`, which has no Mac equivalent that works without accessibility-permission prompts. The two service-based tools (`get_active_run_configuration`, `get_app_status`) work on both platforms. Run / stop / refresh on Mac: use Studio Pro's own keyboard shortcuts (F5 / Shift+F5 / F4) directly, or click the toolbar.
+> **macOS:** the four hotkey-based tools work on Mac via `osascript` driving System Events to keystroke Studio Pro (identified by Unix PID, so the `.app` display name doesn't matter). One-time setup: macOS prompts for Accessibility permission the first time the bridge runs — open **System Settings → Privacy & Security → Accessibility** and enable Studio Pro. Until you grant it, the bridge fails with a clear "Accessibility permission not granted" message that Claude can relay to you. The two service-based tools (`get_active_run_configuration`, `get_app_status`) work on both platforms with no permissions needed.
 
 ### Settings panel
 

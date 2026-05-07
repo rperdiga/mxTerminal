@@ -21,10 +21,12 @@ public class StudioProActionsTests
     {
         public int RunCount, StopCount, RefreshCount, SaveAllCount;
         public bool RunOk = true, StopOk = true, RefreshOk = true, SaveAllOk = true;
+        public string? FailureReason;
         public bool TriggerRun()             { RunCount++;     return RunOk; }
         public bool TriggerStop()            { StopCount++;    return StopOk; }
         public bool TriggerRefreshFromDisk() { RefreshCount++; return RefreshOk; }
         public bool TriggerSaveAll()         { SaveAllCount++; return SaveAllOk; }
+        public string? LastFailureReason => FailureReason;
     }
 
     private static StudioProActions NewActions(FakeProbe probe, FakeUi ui) =>
@@ -139,6 +141,27 @@ public class StudioProActionsTests
         var ui = new FakeUi { RefreshOk = false };
         var result = await NewActions(probe, ui).RefreshProjectAsync();
         result.Error.Should().Contain("main window unavailable");
+    }
+
+    [Fact]
+    public async Task RunApp_TriggerFails_PropagatesUiFailureReason()
+    {
+        // When the UI automation layer surfaces a specific reason (e.g. macOS
+        // "Accessibility permission not granted"), the action layer must pass
+        // it through so MCP clients can guide the user — instead of always
+        // showing the generic "main window unavailable" text.
+        var probe = new FakeProbe();
+        probe.States.Enqueue(RunState.Stopped);
+        var ui = new FakeUi
+        {
+            RunOk = false,
+            FailureReason = "macOS Accessibility permission not granted to Studio Pro. Open System Settings → Privacy & Security → Accessibility.",
+        };
+
+        var result = await NewActions(probe, ui).RunAppAsync();
+
+        result.Error.Should().Contain("Accessibility permission");
+        result.Error.Should().NotContain("main window unavailable");
     }
 
     [Fact]

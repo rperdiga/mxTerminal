@@ -12,8 +12,8 @@
     <LangVersion>preview</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
-    <Version>1.2.0</Version>
-    <InformationalVersion>1.2.0+macos-support</InformationalVersion>
+    <Version>1.2.1</Version>
+    <InformationalVersion>1.2.1+macos-action-bridge</InformationalVersion>
     <Authors>Ricardo Perdigao, Kelly Seale</Authors>
     <Company>Siemens Digital Industries Software — CoE Team</Company>
     <Product>Concord — Terminal for Studio Pro</Product>

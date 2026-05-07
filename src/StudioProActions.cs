@@ -76,7 +76,7 @@ public sealed class StudioProActions
                 return ActionResult.Ok("already_running", probe.GetActiveUrl());
 
             if (!ui.TriggerRun())
-                return ActionResult.Fail("Studio Pro main window unavailable; try again after the IDE finishes loading");
+                return ActionResult.Fail(ui.LastFailureReason ?? "Studio Pro main window unavailable; try again after the IDE finishes loading");
 
             var after = await WaitForAsync(RunState.Running, runTimeout, ct);
             return after switch
@@ -98,7 +98,7 @@ public sealed class StudioProActions
                 return ActionResult.Ok("wasnt_running");
 
             if (!ui.TriggerStop())
-                return ActionResult.Fail("Studio Pro main window unavailable; try again after the IDE finishes loading");
+                return ActionResult.Fail(ui.LastFailureReason ?? "Studio Pro main window unavailable; try again after the IDE finishes loading");
 
             var after = await WaitForAsync(RunState.Stopped, stopTimeout, ct);
             return after switch
@@ -116,7 +116,7 @@ public sealed class StudioProActions
         try
         {
             if (!ui.TriggerRefreshFromDisk())
-                return ActionResult.Fail("Studio Pro main window unavailable; try again after the IDE finishes loading");
+                return ActionResult.Fail(ui.LastFailureReason ?? "Studio Pro main window unavailable; try again after the IDE finishes loading");
             return ActionResult.Ok("reloaded");
         }
         finally { gate.Release(); }
@@ -129,7 +129,7 @@ public sealed class StudioProActions
         try
         {
             if (!ui.TriggerSaveAll())
-                return ActionResult.Fail("Studio Pro main window unavailable; try again after the IDE finishes loading");
+                return ActionResult.Fail(ui.LastFailureReason ?? "Studio Pro main window unavailable; try again after the IDE finishes loading");
             return ActionResult.Ok("save_command_sent");
         }
         finally { gate.Release(); }
