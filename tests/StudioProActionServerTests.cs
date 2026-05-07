@@ -26,6 +26,7 @@ public class StudioProActionServerTests : IAsyncLifetime
         public bool TriggerStop() => true;
         public bool TriggerRefreshFromDisk() => true;
         public bool TriggerSaveAll() => true;
+        public string? LastFailureReason => null;
     }
 
     private StudioProActionServer? server;

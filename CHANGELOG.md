@@ -1,5 +1,60 @@
 # Changelog
 
+## 1.2.1 — 2026-05-07
+
+### Action bridge now works on macOS
+
+In 1.2.0 the four hotkey-based action tools (`run_app`, `stop_app`,
+`refresh_project`, `save_all`) silently no-op'd on Mac — they used Win32
+`PostMessage`, which has no equivalent on Mac. This release adds a real
+Mac backend.
+
+**Implementation (`src/StudioProUiAutomation.cs`).** New `SendMac` path
+invokes `/usr/bin/osascript` with a one-shot AppleScript that:
+
+1. Looks up our own process via Unix PID (`Environment.ProcessId`) — so
+   the lookup is stable regardless of the `.app`'s display name
+   ("Mendix Studio Pro 11.10.0 Beta.app" today, something else
+   tomorrow).
+2. Brings Studio Pro to the foreground via `set frontmost of sp to
+   true`.
+3. Sends `key code N [using {modifiers}]` to deliver the keystroke.
+
+Key codes use Apple's HIToolbox values from `Events.h`. Modifier
+mapping: Ctrl → control down, Shift → shift down, Alt → option down.
+
+**Permission-aware error reporting.** When osascript fails with
+AppleEvent `-1719` ("not allowed assistive access"), the bridge surfaces
+a specific user-actionable message instead of the generic "main window
+unavailable" string from 1.2.0:
+
+> "macOS Accessibility permission not granted to Studio Pro. Open System
+> Settings → Privacy & Security → Accessibility, enable Studio Pro (add
+> it with the + button if it isn't listed), then restart Studio Pro and
+> retry."
+
+This message rides through `IStudioProUiAutomation.LastFailureReason`
+into `ActionResult.Error`, so Claude / Codex see it directly and can
+guide the user. New `RunApp_TriggerFails_PropagatesUiFailureReason` test
+covers the propagation.
+
+### Tests + tooling
+
+- New `IStudioProUiAutomation.LastFailureReason` property (test mocks
+  updated)
+- 96 xunit tests passing on Mac (was 95 in 1.2.0)
+
+### Files touched
+
+- `src/IStudioProUiAutomation.cs` — `LastFailureReason` property
+- `src/StudioProUiAutomation.cs` — Win/Mac dispatch, `SendMac`
+  via osascript, AppleEvent error mapping, Win VK → macOS HIToolbox
+  key code table
+- `src/StudioProActions.cs` — surface `ui.LastFailureReason` in failure
+  ActionResults
+- `tests/StudioProActionServerTests.cs`, `tests/StudioProActionsTests.cs`
+  — mock updates + propagation test
+
 ## 1.2.0 — 2026-05-07
 
 ### macOS support
