@@ -275,11 +275,14 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 maia,
                 studioProActionsEnabled: settings.StudioProActionsEnabled,
                 maiaIntegrationEnabled: maiaEnabled);
-            log.Info($"[concord-mcp] auto-started server on port {settings.McpServerPort} (maia={maiaEnabled})");
+            // Log the LIVE bound port — DefaultPort may have been busy and the
+            // server quietly fell back to an OS-assigned free port.
+            var boundPort = manager.CurrentActionServerPort ?? StudioProActionServer.DefaultPort;
+            log.Info($"[concord-mcp] auto-started server on port {boundPort} (maia={maiaEnabled})");
         }
         catch (Exception ex)
         {
-            log.Error("[actions] auto-start failed", ex);
+            log.Error("[concord-mcp] auto-start failed", ex);
         }
     }
 
