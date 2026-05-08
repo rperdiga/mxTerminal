@@ -18,6 +18,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     private readonly Uri webIndexUri;
     private readonly Logger log;
     private readonly Func<string?> getApplicationRootUrl;
+    private readonly string bundledSkillsRoot;
 
     private IWebView? webView;
     /// <summary>
@@ -35,7 +36,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         Func<IModel?> getCurrentApp,
         Uri webIndexUri,
         Logger log,
-        Func<string?> getApplicationRootUrl)
+        Func<string?> getApplicationRootUrl,
+        string bundledSkillsRoot)
     {
         Title = title;
         this.manager = manager;
@@ -43,6 +45,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         this.webIndexUri = webIndexUri;
         this.log = log;
         this.getApplicationRootUrl = getApplicationRootUrl;
+        this.bundledSkillsRoot = bundledSkillsRoot;
     }
 
     public override void InitWebView(IWebView webView)
@@ -290,6 +293,9 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 manager.StopActionServer();
             }
 
+            var newSkillsEnabled = p.SkillsEnabled ?? current.SkillsEnabled;
+            var newSkillClients  = p.SkillClients  ?? current.SkillClients;
+
             var updated = current with
             {
                 ShellPath = p.ShellPath,
@@ -306,16 +312,19 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 MaiaIntegrationEnabled = newMaiaIntegration,
                 RefreshFromDiskHotkey = newRefreshHotkey,
                 RestoreTabsOnReopen = newRestoreTabs,
+                SkillsEnabled = newSkillsEnabled,
+                SkillClients = newSkillClients,
             };
 
             // 3. Apply file changes BEFORE saving settings.
             var touchedPrimary = ApplyMcpConfig(dir, current, updated);
             var touchedActions = ApplyActionsMcpConfig(dir, current, updated);
+            var touchedSkills  = ApplySkillsConfig(dir, current, updated);
 
             updated.Save(dir);
             Post("settings", BuildSettingsPayload(updated));
 
-            var allTouched = touchedPrimary.Concat(touchedActions).ToArray();
+            var allTouched = touchedPrimary.Concat(touchedActions).Concat(touchedSkills).ToArray();
             if (allTouched.Length > 0)
             {
                 Post("mcpResult", new McpResultPayload(true, BuildResultMessage(updated, allTouched), allTouched));
@@ -342,10 +351,13 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         }
     }
 
-    private static string BuildResultMessage(TerminalSettings s, string[] touched) =>
-        (s.McpEnabled || s.McpServerEnabled)
-            ? $"MCP servers updated for {string.Join(", ", touched)}. Restarting open terminals…"
-            : $"MCP servers disabled (cleaned up: {string.Join(", ", touched)}). Restarting open terminals…";
+    private static string BuildResultMessage(TerminalSettings s, string[] touched)
+    {
+        var any = s.McpEnabled || s.McpServerEnabled || s.SkillsEnabled;
+        return any
+            ? $"Concord wired up: {string.Join(", ", touched)}. Restarting open terminals…"
+            : $"Concord cleaned up: {string.Join(", ", touched)}. Restarting open terminals…";
+    }
 
     /// <summary>
     /// Apply the diff between previous and new MCP settings to the relevant
@@ -438,6 +450,53 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             else if (tomlHadIt) { toml.RemoveActions(); log.Info($"[mcp-config-toml] removed {McpTomlConfigurator.ActionsServerName}"); touched.Add("Codex actions (removed)"); }
         }
         catch (Exception ex) { log.Error("[mcp-config-toml] actions write failed", ex); }
+
+        return touched.ToArray();
+    }
+
+    /// <summary>
+    /// Diff the skills toggle and per-CLI selection. For each newly-selected
+    /// CLI: install bundled skills into its native subdir. For each newly-
+    /// deselected CLI (or any CLI when SkillsEnabled flips off): remove only
+    /// Concord-bundled skill folders, leaving user-authored siblings intact.
+    /// Returns labels for the result banner.
+    /// </summary>
+    private string[] ApplySkillsConfig(string projectDir, TerminalSettings prev, TerminalSettings next)
+    {
+        var prevClients = prev.SkillsEnabled
+            ? new HashSet<string>(prev.SkillClients, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var nextClients = next.SkillsEnabled
+            ? new HashSet<string>(next.SkillClients, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var installer = new SkillInstaller(projectDir, bundledSkillsRoot, log);
+        var touched = new List<string>();
+
+        var perCli = new (string Key, string Label, string Subdir)[]
+        {
+            ("claude",  "Claude Code skills",       Path.Combine(".claude", "skills")),
+            ("copilot", "Copilot CLI skills",       Path.Combine(".github", "skills")),
+            ("codex",   "Codex skills",             Path.Combine(".codex",  "skills")),
+        };
+
+        log.Info($"[skills] diff prev={{{string.Join(",", prevClients)}}} next={{{string.Join(",", nextClients)}}} bundled-root={bundledSkillsRoot}");
+
+        foreach (var (key, label, subdir) in perCli)
+        {
+            var was = prevClients.Contains(key);
+            var now = nextClients.Contains(key);
+            try
+            {
+                if (now && !was)       { installer.InstallAll(subdir); touched.Add(label); }
+                else if (now && was)   { installer.InstallAll(subdir); /* refresh on every save */ }
+                else if (!now && was)  { installer.RemoveAll(subdir);  touched.Add(label + " (removed)"); }
+            }
+            catch (Exception ex)
+            {
+                log.Error($"[skills] {label} apply failed", ex);
+            }
+        }
 
         return touched.ToArray();
     }
@@ -539,6 +598,11 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         var settingsPath = dir != null
             ? System.IO.Path.Combine(dir, "resources", "terminal-settings.json")
             : null;
+
+        var bundled = BundledSkillReader.Enumerate(bundledSkillsRoot)
+            .Select(b => new BundledSkillPayload(b.Name, b.Description))
+            .ToList();
+
         return new SettingsPayload(
             ShellPath: s.ShellPath,
             Args: s.Args,
@@ -564,7 +628,10 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 Version: ResolveBuildVersion(),
                 LogPath: log?.Path,
                 SettingsPath: settingsPath),
-            StudioProMcp: ProbeStudioProMcp());
+            StudioProMcp: ProbeStudioProMcp(),
+            SkillsEnabled: s.SkillsEnabled,
+            SkillClients: s.SkillClients,
+            BundledSkills: bundled);
     }
 
     /// <summary>

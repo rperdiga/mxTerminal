@@ -1,4 +1,5 @@
 using System.ComponentModel.Composition;
+using Mendix.StudioPro.ExtensionsAPI.Services;
 using Mendix.StudioPro.ExtensionsAPI.UI.DockablePane;
 using Mendix.StudioPro.ExtensionsAPI.UI.Events;
 using Mendix.StudioPro.ExtensionsAPI.UI.Services;
@@ -33,10 +34,15 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
     // that no longer have valid method bodies.
     private TerminalPaneViewModel? activeViewModel;
 
+    private readonly IExtensionFileService extensionFileService;
+
     [ImportingConstructor]
-    public TerminalPaneExtension(ILocalRunConfigurationsService localRunConfigs)
+    public TerminalPaneExtension(
+        ILocalRunConfigurationsService localRunConfigs,
+        IExtensionFileService extensionFileService)
     {
         this.localRunConfigs = localRunConfigs;
+        this.extensionFileService = extensionFileService;
         manager = new TerminalSessionManager(new PtyNetFactory());
     }
 
@@ -60,6 +66,11 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         if (themeQuery != null)
             indexUri = new Uri($"{indexUri}?theme={themeQuery}");
         log?.Info($"InitWebView indexUri={indexUri} theme-from-probe={themeQuery ?? "<none>"}");
+        // Resolve once at Open(); the path is stable for the lifetime of the
+        // extension (it's the deployed extensions/Concord/skills/ folder).
+        var bundledSkillsRoot = extensionFileService.ResolvePath("skills");
+        log?.Info($"[skills] bundled-root={bundledSkillsRoot}");
+
         var vm = new TerminalPaneViewModel(
             title: "Concord",
             manager: manager,
@@ -72,7 +83,8 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 if (model is null) return null;
                 try { return localRunConfigs.GetActiveConfiguration(model)?.ApplicationRootUrl; }
                 catch (Exception ex) { log?.Warn($"GetActiveConfiguration threw: {ex.Message}"); return null; }
-            });
+            },
+            bundledSkillsRoot: bundledSkillsRoot);
         activeViewModel = vm;
         return vm;
     }
