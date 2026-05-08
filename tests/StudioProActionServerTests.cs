@@ -70,8 +70,8 @@ public class StudioProActionServerTests : IAsyncLifetime
     {
         var doc = await Post("""{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}""");
         var info = doc.RootElement.GetProperty("result").GetProperty("serverInfo");
-        info.GetProperty("name").GetString().Should().Be("mendix-studio-pro-actions");
-        info.GetProperty("version").GetString().Should().NotBeNullOrEmpty();
+        info.GetProperty("name").GetString().Should().Be("concord-mcp");
+        info.GetProperty("version").GetString().Should().StartWith("1.3");
     }
 
     [Fact]
