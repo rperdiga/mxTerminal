@@ -457,6 +457,37 @@
       color: var(--text-muted);
     }
 
+    .bundled-skills-list {
+      list-style: none;
+      padding: 8px 12px;
+      margin: 4px 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--surface-2, rgba(255, 255, 255, 0.03));
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .bundled-skills-list li {
+      padding: 4px 0;
+      font-size: 12px;
+    }
+    .bundled-skills-list li .skill-name {
+      font-family: var(--mono, monospace);
+      font-weight: 600;
+    }
+    .bundled-skills-list li .skill-desc {
+      display: block;
+      color: var(--muted, #888);
+      font-size: 11px;
+      margin-top: 2px;
+      line-height: 1.4;
+    }
+    .bundled-skills-list:empty::before {
+      content: "No bundled skills found.";
+      color: var(--muted, #888);
+      font-size: 12px;
+    }
+
     /* OneSource logo — built by the Siemens Center of Excellence.
        Static by default; rotates 360° on hover (matches the team's
        portal Logo.tsx behavior, vanilla CSS port). */
@@ -849,15 +880,24 @@
             <div class="field hotkey-field"><label>Refresh-from-disk hotkey</label><input id="set-refresh-hotkey" type="text" value="F4" placeholder="e.g. F4 or Ctrl+F5"></div>
           </section>
 
-          <!-- Skills (placeholder) -->
+          <!-- Skills -->
           <section class="settings-section" data-section="skills" role="tabpanel">
             <h4>Skills</h4>
-            <p class="section-desc">Install prescriptive skill packs that teach Studio Pro patterns it doesn't ship with — files written into your Mendix project so Studio Pro can use them immediately.</p>
-            <div class="coming-soon">
-              <span class="icon" data-icon="packagePlus"></span>
-              <div class="title">Coming soon</div>
-              <p>Skill packs will appear here once the registry is wired up.</p>
+            <p class="section-desc">
+              Mendix skill packs are prescriptive playbooks Concord writes into your project so the CLIs above know how to drive Studio Pro's MCP and Concord MCP correctly. Concord ships the bundled list below; enable per-CLI to install.
+            </p>
+            <div class="checkbox-row">
+              <input id="set-skills-enabled" type="checkbox">
+              <label for="set-skills-enabled" style="margin:0">Enable Mendix skill pack</label>
             </div>
+
+            <h5>Bundled in this Concord</h5>
+            <ul id="bundled-skills-list" class="bundled-skills-list"></ul>
+
+            <h5>CLIs to install for</h5>
+            <div class="checkbox-row"><input id="set-skills-claude"  type="checkbox"><label for="set-skills-claude"  style="margin:0">Claude Code <span class="muted">— writes <code>&lt;project&gt;/.claude/skills/</code></span></label></div>
+            <div class="checkbox-row"><input id="set-skills-copilot" type="checkbox"><label for="set-skills-copilot" style="margin:0">GitHub Copilot CLI <span class="muted">— writes <code>&lt;project&gt;/.github/skills/</code></span></label></div>
+            <div class="checkbox-row"><input id="set-skills-codex"   type="checkbox"><label for="set-skills-codex"   style="margin:0">Codex <span class="muted">— writes <code>&lt;project&gt;/.codex/skills/</code></span></label></div>
           </section>
 
           <!-- About -->

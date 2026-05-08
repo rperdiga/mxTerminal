@@ -38,6 +38,14 @@ interface SettingsPayload {
   restoreTabsOnReopen: boolean;
   about: AboutInfo;
   studioProMcp: StudioProMcpInfo | null;
+  skillsEnabled: boolean;
+  skillClients: string[];
+  bundledSkills: BundledSkill[];
+}
+
+interface BundledSkill {
+  name: string;
+  description: string;
 }
 
 interface StudioProMcpInfo {
@@ -111,6 +119,21 @@ export class SettingsModal {
   private inpRefreshHotkey = document.getElementById(
     "set-refresh-hotkey",
   ) as HTMLInputElement;
+  private chkSkillsEnabled = document.getElementById(
+    "set-skills-enabled",
+  ) as HTMLInputElement;
+  private chkSkillsClaude = document.getElementById(
+    "set-skills-claude",
+  ) as HTMLInputElement;
+  private chkSkillsCopilot = document.getElementById(
+    "set-skills-copilot",
+  ) as HTMLInputElement;
+  private chkSkillsCodex = document.getElementById(
+    "set-skills-codex",
+  ) as HTMLInputElement;
+  private bundledSkillsList = document.getElementById(
+    "bundled-skills-list",
+  ) as HTMLUListElement;
   private bannerClose = document.getElementById(
     "banner-close",
   ) as HTMLSpanElement;
@@ -136,6 +159,9 @@ export class SettingsModal {
     this.chkMcp.addEventListener("change", () => this.onMcpEnabledChange());
     this.chkActions.addEventListener("change", () =>
       this.onActionsEnabledChange(),
+    );
+    this.chkSkillsEnabled.addEventListener("change", () =>
+      this.onSkillsEnabledChange(),
     );
     this.bannerClose.addEventListener("click", () => hideNotice());
 
@@ -234,6 +260,21 @@ export class SettingsModal {
     // No port input to disable anymore — bridge auto-binds when enabled.
   }
 
+  /** When the master Skills toggle flips, sync the per-CLI checkboxes:
+   *  - turning OFF unchecks them and disables them
+   *  - turning ON re-enables them (leaves their last values alone) */
+  private onSkillsEnabledChange() {
+    const enabled = this.chkSkillsEnabled.checked;
+    if (!enabled) {
+      this.chkSkillsClaude.checked = false;
+      this.chkSkillsCopilot.checked = false;
+      this.chkSkillsCodex.checked = false;
+    }
+    this.chkSkillsClaude.disabled = !enabled;
+    this.chkSkillsCopilot.disabled = !enabled;
+    this.chkSkillsCodex.disabled = !enabled;
+  }
+
   open() {
     this.bridge.send("openSettings");
     this.modal.classList.add("visible");
@@ -277,6 +318,15 @@ export class SettingsModal {
     this.applyMaiaPlatformGate(d.platform);
     this.inpRefreshHotkey.value = d.refreshFromDiskHotkey;
     this.onMcpEnabledChange(); // also flips actions enabled state
+
+    // Skills
+    this.chkSkillsEnabled.checked = !!d.skillsEnabled;
+    const skillClients = new Set((d.skillClients ?? []).map((c) => c.toLowerCase()));
+    this.chkSkillsClaude.checked  = skillClients.has("claude");
+    this.chkSkillsCopilot.checked = skillClients.has("copilot");
+    this.chkSkillsCodex.checked   = skillClients.has("codex");
+    this.onSkillsEnabledChange();
+    this.renderBundledSkillsList(d.bundledSkills ?? []);
 
     // About section
     this.populateAbout(d.about);
@@ -348,6 +398,26 @@ export class SettingsModal {
     set("about-settings", a?.settingsPath ?? "—");
   }
 
+  private renderBundledSkillsList(skills: BundledSkill[]) {
+    this.bundledSkillsList.replaceChildren();
+    for (const s of skills) {
+      const li = document.createElement("li");
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "skill-name";
+      nameEl.textContent = s.name;
+      li.appendChild(nameEl);
+
+      if (s.description) {
+        const descEl = document.createElement("span");
+        descEl.className = "skill-desc";
+        descEl.textContent = s.description;
+        li.appendChild(descEl);
+      }
+      this.bundledSkillsList.appendChild(li);
+    }
+  }
+
   private rebuildShellSelect(currentPath: string) {
     this.selShell.innerHTML = "";
     let matched = false;
@@ -395,6 +465,11 @@ export class SettingsModal {
     if (this.chkMcpCopilot.checked) mcpClients.push("copilot");
     if (this.chkMcpCodex.checked) mcpClients.push("codex");
 
+    const skillClients: string[] = [];
+    if (this.chkSkillsClaude.checked)  skillClients.push("claude");
+    if (this.chkSkillsCopilot.checked) skillClients.push("copilot");
+    if (this.chkSkillsCodex.checked)   skillClients.push("codex");
+
     this.bridge.send("saveSettings", {
       shellPath,
       args: args ? args.split(/\s+/) : [],
@@ -408,6 +483,8 @@ export class SettingsModal {
       maiaIntegrationEnabled: this.chkMaia.checked,
       refreshFromDiskHotkey: this.inpRefreshHotkey.value,
       restoreTabsOnReopen: this.chkRestoreTabs.checked,
+      skillsEnabled: this.chkSkillsEnabled.checked,
+      skillClients,
     });
 
     this.onThemeChanged(theme);
