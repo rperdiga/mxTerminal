@@ -7,7 +7,7 @@ description: Use when creating, reading, updating, deleting, or refining a Mendi
 
 - `ped_create_document`, `ped_read_document`, `ped_update_document`, `ped_find_document`, `ped_check_errors`, `ped_get_schema` → `mcp__mendix-studio-pro__ped_*`.
 - `oql_read`, `oql_generate` → `mcp__mendix-studio-pro__oql_read`, `mcp__mendix-studio-pro__oql_generate`.
-- After any view entity write, you can refresh Studio Pro with `mcp__mendix-studio-pro-actions__refresh_project` (or `mcp__concord-mcp__refresh_project`).
+- After any view entity write, you can refresh Studio Pro with `mcp__concord-mcp__refresh_project`.
 
 The skill body uses the short names inline. This header tells you which actual MCP tool to call.
 

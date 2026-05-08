@@ -7,7 +7,7 @@ description: Use when creating or modifying a Mendix page. Includes the widget c
 
 - `pg_read_page`, `pg_write_page` → **NOT exposed in this environment.** Delegate to Maia (see "Maia delegation" below).
 - `ped_check_errors`, `ped_create_document`, `ped_read_document` → `mcp__mendix-studio-pro__ped_*`. Used to verify pages after Maia writes them, and to create the page shell when CustomWidgets are involved.
-- `mcp__mendix-studio-pro-actions__refresh_project` (or `mcp__concord-mcp__refresh_project`) — refresh Studio Pro after a page write.
+- `mcp__concord-mcp__refresh_project` — refresh Studio Pro after a page write.
 
 ## Maia delegation
 
@@ -28,7 +28,7 @@ Because `pg_*` tools are not exposed in this environment, every page read or wri
 
 3. **Verify directly.** After Maia returns, call `mcp__mendix-studio-pro__ped_check_errors` yourself with `documentType: Pages$Page documentName: <ModuleName>.<PageName>` and again with `documentType: DomainModels$DomainModel documentName: <ModuleName>`. Do not trust Maia's self-report alone.
 4. **Retry on errors.** If errors are reported, rebuild the JSON addressing the specific errors and repeat steps 2–3. Maximum two retry attempts. After the second failed attempt, surface the JSON, the Maia response, and the `ped_check_errors` output to the user and stop.
-5. **Refresh Studio Pro.** After a successful write, call `mcp__mendix-studio-pro-actions__refresh_project` so the IDE picks up the change.
+5. **Refresh Studio Pro.** After a successful write, call `mcp__concord-mcp__refresh_project` so the IDE picks up the change.
 
 ### CustomWidget exception
 
@@ -39,7 +39,7 @@ When a page needs a CustomWidget:
 1. Build the page JSON **without** the CustomWidget — leave a placeholder slot (e.g., a `Pages$DivContainer` with a name like `customWidgetPlaceholder`).
 2. Delegate to Maia per the recipe above to write the shell.
 3. Tell the user: "I created the page shell. Please drag the `<widget name>` widget into the `<placeholder name>` container in Studio Pro — `ped_*` and `pg_*` cannot insert custom widgets reliably."
-4. After the user confirms, call `mcp__mendix-studio-pro-actions__refresh_project` and verify with `ped_check_errors`.
+4. After the user confirms, call `mcp__concord-mcp__refresh_project` and verify with `ped_check_errors`.
 
 # Page Generation Common Skills
 

@@ -49,6 +49,7 @@ YourProject/
          Concord.dll
          manifest.json
          wwwroot/
+         skills/             (7 bundled Mendix skill packs)
          (...other DLLs and assets)
 ```
 
@@ -201,22 +202,22 @@ If you previously had a `terminal-settings.json` in `<project>\resources\`, Conc
 - First-build wwwroot chicken-and-egg. Run `dotnet build` once more. (See § Build.)
 - Look at `<project>\resources\terminal.log` for `InitWebView` line — if it shows a URL but the WebView is blank, the bundle didn't make it into `extensions\Concord\wwwroot\`. Inspect that folder.
 
-### "Action bridge tools time out / Claude says it can't reach the bridge"
+### "Concord MCP tools time out / Claude says it can't reach the server"
 
-- Check **Settings → Action bridge** — is "Expose UI actions to the CLIs above" checked? Save.
-- Look at the readout under the checkbox — should say "Action bridge is listening on `localhost:7783`" (or another auto-fallback port if 7783 was taken).
+- Check **Settings → Concord MCP** — is "Enable Concord MCP server" checked? Save.
+- Look at the readout under the checkbox — should say "Concord MCP is listening on `localhost:7783`" (or another auto-fallback port if 7783 was taken).
 - Probe directly:
   ```powershell
   $body = '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
   Invoke-RestMethod -Uri 'http://127.0.0.1:7783/mcp' -Method POST -ContentType 'application/json' -Body $body
   ```
-  Expected: 6 tools.
+  Expected: 6 tools with **Studio Pro UI actions** sub-toggle on; +6 more (`maia__*`) with **Maia integration** also on.
 
 ### "Studio Pro MCP isn't being found by Claude"
 
 - Open Studio Pro **Edit → Preferences → Maia → MCP Server** — is it enabled with a port set?
 - In Concord **Settings → Studio Pro MCP** — is it enabled, with the right CLIs ticked (Claude Code / Copilot CLI / Codex)? Save.
-- Inside the terminal, run `claude` and use `/mcp` — should list `mendix-studio-pro` and `mendix-studio-pro-actions` as connected.
+- Inside the terminal, run `claude` and use `/mcp` — should list `mendix-studio-pro` and `concord-mcp` as connected.
 
 ### "save_all worked / didn't work"
 
@@ -224,7 +225,7 @@ If you previously had a `terminal-settings.json` in `<project>\resources\`, Conc
 
 ### macOS-specific issues
 
-- **"Action bridge says 'macOS Accessibility permission not granted to Studio Pro'."** Open **System Settings → Privacy & Security → Accessibility**, click the **+** button, navigate to your Studio Pro `.app` (e.g. `/Applications/Mendix Studio Pro 11.10.0.app`), add it, and toggle the switch on. Restart Studio Pro. The action bridge uses `osascript` driving System Events to keystroke Studio Pro on Mac (identified by Unix PID); macOS requires Accessibility permission for any app sending synthetic keystrokes via System Events.
+- **"Concord MCP says 'macOS Accessibility permission not granted to Studio Pro'."** Open **System Settings → Privacy & Security → Accessibility**, click the **+** button, navigate to your Studio Pro `.app` (e.g. `/Applications/Mendix Studio Pro 11.10.0.app`), add it, and toggle the switch on. Restart Studio Pro. The Studio Pro UI action tools use `osascript` driving System Events to keystroke Studio Pro on Mac (identified by Unix PID); macOS requires Accessibility permission for any app sending synthetic keystrokes via System Events.
 - **"My new build doesn't show up after a Studio Pro restart."** Studio Pro on Mac caches `extensions/` into `<project>/.mendix-cache/extensions-cache/<guid>/` at first load and serves `wwwroot/` from there. The developer-path build refreshes this cache automatically; the consumer-path drop-in does NOT — quit Studio Pro fully before swapping the folder, or delete the matching `.mendix-cache/extensions-cache/<guid>/` directory.
 - **"Theme probe fails with `db-not-found`."** Studio Pro on Mac stores its settings at `~/Library/Application Support/Mendix/Settings.sqlite`. If the file is missing, you've never opened Studio Pro Preferences with this user account. Open **Studio Pro → Preferences**, change something trivial, save — that creates the SQLite file.
 - **"Studio Pro freezes / shows the spinning beachball after I type a character."** This was the symptom of the WKWebView main-thread write blocking; fixed in 1.2.0 by offloading PTY writes to the thread pool. Make sure you're on `Concord 1.2.0` or newer.
