@@ -351,12 +351,38 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         }
     }
 
+    /// <summary>
+    /// Build the user-facing banner shown after a Settings save. The
+    /// <paramref name="touched"/> array can contain MCP-family labels
+    /// (e.g. "Claude Code", "Codex actions") and skill-family labels
+    /// (e.g. "Claude Code skills"). We split on the " skills" marker so
+    /// each family gets the wording that matches its own enable/disable
+    /// state, then join with "; " when both are present.
+    /// </summary>
     private static string BuildResultMessage(TerminalSettings s, string[] touched)
     {
-        var any = s.McpEnabled || s.McpServerEnabled || s.SkillsEnabled;
-        return any
-            ? $"Concord wired up: {string.Join(", ", touched)}. Restarting open terminals…"
-            : $"Concord cleaned up: {string.Join(", ", touched)}. Restarting open terminals…";
+        var mcpTouched   = touched.Where(t => !t.Contains(" skills")).ToArray();
+        var skillTouched = touched.Where(t =>  t.Contains(" skills")).ToArray();
+
+        var parts = new List<string>();
+
+        if (mcpTouched.Length > 0)
+        {
+            parts.Add(s.McpEnabled || s.McpServerEnabled
+                ? $"MCP servers updated for {string.Join(", ", mcpTouched)}"
+                : $"MCP servers disabled (cleaned up: {string.Join(", ", mcpTouched)})");
+        }
+
+        if (skillTouched.Length > 0)
+        {
+            parts.Add(s.SkillsEnabled
+                ? $"skill packs installed for {string.Join(", ", skillTouched)}"
+                : $"skill packs removed (cleaned up: {string.Join(", ", skillTouched)})");
+        }
+
+        return parts.Count == 0
+            ? "Settings saved. Restarting open terminals…"
+            : string.Join("; ", parts) + ". Restarting open terminals…";
     }
 
     /// <summary>
