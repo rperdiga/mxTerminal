@@ -16,7 +16,9 @@ public sealed record TerminalSettings(
     bool StudioProActionsEnabled,
     bool MaiaIntegrationEnabled,
     string RefreshFromDiskHotkey,
-    bool RestoreTabsOnReopen)
+    bool RestoreTabsOnReopen,
+    bool SkillsEnabled,
+    string[] SkillClients)
 {
     public static TerminalSettings Defaults() => new(
         ShellPath: DefaultShellPath(),
@@ -36,7 +38,9 @@ public sealed record TerminalSettings(
         StudioProActionsEnabled: true,
         MaiaIntegrationEnabled: true,
         RefreshFromDiskHotkey: "F4",
-        RestoreTabsOnReopen: true);
+        RestoreTabsOnReopen: true,
+        SkillsEnabled: false,
+        SkillClients: Array.Empty<string>());
 
     private const string FileName = "terminal-settings.json";
     private const string SubDir = "resources";
@@ -109,7 +113,9 @@ public sealed record TerminalSettings(
                 StudioProActionsEnabled: dto.StudioProActionsEnabled ?? def.StudioProActionsEnabled,
                 MaiaIntegrationEnabled: dto.MaiaIntegrationEnabled ?? def.MaiaIntegrationEnabled,
                 RefreshFromDiskHotkey: dto.RefreshFromDiskHotkey ?? def.RefreshFromDiskHotkey,
-                RestoreTabsOnReopen: dto.RestoreTabsOnReopen ?? def.RestoreTabsOnReopen);
+                RestoreTabsOnReopen: dto.RestoreTabsOnReopen ?? def.RestoreTabsOnReopen,
+                SkillsEnabled: dto.SkillsEnabled ?? def.SkillsEnabled,
+                SkillClients: dto.SkillClients ?? def.SkillClients);
         }
         catch (JsonException)
         {
@@ -128,6 +134,7 @@ public sealed record TerminalSettings(
             McpServerEnabled, McpServerPort,
             StudioProActionsEnabled, MaiaIntegrationEnabled,
             RefreshFromDiskHotkey, RestoreTabsOnReopen,
+            SkillsEnabled, SkillClients,
             // Legacy keys: write them too so an older Concord build that reads
             // this file keeps the master toggle in sync. Drop after 1.4.0.
             ActionsServerEnabled: McpServerEnabled,
@@ -150,6 +157,8 @@ public sealed record TerminalSettings(
         bool? MaiaIntegrationEnabled,
         string? RefreshFromDiskHotkey,
         bool? RestoreTabsOnReopen,
+        bool? SkillsEnabled,
+        string[]? SkillClients,
         bool? ActionsServerEnabled = null,
         int? ActionsServerPort = null);
 }

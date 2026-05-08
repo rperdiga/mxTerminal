@@ -45,7 +45,8 @@ public class TerminalSettingsTests : IDisposable
             McpEnabled: true, McpPort: 7782, McpClients: new[] { "claude", "codex" },
             McpServerEnabled: false, McpServerPort: 7783,
             StudioProActionsEnabled: true, MaiaIntegrationEnabled: true,
-            RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true);
+            RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true,
+            SkillsEnabled: false, SkillClients: Array.Empty<string>());
         original.Save(tmpDir);
 
         var loaded = TerminalSettings.Load(tmpDir);
@@ -97,7 +98,8 @@ public class TerminalSettingsTests : IDisposable
             McpEnabled: false, McpPort: 7782, McpClients: Array.Empty<string>(),
             McpServerEnabled: false, McpServerPort: 7783,
             StudioProActionsEnabled: true, MaiaIntegrationEnabled: true,
-            RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true);
+            RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true,
+            SkillsEnabled: false, SkillClients: Array.Empty<string>());
         settings.Save(tmpDir);
         File.Exists(Path.Combine(tmpDir, "resources", "terminal-settings.json")).Should().BeTrue();
     }
@@ -118,7 +120,8 @@ public class TerminalSettingsTests : IDisposable
             McpEnabled: true, McpPort: 7782, McpClients: new[] { "claude" },
             McpServerEnabled: true, McpServerPort: 7799,
             StudioProActionsEnabled: true, MaiaIntegrationEnabled: true,
-            RefreshFromDiskHotkey: "Ctrl+F5", RestoreTabsOnReopen: false);
+            RefreshFromDiskHotkey: "Ctrl+F5", RestoreTabsOnReopen: false,
+            SkillsEnabled: false, SkillClients: Array.Empty<string>());
         original.Save(tmpDir);
 
         var loaded = TerminalSettings.Load(tmpDir);
@@ -169,5 +172,60 @@ public class TerminalSettingsTests : IDisposable
         d.McpServerEnabled.Should().BeFalse();
         d.StudioProActionsEnabled.Should().BeTrue();
         d.MaiaIntegrationEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Load_NoFile_HasSkillsDisabledAndNoClients()
+    {
+        var settings = TerminalSettings.Load(tmpDir);
+        settings.SkillsEnabled.Should().BeFalse();
+        settings.SkillClients.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Load_LegacyFileWithoutSkillKeys_DefaultsToDisabled()
+    {
+        var resourcesDir = Path.Combine(tmpDir, "resources");
+        Directory.CreateDirectory(resourcesDir);
+        // A 1.3.x settings file: no skillsEnabled, no skillClients keys.
+        File.WriteAllText(Path.Combine(resourcesDir, "terminal-settings.json"), """
+            {
+              "shellPath": "powershell.exe",
+              "args": [],
+              "ringBufferKB": 4096,
+              "xtermScrollbackLines": 10000,
+              "theme": "auto",
+              "mcpEnabled": true,
+              "mcpPort": 8100,
+              "mcpClients": ["claude"],
+              "mcpServerEnabled": true,
+              "mcpServerPort": 7783,
+              "studioProActionsEnabled": true,
+              "maiaIntegrationEnabled": true,
+              "refreshFromDiskHotkey": "F4",
+              "restoreTabsOnReopen": true
+            }
+            """);
+        var settings = TerminalSettings.Load(tmpDir);
+        settings.SkillsEnabled.Should().BeFalse();
+        settings.SkillClients.Should().BeEmpty();
+        // Sanity: existing fields still load.
+        settings.McpEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Save_ThenLoad_PreservesSkillFields()
+    {
+        var defaults = TerminalSettings.Defaults();
+        var saved = defaults with
+        {
+            SkillsEnabled = true,
+            SkillClients = new[] { "claude", "codex" },
+        };
+        saved.Save(tmpDir);
+
+        var loaded = TerminalSettings.Load(tmpDir);
+        loaded.SkillsEnabled.Should().BeTrue();
+        loaded.SkillClients.Should().BeEquivalentTo(new[] { "claude", "codex" });
     }
 }
