@@ -29,4 +29,6 @@ public sealed record SaveSettingsPayload(
     bool? StudioProActionsEnabled = null,
     bool? MaiaIntegrationEnabled = null,
     string? RefreshFromDiskHotkey = null,
-    bool? RestoreTabsOnReopen = null);
+    bool? RestoreTabsOnReopen = null,
+    bool? SkillsEnabled = null,
+    string[]? SkillClients = null);
