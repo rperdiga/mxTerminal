@@ -770,7 +770,7 @@
             <span class="nav-icon" data-icon="server"></span>Studio Pro MCP
           </div>
           <div class="nav-item" data-section="actions" role="tab" tabindex="-1" aria-selected="false">
-            <span class="nav-icon" data-icon="zap"></span>Action bridge
+            <span class="nav-icon" data-icon="zap"></span>Concord MCP
           </div>
           <div class="nav-item" data-section="skills" role="tab" tabindex="-1" aria-selected="false">
             <span class="nav-icon" data-icon="packagePlus"></span>Skills
@@ -825,15 +825,27 @@
             <div class="checkbox-row"><input id="set-mcp-codex" type="checkbox"><label for="set-mcp-codex" style="margin:0">Codex (writes <code>~/.codex/config.toml</code>)</label></div>
           </section>
 
-          <!-- Action bridge -->
+          <!-- Concord MCP -->
           <section class="settings-section" data-section="actions" role="tabpanel">
-            <h4>Action bridge</h4>
-            <p class="section-desc">Exposes Studio Pro UI actions (run, stop, refresh from disk, save all, get app status) to the CLIs above as MCP tools — so Claude Code can drive Studio Pro the way you do.</p>
+            <h4>Concord MCP</h4>
+            <p class="section-desc">Concord runs an in-process MCP server (<code>concord-mcp</code>) that exposes Studio Pro capabilities to the CLIs you use inside this terminal.</p>
             <div class="checkbox-row">
               <input id="set-actions-enabled" type="checkbox">
-              <label for="set-actions-enabled" style="margin:0">Expose UI actions to the CLIs above</label>
+              <label for="set-actions-enabled" style="margin:0">Enable Concord MCP server</label>
             </div>
             <div id="actions-port-readout" class="mcp-port-readout"></div>
+
+            <h5>Tool families</h5>
+            <div class="checkbox-row">
+              <input id="set-sp-actions-enabled" type="checkbox">
+              <label for="set-sp-actions-enabled" style="margin:0">Studio Pro UI actions <span class="muted">— run, stop, refresh, save_all, get_app_status</span></label>
+            </div>
+            <div class="checkbox-row">
+              <input id="set-maia-enabled" type="checkbox">
+              <label for="set-maia-enabled" style="margin:0">Maia integration <span class="muted">— send, status, wait, ask, reset, force_tier</span></label>
+            </div>
+            <div id="maia-platform-note" class="mcp-port-readout"></div>
+
             <div class="field hotkey-field"><label>Refresh-from-disk hotkey</label><input id="set-refresh-hotkey" type="text" value="F4" placeholder="e.g. F4 or Ctrl+F5"></div>
           </section>
 
