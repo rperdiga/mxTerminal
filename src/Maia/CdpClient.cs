@@ -1,4 +1,4 @@
-using System.Management;
+using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -10,8 +10,11 @@ namespace Terminal.Maia;
 
 /// <summary>
 /// Cross-platform-aware: on non-Windows, ConnectMaiaAsync immediately raises
-/// TransportUnavailable("not supported on this platform") so the router
-/// reports zero tiers. The main implementation is Windows + WMI + WebSocket.
+/// TransportUnavailable so the router reports zero tiers. The main implementation
+/// is Windows + PowerShell-CIM + WebSocket. (System.Management cannot be used
+/// directly because Concord targets net8.0 — System.Management requires
+/// net8.0-windows, and we can't change TFM without breaking macOS support.
+/// Shelling out to powershell.exe is what the Python prototype did too.)
 /// </summary>
 public sealed class CdpClient : ICdpClient
 {
@@ -49,25 +52,50 @@ public sealed class CdpClient : ICdpClient
 
     private static int FindDebugPort()
     {
-        // WMI: enumerate msedgewebview2.exe whose CommandLine references studiopro.exe.
-        // If multiple distinct ports are found, fail loud — driving the wrong project
-        // silently is the worst possible outcome.
-        var ports = new HashSet<int>();
+        // Shell out to Windows PowerShell for the CIM query. Why not System.Management
+        // directly: that package requires net8.0-windows TFM, and Concord targets
+        // plain net8.0 so the same DLL can load on macOS too. On net8.0 the
+        // package's stub throws PlatformNotSupportedException at every call site.
+        // PowerShell's Get-CimInstance does the WMI lookup in its own process,
+        // sidestepping the TFM constraint entirely. Same approach the Python
+        // prototype used.
+        var psi = new ProcessStartInfo("powershell.exe")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        psi.ArgumentList.Add("-NoProfile");
+        psi.ArgumentList.Add("-NonInteractive");
+        psi.ArgumentList.Add("-Command");
+        psi.ArgumentList.Add(
+            "Get-CimInstance Win32_Process -Filter \"Name='msedgewebview2.exe'\" | " +
+            "Where-Object { $_.CommandLine -like '*studiopro.exe*' } | " +
+            "Select-Object -ExpandProperty CommandLine");
+
+        string output;
         try
         {
-            using var searcher = new ManagementObjectSearcher(
-                "SELECT CommandLine FROM Win32_Process WHERE Name = 'msedgewebview2.exe'");
-            foreach (ManagementObject mo in searcher.Get())
+            using var p = Process.Start(psi)
+                ?? throw new TransportUnavailable("Could not launch powershell.exe for studiopro.exe lookup.");
+            // Wait with a 5s ceiling, matching the Python prototype.
+            if (!p.WaitForExit(5000))
             {
-                var cmdline = (mo["CommandLine"] as string) ?? "";
-                if (!cmdline.Contains("studiopro.exe", StringComparison.OrdinalIgnoreCase)) continue;
-                var m = Regex.Match(cmdline, @"--remote-debugging-port=(\d+)");
-                if (m.Success) ports.Add(int.Parse(m.Groups[1].Value));
+                try { p.Kill(entireProcessTree: true); } catch { /* best-effort */ }
+                throw new TransportUnavailable("studiopro.exe lookup timed out (5s)");
             }
+            output = p.StandardOutput.ReadToEnd();
         }
-        catch (ManagementException ex)
+        catch (Exception ex) when (ex is not TransportUnavailable)
         {
-            throw new TransportUnavailable($"WMI process query failed: {ex.Message}", ex);
+            throw new TransportUnavailable($"PowerShell CIM query failed: {ex.Message}", ex);
+        }
+
+        var ports = new HashSet<int>();
+        foreach (Match m in Regex.Matches(output, @"--remote-debugging-port=(\d+)"))
+        {
+            if (int.TryParse(m.Groups[1].Value, out var port)) ports.Add(port);
         }
 
         if (ports.Count == 0)

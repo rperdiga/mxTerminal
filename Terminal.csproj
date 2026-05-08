@@ -41,7 +41,6 @@
     <PackageReference Include="System.Text.Json" Version="8.0.*" />
     <!-- For reading Studio Pro's theme preference from %LOCALAPPDATA%\Mendix\Settings.sqlite. -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*" />
-    <PackageReference Include="System.Management" Version="8.0.*" />
     <!--
       PTY backend is hand-rolled kernel32 P/Invoke against CreatePseudoConsole
       (see src/PtySession.cs). ConPTY ships in kernel32 on Win10 1809+ — no
