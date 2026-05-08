@@ -1,6 +1,6 @@
 ---
 name: mendix-workflow-update
-description: Use BEFORE removing any element from an existing Mendix workflow via `mcp__mendix-studio-pro__ped_update_document`. Covers the absolute deletion-safety rules: the start activity is undeletable, single-user and multi-user task activities must keep at least one outcome, and parallel-split activities must keep at least two. Trigger when the user asks to remove, delete, or simplify a workflow's activities or outcomes.
+description: Use BEFORE removing any element from an existing Mendix workflow via `mcp__mendix-studio-pro__ped_update_document`. Covers the absolute deletion-safety rules — the start activity is undeletable, single-user and multi-user task activities must keep at least one outcome, and parallel-split activities must keep at least two. Trigger when the user asks to remove, delete, or simplify a workflow's activities or outcomes.
 ---
 
 ## Tools in this environment
