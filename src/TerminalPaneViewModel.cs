@@ -211,8 +211,10 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             // saved port only if the probe fails entirely (e.g. SQLite locked).
             var probed = ProbeStudioProMcp();
             var newPort = probed?.Port ?? p.McpPort ?? current.McpPort;
-            var newActionsEnabled  = p.ActionsServerEnabled ?? current.ActionsServerEnabled;
-            var newActionsPort     = p.ActionsServerPort    ?? current.ActionsServerPort;
+            var newActionsEnabled  = p.McpServerEnabled ?? current.McpServerEnabled;
+            var newActionsPort     = p.McpServerPort   ?? current.McpServerPort;
+            var newStudioProActions = p.StudioProActionsEnabled ?? current.StudioProActionsEnabled;
+            var newMaiaIntegration  = p.MaiaIntegrationEnabled ?? current.MaiaIntegrationEnabled;
             var newRefreshHotkey   = p.RefreshFromDiskHotkey ?? current.RefreshFromDiskHotkey;
             var newRestoreTabs     = p.RestoreTabsOnReopen ?? current.RestoreTabsOnReopen;
 
@@ -259,7 +261,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     return;
                 }
             }
-            else if (current.ActionsServerEnabled)
+            else if (current.McpServerEnabled)
             {
                 manager.StopActionServer();
             }
@@ -274,8 +276,10 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 McpEnabled = newEnabled,
                 McpPort = newPort,
                 McpClients = newClients,
-                ActionsServerEnabled = newActionsEnabled,
-                ActionsServerPort = newActionsPort,
+                McpServerEnabled = newActionsEnabled,
+                McpServerPort = newActionsPort,
+                StudioProActionsEnabled = newStudioProActions,
+                MaiaIntegrationEnabled = newMaiaIntegration,
                 RefreshFromDiskHotkey = newRefreshHotkey,
                 RestoreTabsOnReopen = newRestoreTabs,
             };
@@ -315,7 +319,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     }
 
     private static string BuildResultMessage(TerminalSettings s, string[] touched) =>
-        (s.McpEnabled || s.ActionsServerEnabled)
+        (s.McpEnabled || s.McpServerEnabled)
             ? $"MCP servers updated for {string.Join(", ", touched)}. Restarting open terminals…"
             : $"MCP servers disabled (cleaned up: {string.Join(", ", touched)}). Restarting open terminals…";
 
@@ -377,19 +381,19 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     private string[] ApplyActionsMcpConfig(string projectDir, TerminalSettings prev, TerminalSettings next)
     {
         var prevClients = new HashSet<string>(prev.McpClients, StringComparer.OrdinalIgnoreCase);
-        var nextClients = next.ActionsServerEnabled
+        var nextClients = next.McpServerEnabled
             ? new HashSet<string>(next.McpClients, StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var jsonNeeded = nextClients.Contains("claude") || nextClients.Contains("copilot");
-        var jsonHadIt  = prev.ActionsServerEnabled && (prevClients.Contains("claude") || prevClients.Contains("copilot"));
+        var jsonHadIt  = prev.McpServerEnabled && (prevClients.Contains("claude") || prevClients.Contains("copilot"));
         var tomlNeeded = nextClients.Contains("codex");
-        var tomlHadIt  = prev.ActionsServerEnabled && prevClients.Contains("codex");
+        var tomlHadIt  = prev.McpServerEnabled && prevClients.Contains("codex");
 
         // Use the LIVE bound port (manager surfaces it after Start). The
         // saved value is back-compat fallback only — bridge auto-binds at
         // 7783 with free-port fallback; user can't choose anymore.
-        var port = manager.CurrentActionServerPort ?? next.ActionsServerPort;
+        var port = manager.CurrentActionServerPort ?? next.McpServerPort;
         var url = $"http://localhost:{port}/mcp";
         var json = new McpJsonConfigurator(projectDir);
         var toml = new McpTomlConfigurator();
@@ -523,10 +527,13 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             McpEnabled: s.McpEnabled,
             McpPort: s.McpPort,
             McpClients: s.McpClients,
-            ActionsServerEnabled: s.ActionsServerEnabled,
+            McpServerEnabled: s.McpServerEnabled,
             // Report the LIVE bound port when the bridge is running so the JS
             // readout shows the truth (auto-fallback may have moved off 7783).
-            ActionsServerPort: manager.CurrentActionServerPort ?? s.ActionsServerPort,
+            McpServerPort: manager.CurrentActionServerPort ?? s.McpServerPort,
+            StudioProActionsEnabled: s.StudioProActionsEnabled,
+            MaiaIntegrationEnabled: s.MaiaIntegrationEnabled,
+            Platform: OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsMacOS() ? "darwin" : "linux",
             RefreshFromDiskHotkey: s.RefreshFromDiskHotkey,
             RestoreTabsOnReopen: s.RestoreTabsOnReopen,
             About: new AboutInfoPayload(

@@ -24,7 +24,9 @@ public sealed record SaveSettingsPayload(
     bool? McpEnabled = null,
     int? McpPort = null,
     string[]? McpClients = null,
-    bool? ActionsServerEnabled = null,
-    int? ActionsServerPort = null,
+    bool? McpServerEnabled = null,
+    int? McpServerPort = null,
+    bool? StudioProActionsEnabled = null,
+    bool? MaiaIntegrationEnabled = null,
     string? RefreshFromDiskHotkey = null,
     bool? RestoreTabsOnReopen = null);

@@ -58,4 +58,23 @@ public class MessageDtoTests
         json.Should().Contain("\"tabId\":\"id1\"");
         json.Should().Contain("\"alive\":true");
     }
+
+    [Fact]
+    public void SettingsPayload_HasNewMcpFields()
+    {
+        var p = new SettingsPayload(
+            ShellPath: "pwsh", Args: Array.Empty<string>(),
+            RingBufferKB: 1, XtermScrollbackLines: 1, Theme: "auto",
+            AvailableShells: Array.Empty<ShellOptionPayload>(),
+            McpEnabled: false, McpPort: 0, McpClients: Array.Empty<string>(),
+            McpServerEnabled: true, McpServerPort: 7783,
+            StudioProActionsEnabled: true, MaiaIntegrationEnabled: true,
+            Platform: "windows",
+            RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true,
+            About: new AboutInfoPayload("1.3.0", null, null),
+            StudioProMcp: null);
+        p.McpServerEnabled.Should().BeTrue();
+        p.MaiaIntegrationEnabled.Should().BeTrue();
+        p.Platform.Should().Be("windows");
+    }
 }
