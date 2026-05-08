@@ -25,6 +25,10 @@ public sealed record TerminalSettings(
         XtermScrollbackLines: 10000,
         Theme: "auto",
         McpEnabled: false,
+        // Studio Pro's standard MCP server port (HKLM\SOFTWARE\Mendix...).
+        // The runtime always re-probes Studio Pro's actual port from
+        // %LOCALAPPDATA%\Mendix\Settings.sqlite at save time — this is just
+        // the fallback when the probe fails (e.g. locked DB).
         McpPort: 8100,
         McpClients: Array.Empty<string>(),
         McpServerEnabled: false,

@@ -103,7 +103,7 @@ public class TerminalSettingsTests : IDisposable
     }
 
     [Fact]
-    public void Load_NoFile_ActionsServerDefaults()
+    public void Load_NoFile_McpServerDefaults()
     {
         var settings = TerminalSettings.Load(tmpDir);
         settings.McpServerEnabled.Should().BeFalse();
@@ -112,7 +112,7 @@ public class TerminalSettingsTests : IDisposable
     }
 
     [Fact]
-    public void Save_ThenLoad_PreservesActionsServerFields()
+    public void Save_ThenLoad_PreservesMcpServerFields()
     {
         var original = new TerminalSettings("bash.exe", new[] { "--login" }, 8192, 20000, "light",
             McpEnabled: true, McpPort: 7782, McpClients: new[] { "claude" },
@@ -128,7 +128,7 @@ public class TerminalSettingsTests : IDisposable
     }
 
     [Fact]
-    public void Load_OldFileWithoutActionsServer_DefaultsToOffOn7783F4()
+    public void Load_OldFileWithoutMcpServer_DefaultsToOffOn7783F4()
     {
         var resourcesDir = Path.Combine(tmpDir, "resources");
         Directory.CreateDirectory(resourcesDir);
