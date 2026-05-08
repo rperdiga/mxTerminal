@@ -461,9 +461,9 @@
       list-style: none;
       padding: 8px 12px;
       margin: 4px 0 12px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--border-default);
       border-radius: 4px;
-      background: var(--surface-2, rgba(255, 255, 255, 0.03));
+      background: var(--surface-2);
       max-height: 200px;
       overflow-y: auto;
     }
@@ -472,19 +472,19 @@
       font-size: 12px;
     }
     .bundled-skills-list li .skill-name {
-      font-family: var(--mono, monospace);
+      font-family: var(--font-mono);
       font-weight: 600;
     }
     .bundled-skills-list li .skill-desc {
       display: block;
-      color: var(--muted, #888);
+      color: var(--text-muted);
       font-size: 11px;
       margin-top: 2px;
       line-height: 1.4;
     }
     .bundled-skills-list:empty::before {
       content: "No bundled skills found.";
-      color: var(--muted, #888);
+      color: var(--text-muted);
       font-size: 12px;
     }
 
