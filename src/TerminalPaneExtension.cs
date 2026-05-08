@@ -249,10 +249,33 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                     var proj = CurrentApp?.Root as IProject;
                     return (proj?.DirectoryPath, proj?.Name);
                 });
+            // Build Maia plumbing only on Windows when the toggle is on. The router
+            // probe runs in the background; the router is functional even before it
+            // returns (early calls just see all-tiers-down and fail with a clear message).
+            Terminal.Maia.MaiaActions? maia = null;
+            bool maiaEnabled = OperatingSystem.IsWindows() && settings.MaiaIntegrationEnabled;
+            if (maiaEnabled)
+            {
+                var transports = new Terminal.Maia.IMaiaTransport[]
+                {
+                    new Terminal.Maia.CdpInjectedTransport(() => new Terminal.Maia.CdpClient()),
+                    new Terminal.Maia.CdpChatTransport(() => new Terminal.Maia.CdpClient()),
+                };
+                var router = new Terminal.Maia.MaiaRouter(transports);
+                _ = router.ProbeAllAsync(CancellationToken.None);  // fire-and-forget; safe
+                maia = new Terminal.Maia.MaiaActions(router);
+            }
+
             // Fixed default — saved settings.McpServerPort is ignored.
             // The server falls back to a free OS-assigned port if 7783 is taken.
-            manager.StartActionServer(StudioProActionServer.DefaultPort, actions, log);
-            log.Info($"[concord-mcp] auto-started server on port {settings.McpServerPort}");
+            manager.StartActionServer(
+                StudioProActionServer.DefaultPort,
+                actions,
+                log,
+                maia,
+                studioProActionsEnabled: settings.StudioProActionsEnabled,
+                maiaIntegrationEnabled: maiaEnabled);
+            log.Info($"[concord-mcp] auto-started server on port {settings.McpServerPort} (maia={maiaEnabled})");
         }
         catch (Exception ex)
         {

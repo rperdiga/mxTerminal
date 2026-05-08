@@ -159,7 +159,13 @@ public sealed class TerminalSessionManager : IDisposable
         get { lock (actionServerGate) return actionServer?.Port; }
     }
 
-    public void StartActionServer(int port, StudioProActions actions, Logger? log = null)
+    public void StartActionServer(
+        int port,
+        StudioProActions actions,
+        Logger? log = null,
+        Terminal.Maia.MaiaActions? maia = null,
+        bool studioProActionsEnabled = true,
+        bool maiaIntegrationEnabled = false)
     {
         if (disposed) throw new ObjectDisposedException(nameof(TerminalSessionManager));
         lock (actionServerGate)
@@ -168,7 +174,7 @@ public sealed class TerminalSessionManager : IDisposable
             // updated hotkey config that we can't detect from here. The cost is one
             // TCP listener bind cycle, which is cheap.
             actionServer?.Dispose();
-            var s = new StudioProActionServer(actions, port, log);
+            var s = new StudioProActionServer(actions, port, log, maia, studioProActionsEnabled, maiaIntegrationEnabled);
             s.Start();
             actionServer = s;
         }

@@ -245,7 +245,31 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     log: log);
                 var probe = new RunStateProbe(getApplicationRootUrl);
                 var actions = new StudioProActions(probe, ui);
-                manager.StartActionServer(StudioProActionServer.DefaultPort, actions, log);
+
+                // Build Maia plumbing only on Windows when the toggle is on. The router
+                // probe runs in the background; the router is functional even before it
+                // returns (early calls just see all-tiers-down and fail with a clear message).
+                Terminal.Maia.MaiaActions? maia = null;
+                bool maiaEnabled = OperatingSystem.IsWindows() && newMaiaIntegration;
+                if (maiaEnabled)
+                {
+                    var transports = new Terminal.Maia.IMaiaTransport[]
+                    {
+                        new Terminal.Maia.CdpInjectedTransport(() => new Terminal.Maia.CdpClient()),
+                        new Terminal.Maia.CdpChatTransport(() => new Terminal.Maia.CdpClient()),
+                    };
+                    var router = new Terminal.Maia.MaiaRouter(transports);
+                    _ = router.ProbeAllAsync(CancellationToken.None);  // fire-and-forget; safe
+                    maia = new Terminal.Maia.MaiaActions(router);
+                }
+
+                manager.StartActionServer(
+                    StudioProActionServer.DefaultPort,
+                    actions,
+                    log,
+                    maia,
+                    studioProActionsEnabled: newStudioProActions,
+                    maiaIntegrationEnabled: maiaEnabled);
 
                 // Probe the LIVE bound port (auto-fallback may have moved off
                 // the default if the OS said 7783 was busy).
