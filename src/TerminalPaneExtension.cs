@@ -252,7 +252,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
             // Fixed default — saved settings.McpServerPort is ignored.
             // The server falls back to a free OS-assigned port if 7783 is taken.
             manager.StartActionServer(StudioProActionServer.DefaultPort, actions, log);
-            log.Info($"[actions] auto-started server on port {settings.McpServerPort}");
+            log.Info($"[concord-mcp] auto-started server on port {settings.McpServerPort}");
         }
         catch (Exception ex)
         {
