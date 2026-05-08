@@ -317,14 +317,17 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             };
 
             // 3. Apply file changes BEFORE saving settings.
-            var touchedPrimary = ApplyMcpConfig(dir, current, updated);
-            var touchedActions = ApplyActionsMcpConfig(dir, current, updated);
-            var touchedSkills  = ApplySkillsConfig(dir, current, updated);
+            var allTouched = SettingsApplyHelper.ApplyAll(
+                dir,
+                bundledSkillsRoot,
+                current,
+                updated,
+                log,
+                currentActionServerPort: () => manager.CurrentActionServerPort,
+                probeStudioProMcpPort:   () => ProbeStudioProMcp()?.Port);
 
             updated.Save(dir);
             Post("settings", BuildSettingsPayload(updated));
-
-            var allTouched = touchedPrimary.Concat(touchedActions).Concat(touchedSkills).ToArray();
             if (allTouched.Length > 0)
             {
                 Post("mcpResult", new McpResultPayload(true, BuildResultMessage(updated, allTouched), allTouched));
@@ -383,156 +386,6 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         return parts.Count == 0
             ? "Settings saved. Restarting open terminals…"
             : string.Join("; ", parts) + ". Restarting open terminals…";
-    }
-
-    /// <summary>
-    /// Apply the diff between previous and new MCP settings to the relevant
-    /// CLI config files. Returns human-readable list of CLIs that were touched
-    /// (for the result banner).
-    /// </summary>
-    private string[] ApplyMcpConfig(string projectDir, TerminalSettings prev, TerminalSettings next)
-    {
-        var prevClients = new HashSet<string>(prev.McpClients, StringComparer.OrdinalIgnoreCase);
-        var nextClients = next.McpEnabled
-            ? new HashSet<string>(next.McpClients, StringComparer.OrdinalIgnoreCase)
-            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        // .mcp.json is shared by Claude Code and Copilot CLI.
-        var jsonNeeded = nextClients.Contains("claude") || nextClients.Contains("copilot");
-        var jsonHadIt  = prev.McpEnabled && (prevClients.Contains("claude") || prevClients.Contains("copilot"));
-
-        // ~/.codex/config.toml is just for Codex.
-        var tomlNeeded = nextClients.Contains("codex");
-        var tomlHadIt  = prev.McpEnabled && prevClients.Contains("codex");
-
-        // Always use Studio Pro's actual MCP port (probed live each save).
-        // The saved next.McpPort is back-compat only — no longer user-settable.
-        // Falls back to the saved value if the probe fails, keeping legacy
-        // configs working until the user enables Studio Pro's MCP.
-        var probedPort = ProbeStudioProMcp()?.Port ?? next.McpPort;
-        var url = $"http://localhost:{probedPort}/mcp";
-        var json = new McpJsonConfigurator(projectDir);
-        var toml = new McpTomlConfigurator();
-        var touched = new List<string>();
-
-        log.Info($"[mcp-config] primary diff jsonNeeded={jsonNeeded} jsonHadIt={jsonHadIt} tomlNeeded={tomlNeeded} tomlHadIt={tomlHadIt} url={url}");
-
-        try
-        {
-            if (jsonNeeded) { json.Upsert(url); log.Info($"[mcp-config-json] upserted {McpJsonConfigurator.ServerName} -> {url}"); touched.Add(LabelForJson(nextClients)); }
-            else if (jsonHadIt) { json.Remove(); log.Info($"[mcp-config-json] removed {McpJsonConfigurator.ServerName}"); touched.Add(LabelForJson(prevClients) + " (removed)"); }
-        }
-        catch (Exception ex) { log.Error("[mcp-config-json] primary write failed", ex); }
-
-        try
-        {
-            if (tomlNeeded) { toml.Upsert(url); log.Info($"[mcp-config-toml] upserted {McpTomlConfigurator.ServerName} -> {url} at {toml.FilePath}"); touched.Add("Codex"); }
-            else if (tomlHadIt) { toml.Remove(); log.Info($"[mcp-config-toml] removed {McpTomlConfigurator.ServerName}"); touched.Add("Codex (removed)"); }
-        }
-        catch (Exception ex) { log.Error("[mcp-config-toml] primary write failed", ex); }
-
-        return touched.ToArray();
-    }
-
-    /// <summary>
-    /// Diff the actions-server toggle (and which CLIs are selected via the existing
-    /// McpClients list) and write the second server entry into .mcp.json / config.toml.
-    /// We piggy-back on McpClients — the action server is registered for the same
-    /// CLIs the user already chose in the primary MCP toggle.
-    /// </summary>
-    private string[] ApplyActionsMcpConfig(string projectDir, TerminalSettings prev, TerminalSettings next)
-    {
-        var prevClients = new HashSet<string>(prev.McpClients, StringComparer.OrdinalIgnoreCase);
-        var nextClients = next.McpServerEnabled
-            ? new HashSet<string>(next.McpClients, StringComparer.OrdinalIgnoreCase)
-            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        var jsonNeeded = nextClients.Contains("claude") || nextClients.Contains("copilot");
-        var jsonHadIt  = prev.McpServerEnabled && (prevClients.Contains("claude") || prevClients.Contains("copilot"));
-        var tomlNeeded = nextClients.Contains("codex");
-        var tomlHadIt  = prev.McpServerEnabled && prevClients.Contains("codex");
-
-        // Use the LIVE bound port (manager surfaces it after Start). The
-        // saved value is back-compat fallback only — bridge auto-binds at
-        // 7783 with free-port fallback; user can't choose anymore.
-        var port = manager.CurrentActionServerPort ?? next.McpServerPort;
-        var url = $"http://localhost:{port}/mcp";
-        var json = new McpJsonConfigurator(projectDir);
-        var toml = new McpTomlConfigurator();
-        var touched = new List<string>();
-
-        log.Info($"[mcp-config] actions diff jsonNeeded={jsonNeeded} jsonHadIt={jsonHadIt} tomlNeeded={tomlNeeded} tomlHadIt={tomlHadIt} url={url} live-port={manager.CurrentActionServerPort?.ToString() ?? "null"}");
-
-        try
-        {
-            if (jsonNeeded) { json.UpsertActions(url); log.Info($"[mcp-config-json] upserted {McpJsonConfigurator.ActionsServerName} -> {url}"); touched.Add(LabelForJson(nextClients) + " actions"); }
-            else if (jsonHadIt) { json.RemoveActions(); log.Info($"[mcp-config-json] removed {McpJsonConfigurator.ActionsServerName}"); touched.Add(LabelForJson(prevClients) + " actions (removed)"); }
-        }
-        catch (Exception ex) { log.Error("[mcp-config-json] actions write failed", ex); }
-
-        try
-        {
-            if (tomlNeeded) { toml.UpsertActions(url); log.Info($"[mcp-config-toml] upserted {McpTomlConfigurator.ActionsServerName} -> {url} at {toml.FilePath}"); touched.Add("Codex actions"); }
-            else if (tomlHadIt) { toml.RemoveActions(); log.Info($"[mcp-config-toml] removed {McpTomlConfigurator.ActionsServerName}"); touched.Add("Codex actions (removed)"); }
-        }
-        catch (Exception ex) { log.Error("[mcp-config-toml] actions write failed", ex); }
-
-        return touched.ToArray();
-    }
-
-    /// <summary>
-    /// Diff the skills toggle and per-CLI selection. For each newly-selected
-    /// CLI: install bundled skills into its native subdir. For each newly-
-    /// deselected CLI (or any CLI when SkillsEnabled flips off): remove only
-    /// Concord-bundled skill folders, leaving user-authored siblings intact.
-    /// Returns labels for the result banner.
-    /// </summary>
-    private string[] ApplySkillsConfig(string projectDir, TerminalSettings prev, TerminalSettings next)
-    {
-        var prevClients = prev.SkillsEnabled
-            ? new HashSet<string>(prev.SkillClients, StringComparer.OrdinalIgnoreCase)
-            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var nextClients = next.SkillsEnabled
-            ? new HashSet<string>(next.SkillClients, StringComparer.OrdinalIgnoreCase)
-            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        var installer = new SkillInstaller(projectDir, bundledSkillsRoot, log);
-        var touched = new List<string>();
-
-        var perCli = new (string Key, string Label, string Subdir)[]
-        {
-            ("claude",  "Claude Code skills",       Path.Combine(".claude", "skills")),
-            ("copilot", "Copilot CLI skills",       Path.Combine(".github", "skills")),
-            ("codex",   "Codex skills",             Path.Combine(".codex",  "skills")),
-        };
-
-        log.Info($"[skills] diff prev={{{string.Join(",", prevClients)}}} next={{{string.Join(",", nextClients)}}} bundled-root={bundledSkillsRoot}");
-
-        foreach (var (key, label, subdir) in perCli)
-        {
-            var was = prevClients.Contains(key);
-            var now = nextClients.Contains(key);
-            try
-            {
-                if (now && !was)       { installer.InstallAll(subdir); touched.Add(label); }
-                else if (now && was)   { installer.InstallAll(subdir); /* refresh on every save */ }
-                else if (!now && was)  { installer.RemoveAll(subdir);  touched.Add(label + " (removed)"); }
-            }
-            catch (Exception ex)
-            {
-                log.Error($"[skills] {label} apply failed", ex);
-            }
-        }
-
-        return touched.ToArray();
-    }
-
-    private static string LabelForJson(HashSet<string> clients)
-    {
-        var parts = new List<string>();
-        if (clients.Contains("claude"))  parts.Add("Claude Code");
-        if (clients.Contains("copilot")) parts.Add("Copilot CLI");
-        return string.Join(" + ", parts);
     }
 
     private async void HandleCreateTab(CreateTabPayload p)
