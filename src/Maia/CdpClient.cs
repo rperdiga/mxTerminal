@@ -83,17 +83,21 @@ public sealed class CdpClient : ICdpClient
         {
             using var p = Process.Start(psi)
                 ?? throw new TransportUnavailable("Could not launch powershell.exe for studiopro.exe lookup.");
-            // 15s ceiling. Direct invocation typically returns in 0.5-1s, but
-            // PowerShell cold-start under EDR/AV scanning has been observed
-            // to push past 5s in field reports — generous budget here is
-            // cheaper than a false-negative on a real Studio Pro instance.
-            const int timeoutMs = 15000;
+            // CIM query output is large: each msedgewebview2.exe child (renderer,
+            // GPU, utility, etc.) returns its full command line, so total output
+            // can easily be 15-30KB. The OS pipe buffer is ~4-8KB on Windows —
+            // if we don't drain stdout concurrently with WaitForExit, PowerShell
+            // blocks writing to a full pipe, never exits, and our WaitForExit
+            // times out. This was the actual failure mode under live Studio Pro:
+            // direct invocation completed in 0.7s, in-process timed out at 15s.
+            var outputTask = Task.Run(() => p.StandardOutput.ReadToEnd());
+            const int timeoutMs = 10000;
             if (!p.WaitForExit(timeoutMs))
             {
                 try { p.Kill(entireProcessTree: true); } catch { /* best-effort */ }
                 throw new TransportUnavailable($"studiopro.exe lookup timed out ({timeoutMs / 1000}s)");
             }
-            output = p.StandardOutput.ReadToEnd();
+            output = outputTask.Result;
         }
         catch (Exception ex) when (ex is not TransportUnavailable)
         {
