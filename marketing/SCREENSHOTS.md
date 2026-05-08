@@ -1,7 +1,9 @@
 # Concord — Marketplace screenshot shot list
 
-10 screenshots, 600×420 each (marketplace requirement), captured by
-Neo, processed (cropped + light annotation) afterwards.
+11 candidate shots; the marketplace caps the upload at 10. If forced
+to drop one, drop **#6 (Settings: About)** — it's the least sales-y
+of the set. Each is 600×420, captured by Neo, processed (cropped +
+light annotation) afterwards.
 
 ## General framing rules
 
@@ -59,25 +61,43 @@ Neo, processed (cropped + light annotation) afterwards.
   pill if applicable
 - Highlight the "writes .mcp.json" / "writes config.toml" affordance
 
-### 4 — Settings: Action Bridge
+### 4 — Settings: Concord MCP
 
-**Goal:** "Concord can drive Studio Pro itself, not just the model."
+**Goal:** "Concord can drive Studio Pro itself, not just the model — and call Maia programmatically."
 
-- Open Settings → Action bridge section
-- Show toggle ON, port readout populated (probably 7783)
-- If there's a list of exposed tools (run/stop/refresh/save/
-  get_active_run_configuration/get_app_status), show that
+- Open Settings → Concord MCP section
+- Show master toggle ON, port readout populated (probably 7783)
+- Both sub-toggles visible: **Studio Pro UI actions** (ON) and
+  **Maia integration** (ON on Windows; disabled-with-tooltip on Mac
+  if doing the Mac variant)
+- If there's a list of exposed tools or hover-popovers showing
+  `run_app`/`stop_app`/`refresh_project`/`save_all`/
+  `get_active_run_configuration`/`get_app_status` plus
+  `maia__send`/`status`/`wait`/`ask`/`reset`/`force_tier`, show that
 
-### 5 — Settings: About
+### 5 — Settings: Skills
+
+**Goal:** "Concord ships prescriptive Mendix know-how the CLIs auto-discover."
+
+- Open Settings → Skills section
+- Show master toggle ON
+- "Bundled in this Concord" list visible with all 7 skill names:
+  `mendix-microflow-common`, `mendix-microflow-syntax`,
+  `mendix-microflow-update`, `mendix-page-gen`, `mendix-view-entities`,
+  `mendix-workflow-common`, `mendix-workflow-update`
+- Per-CLI checkboxes visible: Claude Code (✓), Copilot CLI (✓),
+  Codex (unchecked is fine — proves user controls per-CLI)
+
+### 6 — Settings: About
 
 **Goal:** "Built by professionals."
 
 - Open Settings → About section
-- Show the Concord ASCII art, version, log file path, settings
-  file path
+- Show the Concord ASCII art, version (4.0.0), log file path,
+  settings file path
 - Footer credit "A Siemens CoE extension for Studio Pro." visible
 
-### 6 — Multi-tab terminal
+### 7 — Multi-tab terminal
 
 **Goal:** "Real PTY tabs, not a single shell."
 
@@ -86,23 +106,23 @@ Neo, processed (cropped + light annotation) afterwards.
 - The other tabs labeled `Bash - 2` and `Cmd - 3`
 - Tab close buttons visible
 
-### 7 — Theme follows Studio Pro (dark)
+### 8 — Theme follows Studio Pro (dark)
 
 **Goal:** "Concord blends in, not bolted on."
 
 - Studio Pro in dark theme; Concord pane visible inline; chrome
   surfaces match exactly (no visible seam)
 
-### 8 — Theme follows Studio Pro (light)
+### 9 — Theme follows Studio Pro (light)
 
-**Goal:** Pair with #7 — show the same pane in light theme.
+**Goal:** Pair with #8 — show the same pane in light theme.
 
-- Same shot as #7 but Studio Pro switched to light. Same content
+- Same shot as #8 but Studio Pro switched to light. Same content
   in the terminal so the reviewer sees the chrome adapting.
 
-### 9 — Paste pipeline working (proof, not promise)
+### 10 — Paste pipeline working (proof, not promise)
 
-**Goal:** "The 1.1.0 paste fix actually works on Windows."
+**Goal:** "Concord's paste fix actually works on Windows."
 
 - Concord pane, Claude Code running
 - A multi-line paste landed cleanly (not truncated)
@@ -111,7 +131,7 @@ Neo, processed (cropped + light annotation) afterwards.
 - Optionally a log tail at the bottom showing
   `bracket-mode SET / paste bracketed=true`
 
-### 10 — Studio Pro menu integration
+### 11 — Studio Pro menu integration
 
 **Goal:** "It's a first-class Studio Pro citizen."
 
@@ -127,7 +147,7 @@ For each capture:
 1. Crop to 600×420 (10:7 aspect)
 2. Add a 1-pixel border in `#1F5A9F` (Mendix-blue light) — subtle
    frame so screenshots don't bleed into the marketplace background
-3. (Optional) small "Concord 1.1.0" wordmark in lower-right corner,
+3. (Optional) small "Concord 4.0.0" wordmark in lower-right corner,
    45% opacity, Cascadia Mono — reads as a watermark, not branding
 4. Save as `marketing/screenshots/01-hero.png`,
    `02-settings-general.png`, etc.

@@ -53,7 +53,7 @@ extension files inside.
    - **Description:** "The terminal Studio Pro was missing." (or
      paste the short pitch from `marketing/listing.md`)
    - **Version:** match `Terminal.csproj` `<Version>` exactly (e.g.
-     `1.1.0`)
+     `4.0.0`)
    - **Author:** Siemens CoE Team
 6. **File → Export Add-on Module Package** → save as
    `Concord.mxmodule` somewhere outside the repo (or under
@@ -80,20 +80,21 @@ If any of those fail, the wrapper is mis-built — fix before tagging.
 
 ```sh
 # from main, with all changes committed
-git tag -a v1.1.0 -m "v1.1.0 — paste pipeline overhaul (ConPTY + chunking + LF bypass)"
-git push origin v1.1.0
+git tag -a v4.0.0 -m "v4.0.0 — bundled Mendix skill packs + Concord MCP / Maia"
+git push origin v4.0.0
 
 # Create GitHub release with the .mxmodule attached
-gh release create v1.1.0 \
+gh release create v4.0.0 \
     --repo rperdiga/mxTerminal \
-    --title "v1.1.0 — Paste pipeline overhaul" \
+    --title "v4.0.0 — Bundled Mendix skill packs" \
     --notes-file CHANGELOG.md \
     Concord.mxmodule
 ```
 
-(If the `v1.1.0` tag already exists from earlier work, replace
-`gh release create` with `gh release upload v1.1.0 Concord.mxmodule`
-to attach the binary to the existing release.)
+(If the tag already exists from earlier work, replace
+`gh release create` with `gh release upload v4.0.0 Concord.mxmodule`
+to attach the binary to the existing release. Substitute the actual
+version you're shipping if it isn't 4.0.0.)
 
 ## Step 5 — Submit to Mendix Marketplace via MxLabs
 
@@ -105,11 +106,12 @@ to attach the binary to the existing release.)
    - **Component Name:** "Concord — Terminal for Studio Pro"
    - **Visibility:** Public
    - **Source:** GitHub Link → paste
-     `https://github.com/rperdiga/mxTerminal/releases/tag/v1.1.0`
+     `https://github.com/rperdiga/mxTerminal/releases/tag/v4.0.0`
    - **Thumbnail:** `marketing/concord-thumbnail-600x420.png`
-   - **Screenshots:** the 7-10 captures from
-     `marketing/screenshots/` (driven by the SCREENSHOTS.md
-     shot list)
+   - **Screenshots:** up to 10 captures from
+     `marketing/screenshots/` (the SCREENSHOTS.md shot list has 11
+     candidates; pick the strongest 10 — drop About if you have to
+     drop one)
 4. Step 2 (Content): paste the long description from
    `marketing/listing.md` "Long description" section.
 5. Step 3 (License): Apache 2.0 — link to LICENSE in the repo or

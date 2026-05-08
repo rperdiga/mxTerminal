@@ -26,10 +26,10 @@ publisher-private during draft review.)
 ## Short pitch (≤140 chars — for the tile / search results)
 
 ```
-A real terminal pane in Studio Pro. Run Claude Code, Codex, or Copilot CLI alongside Studio Pro's MCP server, Maia, and Concord's Action Bridge.
+A real terminal pane for Studio Pro. Run Claude Code, Codex, or Copilot CLI wired to Studio Pro MCP, Maia, and bundled skill packs.
 ```
 
-(143 chars — trim "Concord's" if needed: "and the Action Bridge" = 138.)
+(133 chars — comfortably under the 140 limit.)
 
 ## Long description (Markdown supported; goes in the Content step)
 
@@ -37,16 +37,19 @@ A real terminal pane in Studio Pro. Run Claude Code, Codex, or Copilot CLI along
 **Concord is the terminal Studio Pro was missing.**
 
 A tabbed PTY terminal embedded as a dockable pane inside Studio Pro
-11.10+. The pane is the workspace where developers run modern CLI
-agents — **Claude Code**, **Codex**, **GitHub Copilot CLI** — and
-those agents talk directly to:
+11.10+ on Windows and macOS. The pane is the workspace where
+developers run modern CLI agents — **Claude Code**, **Codex**,
+**GitHub Copilot CLI** — and those agents talk directly to:
 
 - **Studio Pro's built-in MCP server** (entities, microflows, pages,
   OQL, file ops on `/themes` + `/jsactions`, knowledge base)
-- **Maia** (Studio Pro's in-IDE AI assistant)
-- **Concord's own Action Bridge** (six MCP tools — run / stop /
-  refresh / save / get active run config / get app status — exposed
-  to whatever CLI agent you have running)
+- **Concord MCP** — Concord's own in-process MCP server with two
+  tool families: Studio Pro UI actions (run / stop / refresh / save /
+  status) and Maia integration (programmatic access to Studio Pro's
+  in-IDE AI assistant)
+- **Bundled Mendix skill packs** — prescriptive playbooks installed
+  into the project so the CLIs know how to drive the two MCP servers
+  above
 
 The result: developer + Maia + CLI agent collaborate on Mendix apps
 from one workspace, with Concord wiring the integration plumbing
@@ -96,12 +99,28 @@ Concord makes the agent-augmented Mendix workflow first-class.
   entries that point each CLI at Studio Pro's MCP server.
 - One toggle, three CLI configs in sync.
 
-### Action Bridge
-- A second MCP server hosted by Concord on port 7783, exposing six
-  tools to your running CLI agent: `run_app`, `stop_app`,
-  `refresh_app`, `save_all`, `get_active_run_configuration`,
-  `get_app_status`.
-- Lets the CLI drive Studio Pro itself, not just the model.
+### Concord MCP
+- A second MCP server hosted by Concord on port 7783 (auto-fallback
+  to a free port if 7783 is taken), wire identity `concord-mcp`. Two
+  tool families share the endpoint:
+  - **Studio Pro UI actions** — `run_app`, `stop_app`,
+    `refresh_project`, `save_all`, `get_active_run_configuration`,
+    `get_app_status`. Drive the IDE itself, not just the model.
+  - **Maia integration** (Windows only) — `maia__send`, `maia__status`,
+    `maia__wait`, `maia__ask`, `maia__reset`, `maia__force_tier`.
+    Programmatic access to Studio Pro's in-IDE AI assistant.
+- Master + per-family toggles in **Settings → Concord MCP**.
+
+### Bundled Mendix skill packs
+- 7 prescriptive Mendix playbooks ship with the extension —
+  microflow creation/editing, pages, view entities, workflow
+  patterns. Each one is a `SKILL.md` with YAML frontmatter that the
+  CLIs auto-discover.
+- Toggle per-CLI in **Settings → Skills**: Concord installs the
+  bundled folders into `<project>/.claude/skills/`,
+  `<project>/.github/skills/`, or `<project>/.codex/skills/`.
+  Disabling a CLI removes only Concord's bundled folders;
+  user-authored siblings under the same directory stay intact.
 
 ### Paste pipeline that actually works
 
@@ -113,7 +132,7 @@ lines]` placeholder so your prompt history stays scannable. Pastes
 ≥ 4 KB show a quiet notice; ≥ 50 KB show an estimated delivery time;
 ≥ 1 MB are refused with a "save to a file" suggestion.
 
-Under the hood, v1.1.0 ships a four-layer paste pipeline that fixes
+Under the hood, Concord ships a four-layer paste pipeline that fixes
 the multi-line paste truncation that affects every Node/Ink-based TUI
 agent on Windows ([claude-code #49337](https://github.com/anthropics/claude-code/issues/49337) and siblings):
 
@@ -127,20 +146,28 @@ agent on Windows ([claude-code #49337](https://github.com/anthropics/claude-code
 4. **Size-tiered UX** — notice ≥ 4 KB, warn + duration estimate
    ≥ 50 KB, refuse with "save to file" guidance ≥ 1 MB.
 
-## What's new in 1.2.0
+## What's new in 4.0.0
 
 See [CHANGELOG.md](https://github.com/rperdiga/mxTerminal/blob/main/CHANGELOG.md).
 
-- **macOS support** — Studio Pro on Mac is now a first-class host
-  alongside Windows. Hand-rolled POSIX PTY backend (`openpty` +
-  `posix_spawnp` against `libSystem.dylib`), WKWebView bridge with
-  focus + keyboard fixes, Mac Settings.sqlite probe path, Homebrew-aware
-  shell init, platform-aware shell-path migration.
-- **128 tests passing** (33 vitest UI + 95 xunit C#)
-- **1.1.0 highlights still shipping:** ConPTY backend on Windows
-  (~290 LOC of `kernel32!CreatePseudoConsole` P/Invoke), four-layer
-  paste pipeline with bracketed-paste, paced chunking, LF-bypass, and
-  size-tiered UX
+- **Bundled Mendix skill packs.** 7 prescriptive Mendix playbooks
+  install into your project's `.claude/skills/`, `.github/skills/`,
+  and/or `.codex/skills/` per the CLIs you enable. Each Save refreshes
+  the bundled content; user-authored skills sitting alongside stay
+  intact.
+- **Concord MCP** — the in-process MCP server (renamed from "Action
+  Bridge") now hosts two tool families under a single `concord-mcp`
+  endpoint: Studio Pro UI actions (the original six) and Maia
+  integration (`maia__send` / `status` / `wait` / `ask` / `reset` /
+  `force_tier` — Windows only).
+- **Maia is C#-native** — no Python, no subprocess, no second port.
+  Two-tier transport (injected JS agent + DOM-scrape fallback) over
+  Studio Pro's WebView2 `--remote-debugging-port`.
+- **macOS support still shipping** — POSIX PTY backend, WKWebView
+  bridge, Mac Settings.sqlite probe, Homebrew-aware shell init.
+- **Windows paste pipeline still shipping** — ConPTY backend with
+  bracketed-paste negotiation, paced chunking, LF-bypass, size-tiered
+  UX for very large pastes.
 
 ## Compatibility
 
@@ -194,7 +221,7 @@ https://github.com/rperdiga/mxTerminal
 ```
 
 Use the **GitHub Link** option on the upload form. Concord's release
-flow attaches `Concord.mxmodule` to the `v1.1.0` GitHub release tag;
+flow attaches `Concord.mxmodule` to the `v4.0.0` GitHub release tag;
 marketplace auto-syncs from the release attachment.
 
 ## Thumbnail (600×420 PNG, ≤1 MB)
