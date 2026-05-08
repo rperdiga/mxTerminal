@@ -29,8 +29,11 @@ interface SettingsPayload {
   mcpEnabled: boolean;
   mcpPort: number;
   mcpClients: string[];
-  actionsServerEnabled: boolean;
-  actionsServerPort: number;
+  mcpServerEnabled: boolean;
+  mcpServerPort: number;
+  studioProActionsEnabled: boolean;
+  maiaIntegrationEnabled: boolean;
+  platform: string;
   refreshFromDiskHotkey: string;
   restoreTabsOnReopen: boolean;
   about: AboutInfo;
@@ -95,6 +98,15 @@ export class SettingsModal {
   // auto-fallback to a free port on collision). User no longer chooses.
   private actionsPortReadout = document.getElementById(
     "actions-port-readout",
+  ) as HTMLDivElement;
+  private chkSpActions = document.getElementById(
+    "set-sp-actions-enabled",
+  ) as HTMLInputElement;
+  private chkMaia = document.getElementById(
+    "set-maia-enabled",
+  ) as HTMLInputElement;
+  private maiaPlatformNote = document.getElementById(
+    "maia-platform-note",
   ) as HTMLDivElement;
   private inpRefreshHotkey = document.getElementById(
     "set-refresh-hotkey",
@@ -257,9 +269,12 @@ export class SettingsModal {
     // Apply enabled/disabled to children based on master state.
     this.onMcpEnabledChange();
 
-    // Actions server fields
-    this.chkActions.checked = d.actionsServerEnabled;
-    this.renderActionsPortReadout(d.actionsServerEnabled, d.actionsServerPort);
+    // Concord MCP fields
+    this.chkActions.checked = d.mcpServerEnabled;
+    this.chkSpActions.checked = d.studioProActionsEnabled;
+    this.chkMaia.checked = d.maiaIntegrationEnabled;
+    this.renderActionsPortReadout(d.mcpServerEnabled, d.mcpServerPort);
+    this.applyMaiaPlatformGate(d.platform);
     this.inpRefreshHotkey.value = d.refreshFromDiskHotkey;
     this.onMcpEnabledChange(); // also flips actions enabled state
 
@@ -277,14 +292,25 @@ export class SettingsModal {
     if (!this.actionsPortReadout) return;
     if (!enabled) {
       this.actionsPortReadout.classList.remove("warn");
-      this.actionsPortReadout.innerHTML = `Action bridge is <strong>not running</strong>. Enable to start the local HTTP server that exposes Studio Pro UI actions to the CLIs above.`;
+      this.actionsPortReadout.innerHTML = `Concord MCP is <strong>not running</strong>. Enable to start the local HTTP server that exposes Concord tools to the CLIs above.`;
       return;
     }
     this.actionsPortReadout.classList.remove("warn");
     this.actionsPortReadout.innerHTML =
-      `Action bridge is listening on <code>localhost:${boundPort}</code>. ` +
+      `Concord MCP is listening on <code>localhost:${boundPort}</code>. ` +
       `Each Save writes that URL into the CLI configs. Default is 7783; ` +
       `if that's busy on your machine the bridge falls back to a free port automatically.`;
+  }
+
+  private applyMaiaPlatformGate(platform: string): void {
+    const isWindows = platform === "windows";
+    this.chkMaia.disabled = !isWindows;
+    if (this.maiaPlatformNote) {
+      this.maiaPlatformNote.classList.remove("warn");
+      this.maiaPlatformNote.innerHTML = isWindows
+        ? `Maia integration uses Studio Pro's WebView2 debug port. Maia panel must be visible at call time.`
+        : `Maia integration is <strong>Windows-only</strong> in this Concord release.`;
+    }
   }
 
   /** Read-only port readout under the MCP enable checkbox. Surfaces what
@@ -376,13 +402,10 @@ export class SettingsModal {
       xtermScrollbackLines: parseInt(this.inpScroll.value, 10) || 10000,
       theme,
       mcpEnabled: this.chkMcp.checked,
-      // mcpPort intentionally omitted — C# always uses Studio Pro's actual
-      // port (probed from Settings.sqlite). Saved field kept for back-compat
-      // but no longer user-settable.
       mcpClients,
-      actionsServerEnabled: this.chkActions.checked,
-      // actionsServerPort intentionally omitted — bridge auto-binds default
-      // 7783 with free-port fallback. Saved field kept for back-compat.
+      mcpServerEnabled: this.chkActions.checked,
+      studioProActionsEnabled: this.chkSpActions.checked,
+      maiaIntegrationEnabled: this.chkMaia.checked,
       refreshFromDiskHotkey: this.inpRefreshHotkey.value,
       restoreTabsOnReopen: this.chkRestoreTabs.checked,
     });
