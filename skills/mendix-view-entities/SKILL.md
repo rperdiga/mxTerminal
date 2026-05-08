@@ -1,0 +1,451 @@
+---
+name: mendix-view-entities
+description: Use when creating, reading, updating, deleting, or refining a Mendix view entity, or when generating OQL for a retrieve-from-database microflow action. Includes the six tool sequences (create, update, read, generate-only, delete, rename), the construction rules for `userIntent`, the OQL syntax reference (SELECT/FROM/JOIN/WHERE/GROUP BY/HAVING/ORDER BY/UNION, association traversal, scalar and aggregate functions), and the common-mistakes catalogue. Trigger when the user mentions a view entity, a `ViewEntitySourceDocument`, OQL, or describes a query in natural language.
+---
+
+## Tools in this environment
+
+- `ped_create_document`, `ped_read_document`, `ped_update_document`, `ped_find_document`, `ped_check_errors`, `ped_get_schema` → `mcp__mendix-studio-pro__ped_*`.
+- `oql_read`, `oql_generate` → `mcp__mendix-studio-pro__oql_read`, `mcp__mendix-studio-pro__oql_generate`.
+- After any view entity write, you can refresh Studio Pro with `mcp__mendix-studio-pro-actions__refresh_project` (or `mcp__concord-mcp__refresh_project`).
+
+The skill body uses the short names inline. This header tells you which actual MCP tool to call.
+
+# View Entities — OQL Generation
+
+## What OQL Is
+
+OQL (Object Query Language) is Mendix's SQL-like query language for reading data from domain model entities. It uses the same keywords as SQL (`SELECT`, `FROM`, `WHERE`, `JOIN`, `GROUP BY`, `ORDER BY`) but operates on Mendix entities and associations instead of database tables and foreign keys.
+
+Key differences from SQL:
+
+- Entity names use module-qualified notation: `Module.Entity` (e.g. `MyModule.Order`).
+- Association traversal replaces explicit joins: `Module.Entity/Module.AssociationName/Module.TargetEntity`.
+- OQL is read-only — it cannot insert, update, or delete data.
+
+OQL appears in two places in a Mendix app:
+
+- **View entities** — a `DomainModels$ViewEntitySourceDocument` stores the OQL query that defines what the view entity returns at runtime.
+- **Retrieve-from-database microflow actions** — OQL can filter and shape the data a microflow retrieves.
+
+---
+
+## What a View Entity Is
+
+A view entity stores its definition as an OQL query in a `DomainModels$ViewEntitySourceDocument`. The query runs at runtime to produce a read-only dataset. Invalid OQL is stored silently and surfaces as a model consistency error — not a write-time failure.
+
+View entities require OQL v2 to be enabled in the app settings. They cannot reference non-persistable or external entities.
+
+**PED structure.** A view entity has two parts in the model:
+
+1. A `DomainModels$Entity` entry inside the domain model's `entities` array. Its `source.$Type` is `"DomainModels$OqlViewEntitySource"` — this is what makes it a view entity, not a regular entity.
+2. A companion `DomainModels$ViewEntitySourceDocument` with the same qualified name (e.g., `"MyModule.MyView"`). This document holds the OQL string.
+
+```json
+{
+    "$Type": "DomainModels$Entity",
+    "$QualifiedName": "MyModule.MyView",
+    "source": {
+        "$Type": "DomainModels$OqlViewEntitySource",
+        "sourceDocument": "MyModule.MyView"
+    }
+}
+```
+
+`source.sourceDocument` is the qualified name of the companion `DomainModels$ViewEntitySourceDocument`.
+
+**Deletion removes both parts automatically.** When the agent removes a view entity via `ped_update_document` (remove operation on `/entities`), the element remover detects the `DomainModels$OqlViewEntitySource` source type and cascade-deletes the companion `DomainModels$ViewEntitySourceDocument` in the same operation. No manual step is needed.
+
+---
+
+## PED and the OQL Field
+
+**PED does not support the `oql` field on `DomainModels$ViewEntitySourceDocument`.**
+
+- `ped_read_document` does not return the `oql` field — do not use it to read OQL.
+- `ped_update_document` does not support setting the `oql` field — do not use it to write OQL.
+
+Use the dedicated tools instead:
+
+- **`oql_read`** — reads the current OQL from a `ViewEntitySourceDocument`.
+- **`oql_generate`** — generates OQL and writes it to a `ViewEntitySourceDocument`.
+
+> **Note:** `oql_read` and `oql_generate` use direct model access to bypass PED's document layer. This is a temporary workaround until PED exposes the `oql` field natively.
+
+---
+
+## When to Call `oql_generate`
+
+`oql_generate` produces the OQL string and, when `documentName` is set and `written: true`, automatically syncs the view entity's attribute list to match the `SELECT` columns. Always use `oql_generate` when creating or updating a view entity.
+
+Call `oql_generate` when:
+
+- The user describes the query in natural language and you need to produce OQL from that description.
+- The OQL is non-trivial: joins, association traversal, aggregations, grouping, or complex filters.
+- You are unsure about entity names, attribute paths, or association syntax.
+- You are refining or fixing existing OQL based on a vague or complex instruction.
+- OQL generated by `oql_generate` is invalid after `ped_check_errors` — pass the broken OQL as `currentOql` to fix it.
+
+When in doubt, use `oql_generate`. It validates entity and association references but can still produce invalid OQL. Always verify with `ped_check_errors` after writing.
+
+---
+
+## `userIntent` — How to Construct It
+
+`userIntent` must summarize the full request from the entire conversation: what view entity is being modified, what data it should return, which entities and associations are involved, and any constraints, examples, or OQL the user mentioned. Include:
+
+- What view entity is being modified and in which module
+- The full intent: what data it should return, which entities and associations are involved, any filters, grouping, ordering, or limits
+- Any constraints or examples the user mentioned earlier in the conversation
+- Any OQL or schema details the user provided at any point
+
+A thin `userIntent` (e.g., "generate OQL for orders") produces poor results. Write a full description with no assumed prior context.
+
+**Identifying the primary (`FROM`) entity.** Before writing `userIntent`, decide which entity is the `FROM` entity. The `FROM` entity is the primary subject — the thing the user is asking for a list of. When the user says "all X with their Y", `X` is the `FROM` entity and `Y` is joined or traversed. Example: "all accounts with their journal entries" → `FROM MyModule.Account`, not `FROM MyModule.JournalEntry`. Getting this wrong produces a syntactically valid query that returns the wrong result set and passes `ped_check_errors`. Identify the primary subject first, then build the `userIntent` and the query around it.
+
+---
+
+## Tool Inputs
+
+### `oql_generate`
+
+| Parameter      | Required | Description                                                                                                                                                                                                                                                      |
+| -------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `moduleName`   | Yes      | Mendix module name (e.g., `"MyModule"`). Must match an existing module.                                                                                                                                                                                          |
+| `userIntent`   | Yes      | Comprehensive natural-language description — full context from the entire conversation.                                                                                                                                                                          |
+| `currentOql`   | No       | Existing OQL string. Pass whenever editing existing OQL — refines, fixes, renames, column changes, or any other modification. Without it, `oql_generate` builds the query from scratch and may produce a structurally different result.                          |
+| `documentName` | No       | Fully-qualified name of the companion `DomainModels$ViewEntitySourceDocument` (e.g., `"MyModule.MyView"`). Use `ped_find_document` with `documentType: DomainModels$ViewEntitySourceDocument` to locate it. When set, `oql_generate` writes the result directly. |
+
+### When to read the domain model explicitly
+
+`oql_generate` loads the domain model internally. Read it explicitly only when you have a concrete reason:
+
+- You need entity or association structure to write a good `userIntent`.
+- You need to confirm an entity or attribute name before generating.
+- You need to list all view entities in a module (read `/entities` from `DomainModels$DomainModel`).
+- The user asked about domain structure directly.
+
+`ped_get_schema` is appropriate when you need to understand the structure of an unfamiliar PED document type. To get entity or attribute structure for a good `userIntent`, either call `ped_get_schema` on the relevant entity type or call `ped_read_document` on `DomainModels$DomainModel` with the relevant paths. **Do not call `ped_get_schema` on `DomainModels$ViewEntitySourceDocument` or `DomainModels$Entity` before Sequence 1** — those payloads are already documented here.
+
+### `oql_read`
+
+| Parameter      | Required | Description                                                                              |
+| -------------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| `documentName` | Yes      | Fully-qualified name of the `DomainModels$ViewEntitySourceDocument` to read (e.g., `"MyModule.MyView"`). |
+
+Returns `{ oql: string }` on success, or `{ error: string }` if the document is not found.
+
+---
+
+## Detecting View Entities
+
+Every view entity appears as a `DomainModels$Entity` in the domain model. Identify it by checking `source.$Type`:
+
+- `"DomainModels$OqlViewEntitySource"` → view entity
+- anything else (or absent) → regular entity
+
+**List all view entities in a module:**
+
+```text
+ped_read_document
+  documentType: DomainModels$DomainModel
+  documentName: MyModule
+  paths: ["/entities"]
+```
+
+Filter the result for entries where `source.$Type === "DomainModels$OqlViewEntitySource"`.
+
+**Check whether a view entity exists:**
+
+Use `ped_find_document` — no read needed:
+
+```text
+ped_find_document
+  documentType: DomainModels$ViewEntitySourceDocument
+  documentName: MyModule.MyView
+```
+
+If the document is returned, the view entity exists.
+
+> **Empty result does not confirm absence.** `ped_find_document` returns `{"foundDocuments":[]}` for both "no documents exist" and "wrong `documentType` was used" — with no error in either case. If the result is empty, verify `documentType` is exactly `DomainModels$ViewEntitySourceDocument` before concluding no view entities exist.
+
+**Find companion documents in a module:**
+
+```text
+ped_find_document
+  documentType: DomainModels$ViewEntitySourceDocument
+  moduleName: MyModule
+```
+
+---
+
+## Confirming a Write Succeeded
+
+`oql_generate` with `documentName` returns `{ oql, message, written, writeError? }`:
+
+- `written: true` — OQL was written and the view entity's attribute list was synced to match the `SELECT` columns. Verify with `ped_check_errors documentType: DomainModels$ViewEntitySourceDocument documentName: MyModule.MyView` before reporting success. Invalid OQL is accepted silently — a successful write does not mean the OQL is valid. Report success only after `ped_check_errors` returns no errors.
+- `written: false` — Write failed. Present the generated OQL to the user and ask them to paste it into the OQL editor in Studio Pro manually. Do not claim success until a write is confirmed.
+
+If `ped_check_errors` returns OQL errors:
+
+1. Call `oql_generate` once more with the broken OQL passed as `currentOql`.
+2. Call `ped_check_errors` again.
+3. If errors remain: **STOP. Report the OQL errors to the user. Do not call `oql_generate` again. Do not attempt to fix the problem by modifying any other document (microflows, domain model entities, or otherwise).**
+
+If `oql_generate` returns `{ message: "...", oql: undefined }` (no OQL generated): the C# pipeline encountered a constraint it cannot resolve (for example, a JOIN without an association path is an OQL syntax limitation). Do not retry. Do not attempt to work around it by modifying microflows or other documents. Report the message and the limitation to the user and stop.
+
+When OQL is confirmed valid, call `ped_check_errors documentType: DomainModels$DomainModel documentName: MyModule` to catch any structural errors on the domain model.
+
+---
+
+## Tool Sequences
+
+### 1. Create a new view entity
+
+Use when no view entity with this name exists yet.
+
+1. Call `ped_create_document`:
+    - `documentType`: `DomainModels$ViewEntitySourceDocument`
+    - `moduleName`: `"MyModule"`
+    - `documentName`: `"MyView"` (entity name only, not qualified)
+    - `documentContent`: `{ "$Type": "DomainModels$ViewEntitySourceDocument", "name": "MyView" }`
+
+    **`name` in `documentContent` is required.** Set it to match `documentName`. `ped_create_document` uses `documentName` for routing only and does not write it into the document. Omitting `name` creates a document with `name: ""` that `oql_generate` and `ped_check_errors` cannot find.
+
+2. Call `ped_update_document` on `DomainModels$DomainModel` to add the entity:
+
+    ```json
+    {
+        "path": "/entities",
+        "operation": {
+            "type": "add",
+            "value": {
+                "$Type": "DomainModels$Entity",
+                "name": "MyView",
+                "location": { "x": 100, "y": 100 },
+                "documentation": "",
+                "attributes": [],
+                "validationRules": [],
+                "eventHandlers": [],
+                "indexes": [],
+                "accessRules": [],
+                "source": {
+                    "$Type": "DomainModels$OqlViewEntitySource",
+                    "sourceDocument": "MyModule.MyView"
+                }
+            }
+        }
+    }
+    ```
+
+    **Do not include `generalization` in the `add` payload.** PED sets `NoGeneralization` by default.
+
+    **Wait for step 2 to complete before proceeding.** Do not call `oql_generate` until `ped_update_document` returns successfully.
+
+3. Write the OQL — call `oql_generate` with `moduleName`, `userIntent`, and `documentName: "MyModule.MyView"`.
+
+    **Steps 1, 2, and 3 are strictly sequential.** Do not call `oql_generate` in parallel with `ped_update_document`.
+
+    **Only call `oql_generate` with `documentName` after steps 1 and 2 succeed.** The document must exist before `oql_generate` can write to it. Calling `oql_generate` with a non-existent `documentName` returns `written: false` — the document is not created as a side effect.
+    - If `written: true`: call `ped_check_errors documentType: DomainModels$ViewEntitySourceDocument documentName: MyModule.MyView` to verify OQL validity. If errors are returned, call `oql_generate` once more with the broken OQL as `currentOql`, then call `ped_check_errors` again. If errors remain: **STOP. Report the errors to the user. Do not call `oql_generate` again.** Once OQL is valid, call `ped_check_errors documentType: DomainModels$DomainModel documentName: MyModule` to confirm no structural errors remain.
+    - If `written: false` with `writeError: "Document not found"` immediately after completing steps 1 and 2: the most likely cause is that step 1 omitted `name` from `documentContent`, creating a document with `name: ""`. Call `ped_find_document documentType: DomainModels$ViewEntitySourceDocument moduleName: MyModule` to list companion documents in the module. If a document named `MyView` is returned, retry `oql_generate`. If no document named `MyView` is found, the document was created with an empty name — report the failure to the user and stop.
+    - If `written: false` for any other reason: present the generated OQL to the user and ask them to paste it into the OQL editor in Studio Pro.
+
+### 2. Update or refine OQL in an existing view entity
+
+1. Read the current OQL:
+
+    ```text
+    oql_read
+      documentName: MyModule.MyView
+    ```
+
+    - If the response contains `oql`: pass it as `currentOql` in step 2.
+    - If the response contains `error`: the document was not found — ask the user for the current OQL string.
+
+2. Call `oql_generate` with `moduleName`, `userIntent`, `currentOql`, and `documentName`.
+    - If `written: true`: call `ped_check_errors documentType: DomainModels$ViewEntitySourceDocument documentName: MyModule.MyView` to verify OQL validity. If errors are returned, call `oql_generate` once more with the broken OQL as `currentOql`, then call `ped_check_errors` again. If errors remain: **STOP. Report the errors to the user. Do not call `oql_generate` again.** Once OQL is valid, call `ped_check_errors documentType: DomainModels$DomainModel documentName: MyModule` to confirm no structural errors remain.
+    - If `written: false`: present the generated OQL to the user and ask them to paste it into the OQL editor in Studio Pro.
+
+### 3. Read existing OQL (no generation)
+
+1. Call `oql_read` with `documentName: "MyModule.MyView"`.
+    - If the response contains `oql`: present the OQL string to the user.
+    - If the response contains `error`: the document was not found — tell the user.
+
+### 4. Generate OQL only (no write)
+
+1. Call `oql_generate` with `moduleName` and `userIntent`.
+2. Present the OQL string to the user.
+
+### 5. Delete a view entity
+
+1. Read the domain model to find the entity index:
+
+    ```text
+    ped_read_document
+      documentType: DomainModels$DomainModel
+      documentName: MyModule
+      paths: ["/entities"]
+    ```
+
+    Locate the entry with `$QualifiedName: "MyModule.MyView"` and note its array index.
+
+2. Remove the entity:
+
+    ```json
+    ped_update_document
+      documentType: DomainModels$DomainModel
+      documentName: MyModule
+      operations: [{ "path": "/entities", "operation": { "type": "remove", "index": <N> } }]
+    ```
+
+    The element remover detects that the entity is a view entity and automatically deletes the companion `DomainModels$ViewEntitySourceDocument`. No additional step is needed.
+
+3. Call `ped_check_errors` on `DomainModels$DomainModel` to confirm no structural errors remain.
+
+### 6. Rename a view entity
+
+Renaming a view entity involves up to two targets: the `DomainModels$Entity` name and `SELECT` column aliases.
+
+#### Rename the entity itself
+
+**Renaming view entities via the agent API is not currently supported.** The platform does not expose an atomic rename operation, and renaming the entity and its companion `ViewEntitySourceDocument` separately can leave the model in a broken half-renamed state.
+
+Tell the user to rename the view entity manually in Studio Pro (select the entity → F2).
+
+Do **not** attempt to rename the entity or the `ViewEntitySourceDocument` via `ped_update_document` or any other tool.
+
+#### Rename a view entity attribute (OQL column alias)
+
+View entity attributes are derived from `SELECT ... AS <alias>` columns. Renaming an attribute means changing the alias in the OQL string. `ped_update_document` on view entity attributes fails because the OQL sync controls the attribute list.
+
+Follow Sequence 2 (Update or refine OQL) with a precise `userIntent`:
+
+> "Rename the column alias `oldAlias` to `newAlias` in the SELECT clause. Keep all other columns, joins, WHERE conditions, and clauses unchanged."
+
+---
+
+## OQL Syntax Reference
+
+### Basic Structure
+
+```sql
+SELECT [DISTINCT] { * | { <expression> [AS <alias>] } [, ...] }
+FROM Module.Entity [AS alias]
+[INNER JOIN | LEFT [OUTER] JOIN | RIGHT [OUTER] JOIN | FULL [OUTER] JOIN
+    Module.Entity/Module.AssocName/Module.TargetEntity [AS alias]]
+[WHERE <condition>]
+[GROUP BY <expr>[, ...]]
+[HAVING <condition>]    -- only valid with GROUP BY
+[ORDER BY <expr> [ASC|DESC][, ...]]   -- in view entities, only valid with LIMIT or OFFSET
+[LIMIT <n>]
+[OFFSET <n>]
+```
+
+- `SELECT` and `FROM` are mandatory.
+- Attribute aliases are **mandatory** in view entity queries.
+- In view entities, `ORDER BY` is only valid when `LIMIT` or `OFFSET` is also present.
+
+### Entity and Attribute Names
+
+- Use `Module.Entity` notation (e.g., `MyModule.Order`).
+- Attribute paths use `/`: `MyModule.Order/TotalAmount`.
+- Names are **case-sensitive** — match the domain model exactly.
+- Reserved words must be quoted with `" "` (e.g., `"Order"`).
+
+### Association Traversal
+
+Associations appear in two contexts:
+
+**In `JOIN` — bring in a related entity:**
+
+```sql
+FROM MyModule.Order AS o
+LEFT JOIN MyModule.Order/MyModule.Order_Customer/MyModule.Customer AS c
+    ON ...
+```
+
+Pattern: `Module.SourceEntity/Module.AssociationName/Module.TargetEntity`
+
+**In `SELECT` / `WHERE` — access an attribute across an association:**
+
+```sql
+SELECT MyModule.Order/MyModule.Order_Customer/MyModule.Customer/Name AS customerName
+FROM MyModule.Order
+```
+
+The path navigates from the `FROM` entity through the association to a target attribute.
+
+### Division
+
+Use `:` for division (not `/`): `TotalAmount : Quantity`.
+
+### System Variables
+
+Wrap in single quotes: `'[%CurrentDateTime%]'`, `'[%CurrentUser%]'`.
+
+### NULL Handling
+
+If the `WHERE` expression evaluates to `NULL`, the row is excluded. Use `IS NULL` / `IS NOT NULL` for null checks.
+
+### Functions
+
+**Scalar:** `CAST`, `COALESCE`, `DATEDIFF`, `DATEPART`, `LENGTH`, `LOWER`, `UPPER`, `REPLACE`, `ROUND`
+
+**Aggregate:** `COUNT`, `AVG`, `MAX`, `MIN`, `SUM`, `STRING_AGG` (view entities, Mendix 11.2.0+)
+
+### Comments
+
+`--` single-line, `/* */` multi-line (requires Mendix 11.7+).
+
+### UNION
+
+```sql
+SELECT ... FROM ...
+UNION [ALL]
+SELECT ... FROM ...
+```
+
+---
+
+## Constraints
+
+- **Cross-module OQL is not supported.** The view entity and all referenced entities must be in the same module.
+- **`moduleName` is required.** If set to a non-existent module, `oql_generate` throws with a list of available modules.
+- **Non-persistable and external entities cannot be used** in OQL queries.
+- **`oql_generate` accepts invalid OQL silently.** A successful write does not confirm validity — errors appear as model consistency issues. Always verify with `ped_check_errors` after writing.
+- **When OQL cannot be fixed, do not pivot.** If OQL errors persist after one retry, do not attempt to work around the limitation by modifying microflows, retrieve-from-database actions, or any other document. Report the limitation and stop.
+
+---
+
+## Common Mistakes
+
+- Using wrong document type names. These type names do **not** exist and must never be used: `ViewEntities$ViewEntitySourceDocument`, `ViewEntities$ViewEntity`, `OQL$OqlQuery`, `DomainModels$OqlViewEntitySourceDocument`, `ViewEntitySourceDocuments$ViewEntitySourceDocument`. The correct types are:
+    - `DomainModels$Entity` — the entity element inside `DomainModels$DomainModel`. Valid in `documentContent` payloads (e.g. in `add` operations). It is an element type, not a unit type — do not use it as `documentType` in PED tool calls.
+    - `DomainModels$ViewEntitySourceDocument` — the companion OQL document (a unit). Use as `documentType` in `ped_create_document`, `ped_find_document`, and `ped_check_errors`.
+    - `DomainModels$OqlViewEntitySource` — the `source` sub-element on the entity. Set it in the entity `add` payload (see Sequence 1 step 2). It is a sub-element type, not a document type — PED tool calls like `ped_find_document`, `ped_read_document`, and `ped_check_errors` require a document type (`DomainModels$ViewEntitySourceDocument` or `DomainModels$DomainModel`).
+    - `DomainModels$NoGeneralization` — the generalization type. PED sets it automatically; do not include `generalization` in the entity `add` payload.
+
+- Using `ped_read_document` to read the `oql` field — PED does not expose this field. Use `oql_read` instead.
+- Using `ped_update_document` to set the `oql` field — PED does not support this field. Use `oql_generate` instead.
+- Assuming every `DomainModels$Entity` is a view entity — check `source.$Type === "DomainModels$OqlViewEntitySource"`.
+- Creating the entity in the domain model without first creating the companion `DomainModels$ViewEntitySourceDocument`.
+- Omitting required fields in the entity `add` operation (`source`, `attributes`, etc.).
+- Including `generalization` in the entity `add` payload — omit it, PED sets the default automatically.
+- Claiming the OQL was written without confirming `written: true` and without verifying with `ped_check_errors`.
+- Refining existing OQL without the current OQL string — read it first via `oql_read`.
+- Omitting `moduleName` in `oql_generate`.
+- Writing a thin `userIntent` that omits earlier context from the conversation.
+- Using cross-module entity references in OQL — see Constraints.
+- Writing `ORDER BY` without `LIMIT` or `OFFSET` in a view entity — see Syntax Reference.
+- Omitting `name` in `documentContent` when calling `ped_create_document` for `ViewEntitySourceDocument`. The document is created with an empty name. It returns `SUCCESS` but cannot be found by `oql_generate` or `ped_check_errors`. Always include `"name": "MyView"` in `documentContent`.
+- Calling `oql_generate` with `documentName` before the companion `ViewEntitySourceDocument` exists. The write fails with `written: false, writeError: "Document not found"`. Create the document with `ped_create_document` first (Sequence 1 step 1), then call `oql_generate`.
+- Manually adding attributes to the entity `add` payload. Set `"attributes": []` in the `add` payload. When `oql_generate` returns `written: true`, the modeler automatically derives the attribute list from the `SELECT` columns and saves the document — do not add attributes manually.
+- Using `DomainModels$Entity` as `documentType` in `ped_check_errors` or any PED tool call. It is an element type, not a unit. The problems endpoint returns HTTP 404. Use `documentType: DomainModels$ViewEntitySourceDocument` (OQL errors) or `DomainModels$DomainModel` (structural errors).
+- Removing and re-adding the entity to work around a 404 on `ped_check_errors`. That destroys the `source` field and breaks the view entity.
+- When `ped_find_document` returns an empty result, searching other modules (System, Administration, etc.) to find the document. The correct recovery is: verify that `documentType` is exactly `DomainModels$ViewEntitySourceDocument`, then retry the same module. Do not search unrelated modules (System, Administration) — those are framework modules that do not contain view entities. Marketplace and app modules may contain view entities and are valid search targets for explain or read operations.
+- Calling `ped_get_schema` on `DomainModels$ViewEntitySourceDocument` or `DomainModels$Entity` before Sequence 1. The required payloads are fully documented above — no schema fetch is needed for these types.
+- Using `ped_update_document` to rename a view entity attribute. View entity attributes are derived from OQL `SELECT` aliases — `ped_update_document` on the attribute name fails with "Rename request failed." Use Sequence 6 (rename column alias via `oql_generate` with `currentOql`) instead.
+- Calling `oql_generate` without `currentOql` when editing existing OQL. Without `currentOql`, the generator builds from scratch and typically drops columns, removes joins, and changes query structure. Always read the current OQL via `oql_read` first and pass it as `currentOql`.
+- Attempting to rename a view entity via `ped_update_document` or any other tool. The platform does not expose an atomic rename that cascades to the companion `ViewEntitySourceDocument`, associations, and usages. Renaming the entity or document separately leaves the model in a broken half-renamed state. Tell the user to rename manually in Studio Pro (F2).

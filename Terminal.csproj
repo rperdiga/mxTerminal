@@ -57,6 +57,10 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>
+    <Content Include="skills/**/*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
     <EmbeddedResource Include="src/Maia/maia_agent.js" LogicalName="Terminal.Maia.maia_agent.js" />
   </ItemGroup>
 
