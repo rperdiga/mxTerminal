@@ -455,6 +455,13 @@ public sealed class StudioProActionServer : IDisposable
         if (result is null)
             return BuildErrorBody(code: -32601, message: $"Unknown tool '{name}'");
 
+        // Log failed tool calls. ActionResult.Fail responses don't throw, so
+        // they bypass the JSON-RPC catch above — without this line, Maia/CDP
+        // failures return clean errors to the client but leave nothing in the
+        // Concord log to diagnose against.
+        if (result.Error != null)
+            log?.Warn($"[concord-mcp] tool '{name}' failed: {result.Error}");
+
         var payload = JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {
             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,

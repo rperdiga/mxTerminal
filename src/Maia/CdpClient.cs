@@ -66,8 +66,12 @@ public sealed class CdpClient : ICdpClient
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        // -ExecutionPolicy Bypass: defends against per-machine policy hooks that
+        // can slow cold-start by 1-2s under Tamper Protection / Application Control.
         psi.ArgumentList.Add("-NoProfile");
         psi.ArgumentList.Add("-NonInteractive");
+        psi.ArgumentList.Add("-ExecutionPolicy");
+        psi.ArgumentList.Add("Bypass");
         psi.ArgumentList.Add("-Command");
         psi.ArgumentList.Add(
             "Get-CimInstance Win32_Process -Filter \"Name='msedgewebview2.exe'\" | " +
@@ -79,11 +83,15 @@ public sealed class CdpClient : ICdpClient
         {
             using var p = Process.Start(psi)
                 ?? throw new TransportUnavailable("Could not launch powershell.exe for studiopro.exe lookup.");
-            // Wait with a 5s ceiling, matching the Python prototype.
-            if (!p.WaitForExit(5000))
+            // 15s ceiling. Direct invocation typically returns in 0.5-1s, but
+            // PowerShell cold-start under EDR/AV scanning has been observed
+            // to push past 5s in field reports — generous budget here is
+            // cheaper than a false-negative on a real Studio Pro instance.
+            const int timeoutMs = 15000;
+            if (!p.WaitForExit(timeoutMs))
             {
                 try { p.Kill(entireProcessTree: true); } catch { /* best-effort */ }
-                throw new TransportUnavailable("studiopro.exe lookup timed out (5s)");
+                throw new TransportUnavailable($"studiopro.exe lookup timed out ({timeoutMs / 1000}s)");
             }
             output = p.StandardOutput.ReadToEnd();
         }
