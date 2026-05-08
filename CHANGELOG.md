@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.0
+
+### Added
+
+- **Bundled Mendix skill packs.** The Skills section of the settings modal is now a working installer: enable per-CLI to write the Concord-bundled skills into `<project>/.claude/skills/`, `<project>/.github/skills/`, and/or `<project>/.codex/skills/`. Disable a CLI to remove only the Concord-bundled folders — user-authored siblings under the same directory are left intact. Each Save refreshes the bundled content so a Concord upgrade ships new or updated skills automatically.
+- **7 Mendix skills** ship in this release: `mendix-microflow-common`, `mendix-microflow-syntax`, `mendix-microflow-update`, `mendix-page-gen`, `mendix-view-entities`, `mendix-workflow-common`, `mendix-workflow-update`.
+
+### Notes
+
+- Skills are installed project-local only in this release (no `~/.claude/skills/` writes).
+- If you have hand-edited a Concord-bundled skill folder, your edits will be overwritten on the next Save. Add custom skills as siblings (e.g. `<project>/.claude/skills/my-thing/`) to keep them safe across upgrades.
+
 ## 1.3.0 — 2026-05-08
 
 ### Breaking
