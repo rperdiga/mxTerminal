@@ -75,7 +75,7 @@ public class McpTomlConfiguratorTests : IDisposable
     {
         NewConfig().UpsertActions("http://localhost:7783/mcp");
         var content = File.ReadAllText(filePath);
-        content.Should().Contain("[mcp_servers.mendix-studio-pro-actions]");
+        content.Should().Contain("[mcp_servers.concord-mcp]");
         content.Should().Contain("\"http://localhost:7783/mcp\"");
     }
 
@@ -87,7 +87,7 @@ public class McpTomlConfiguratorTests : IDisposable
         c.UpsertActions("http://localhost:7783/mcp");
         var content = File.ReadAllText(filePath);
         content.Should().Contain("[mcp_servers.mendix-studio-pro]");
-        content.Should().Contain("[mcp_servers.mendix-studio-pro-actions]");
+        content.Should().Contain("[mcp_servers.concord-mcp]");
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class McpTomlConfiguratorTests : IDisposable
         c.RemoveActions();
         var content = File.ReadAllText(filePath);
         content.Should().Contain("[mcp_servers.mendix-studio-pro]");
-        content.Should().NotContain("[mcp_servers.mendix-studio-pro-actions]");
+        content.Should().NotContain("[mcp_servers.concord-mcp]");
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public class McpTomlConfiguratorTests : IDisposable
         c.Remove();
         var content = File.ReadAllText(filePath);
         content.Should().NotContain("[mcp_servers.mendix-studio-pro]\n");
-        content.Should().Contain("[mcp_servers.mendix-studio-pro-actions]");
+        content.Should().Contain("[mcp_servers.concord-mcp]");
     }
 
     [Fact]
@@ -119,5 +119,37 @@ public class McpTomlConfiguratorTests : IDisposable
     {
         Action act = () => NewConfig().RemoveActions();
         act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void UpsertActions_MigratesLegacySectionToConcordMcp()
+    {
+        // Pre-populate with the old (pre-v1.3.0) section.
+        File.WriteAllText(filePath,
+            "[mcp_servers.mendix-studio-pro-actions]\nurl = \"http://localhost:7783/mcp\"\n");
+
+        NewConfig().UpsertActions("http://localhost:7783/mcp");
+
+        var content = File.ReadAllText(filePath);
+        content.Should().Contain("[mcp_servers.concord-mcp]");
+        content.Should().NotContain("[mcp_servers.mendix-studio-pro-actions]");
+
+        // Sanity: exactly one occurrence of the new header.
+        var occurrences = System.Text.RegularExpressions.Regex.Matches(content, @"\[mcp_servers\.concord-mcp\]").Count;
+        occurrences.Should().Be(1);
+    }
+
+    [Fact]
+    public void RemoveActions_RemovesBothLegacyAndCurrentSections()
+    {
+        // Pre-populate with both legacy and current sections.
+        File.WriteAllText(filePath,
+            "[mcp_servers.mendix-studio-pro-actions]\nurl = \"http://localhost:7783/mcp\"\n\n[mcp_servers.concord-mcp]\nurl = \"http://localhost:7783/mcp\"\n");
+
+        NewConfig().RemoveActions();
+
+        var content = File.Exists(filePath) ? File.ReadAllText(filePath) : string.Empty;
+        content.Should().NotContain("[mcp_servers.mendix-studio-pro-actions]");
+        content.Should().NotContain("[mcp_servers.concord-mcp]");
     }
 }

@@ -11,7 +11,13 @@ namespace Terminal;
 public sealed class McpJsonConfigurator
 {
     public const string ServerName = "mendix-studio-pro";
-    public const string ActionsServerName = "mendix-studio-pro-actions";
+    public const string ActionsServerName = "concord-mcp";
+
+    /// <summary>
+    /// Pre-v1.3.0 entry name. <see cref="UpsertActions"/> and <see cref="RemoveActions"/>
+    /// transparently strip this on every save so user configs migrate without manual edits.
+    /// </summary>
+    private const string LegacyActionsServerName = "mendix-studio-pro-actions";
 
     private static readonly JsonSerializerOptions WriteOpts = new() { WriteIndented = true };
 
@@ -22,10 +28,20 @@ public sealed class McpJsonConfigurator
         filePath = Path.Combine(projectDir, ".mcp.json");
     }
 
-    public void Upsert(string url)        => UpsertNamed(ServerName, url);
-    public void Remove()                  => RemoveNamed(ServerName);
-    public void UpsertActions(string url) => UpsertNamed(ActionsServerName, url);
-    public void RemoveActions()           => RemoveNamed(ActionsServerName);
+    public void Upsert(string url) => UpsertNamed(ServerName, url);
+    public void Remove()           => RemoveNamed(ServerName);
+
+    public void UpsertActions(string url)
+    {
+        RemoveNamed(LegacyActionsServerName);
+        UpsertNamed(ActionsServerName, url);
+    }
+
+    public void RemoveActions()
+    {
+        RemoveNamed(LegacyActionsServerName);
+        RemoveNamed(ActionsServerName);
+    }
 
     private void UpsertNamed(string serverName, string url)
     {

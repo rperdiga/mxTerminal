@@ -82,7 +82,7 @@ public class McpJsonConfiguratorTests : IDisposable
     {
         new McpJsonConfigurator(tmpDir).UpsertActions("http://localhost:7783/mcp");
         var json = File.ReadAllText(filePath);
-        json.Should().Contain("\"mendix-studio-pro-actions\"");
+        json.Should().Contain("\"concord-mcp\"");
         json.Should().Contain("\"http://localhost:7783/mcp\"");
     }
 
@@ -94,7 +94,7 @@ public class McpJsonConfiguratorTests : IDisposable
         c.UpsertActions("http://localhost:7783/mcp");
         var json = File.ReadAllText(filePath);
         json.Should().Contain("\"mendix-studio-pro\"");
-        json.Should().Contain("\"mendix-studio-pro-actions\"");
+        json.Should().Contain("\"concord-mcp\"");
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public class McpJsonConfiguratorTests : IDisposable
         c.RemoveActions();
         var json = File.ReadAllText(filePath);
         json.Should().Contain("mendix-studio-pro");
-        json.Should().NotContain("mendix-studio-pro-actions");
+        json.Should().NotContain("concord-mcp");
     }
 
     [Fact]
@@ -117,8 +117,8 @@ public class McpJsonConfiguratorTests : IDisposable
         c.UpsertActions("http://localhost:7783/mcp");
         c.Remove();
         var json = File.ReadAllText(filePath);
-        json.Should().NotContain("\"mendix-studio-pro\":");      // colon prevents matching the actions entry
-        json.Should().Contain("mendix-studio-pro-actions");
+        json.Should().NotContain("\"mendix-studio-pro\":");      // colon prevents matching mendix-studio-pro inside another value
+        json.Should().Contain("concord-mcp");
     }
 
     [Fact]
@@ -126,5 +126,43 @@ public class McpJsonConfiguratorTests : IDisposable
     {
         Action act = () => new McpJsonConfigurator(tmpDir).RemoveActions();
         act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void UpsertActions_MigratesLegacyEntryToConcordMcp()
+    {
+        // Pre-populate with the old (pre-v1.3.0) entry.
+        File.WriteAllText(filePath,
+            """{"mcpServers":{"mendix-studio-pro-actions":{"type":"http","url":"http://localhost:7783/mcp"}}}""");
+
+        new McpJsonConfigurator(tmpDir).UpsertActions("http://localhost:7783/mcp");
+
+        var json = File.ReadAllText(filePath);
+        json.Should().Contain("\"concord-mcp\"");
+        json.Should().NotContain("mendix-studio-pro-actions");
+
+        // Sanity: exactly one entry under our actions key.
+        var doc = System.Text.Json.JsonDocument.Parse(json);
+        var servers = doc.RootElement.GetProperty("mcpServers");
+        servers.TryGetProperty("concord-mcp", out _).Should().BeTrue();
+        servers.TryGetProperty("mendix-studio-pro-actions", out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RemoveActions_RemovesBothLegacyAndCurrentEntries()
+    {
+        // Pre-populate with both the legacy and current entries.
+        File.WriteAllText(filePath,
+            """{"mcpServers":{"mendix-studio-pro-actions":{"type":"http","url":"http://localhost:7783/mcp"},"concord-mcp":{"type":"http","url":"http://localhost:7783/mcp"}}}""");
+
+        new McpJsonConfigurator(tmpDir).RemoveActions();
+
+        // File may have been deleted (if it became empty); otherwise it must contain neither.
+        if (File.Exists(filePath))
+        {
+            var json = File.ReadAllText(filePath);
+            json.Should().NotContain("mendix-studio-pro-actions");
+            json.Should().NotContain("concord-mcp");
+        }
     }
 }
