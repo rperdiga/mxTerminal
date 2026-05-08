@@ -43,7 +43,9 @@ public class TerminalSettingsTests : IDisposable
         var shell = OperatingSystem.IsWindows() ? "bash.exe" : "/bin/bash";
         var original = new TerminalSettings(shell, new[] { "--login" }, 8192, 20000, "light",
             McpEnabled: true, McpPort: 7782, McpClients: new[] { "claude", "codex" },
-            ActionsServerEnabled: false, ActionsServerPort: 7783, RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true);
+            McpServerEnabled: false, McpServerPort: 7783,
+            StudioProActionsEnabled: true, MaiaIntegrationEnabled: true,
+            RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true);
         original.Save(tmpDir);
 
         var loaded = TerminalSettings.Load(tmpDir);
@@ -93,7 +95,9 @@ public class TerminalSettingsTests : IDisposable
     {
         var settings = new TerminalSettings("powershell.exe", Array.Empty<string>(), 4096, 10000, "dark",
             McpEnabled: false, McpPort: 7782, McpClients: Array.Empty<string>(),
-            ActionsServerEnabled: false, ActionsServerPort: 7783, RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true);
+            McpServerEnabled: false, McpServerPort: 7783,
+            StudioProActionsEnabled: true, MaiaIntegrationEnabled: true,
+            RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true);
         settings.Save(tmpDir);
         File.Exists(Path.Combine(tmpDir, "resources", "terminal-settings.json")).Should().BeTrue();
     }
@@ -102,8 +106,8 @@ public class TerminalSettingsTests : IDisposable
     public void Load_NoFile_ActionsServerDefaults()
     {
         var settings = TerminalSettings.Load(tmpDir);
-        settings.ActionsServerEnabled.Should().BeFalse();
-        settings.ActionsServerPort.Should().Be(7783);
+        settings.McpServerEnabled.Should().BeFalse();
+        settings.McpServerPort.Should().Be(7783);
         settings.RefreshFromDiskHotkey.Should().Be("F4");
     }
 
@@ -112,12 +116,14 @@ public class TerminalSettingsTests : IDisposable
     {
         var original = new TerminalSettings("bash.exe", new[] { "--login" }, 8192, 20000, "light",
             McpEnabled: true, McpPort: 7782, McpClients: new[] { "claude" },
-            ActionsServerEnabled: true, ActionsServerPort: 7799, RefreshFromDiskHotkey: "Ctrl+F5", RestoreTabsOnReopen: false);
+            McpServerEnabled: true, McpServerPort: 7799,
+            StudioProActionsEnabled: true, MaiaIntegrationEnabled: true,
+            RefreshFromDiskHotkey: "Ctrl+F5", RestoreTabsOnReopen: false);
         original.Save(tmpDir);
 
         var loaded = TerminalSettings.Load(tmpDir);
-        loaded.ActionsServerEnabled.Should().BeTrue();
-        loaded.ActionsServerPort.Should().Be(7799);
+        loaded.McpServerEnabled.Should().BeTrue();
+        loaded.McpServerPort.Should().Be(7799);
         loaded.RefreshFromDiskHotkey.Should().Be("Ctrl+F5");
     }
 
@@ -130,8 +136,38 @@ public class TerminalSettingsTests : IDisposable
             """{"shellPath":"cmd.exe","mcpEnabled":false,"mcpPort":7782}""");
 
         var loaded = TerminalSettings.Load(tmpDir);
-        loaded.ActionsServerEnabled.Should().BeFalse();
-        loaded.ActionsServerPort.Should().Be(7783);
+        loaded.McpServerEnabled.Should().BeFalse();
+        loaded.McpServerPort.Should().Be(7783);
         loaded.RefreshFromDiskHotkey.Should().Be("F4");
+    }
+
+    [Fact]
+    public void Load_OldSchemaWithActionsServerEnabled_MigratesToMcpServerEnabled()
+    {
+        var dir = Directory.CreateTempSubdirectory("concord-settings-").FullName;
+        try
+        {
+            var resDir = Path.Combine(dir, "resources");
+            Directory.CreateDirectory(resDir);
+            // Old schema: actionsServerEnabled present, McpServerEnabled absent.
+            File.WriteAllText(Path.Combine(resDir, "terminal-settings.json"),
+                """{"shellPath":"powershell.exe","actionsServerEnabled":true}""");
+
+            var s = TerminalSettings.Load(dir);
+
+            s.McpServerEnabled.Should().BeTrue();
+            s.StudioProActionsEnabled.Should().BeTrue();
+            s.MaiaIntegrationEnabled.Should().BeTrue();
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public void Defaults_HaveSubTogglesOnAndMasterOff()
+    {
+        var d = TerminalSettings.Defaults();
+        d.McpServerEnabled.Should().BeFalse();
+        d.StudioProActionsEnabled.Should().BeTrue();
+        d.MaiaIntegrationEnabled.Should().BeTrue();
     }
 }
