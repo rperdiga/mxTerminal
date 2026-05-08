@@ -12,8 +12,8 @@
     <LangVersion>preview</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
-    <Version>1.2.2</Version>
-    <InformationalVersion>1.2.2+mac-defocus-webview</InformationalVersion>
+    <Version>1.3.0</Version>
+    <InformationalVersion>1.3.0+concord-mcp-maia-bridge</InformationalVersion>
     <Authors>Ricardo Perdigao, Kelly Seale</Authors>
     <Company>Siemens Digital Industries Software — CoE Team</Company>
     <Product>Concord — Terminal for Studio Pro</Product>
