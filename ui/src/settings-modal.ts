@@ -29,12 +29,23 @@ interface SettingsPayload {
   mcpEnabled: boolean;
   mcpPort: number;
   mcpClients: string[];
-  actionsServerEnabled: boolean;
-  actionsServerPort: number;
+  mcpServerEnabled: boolean;
+  mcpServerPort: number;
+  studioProActionsEnabled: boolean;
+  maiaIntegrationEnabled: boolean;
+  platform: string;
   refreshFromDiskHotkey: string;
   restoreTabsOnReopen: boolean;
   about: AboutInfo;
   studioProMcp: StudioProMcpInfo | null;
+  skillsEnabled: boolean;
+  skillClients: string[];
+  bundledSkills: BundledSkill[];
+}
+
+interface BundledSkill {
+  name: string;
+  description: string;
 }
 
 interface StudioProMcpInfo {
@@ -96,9 +107,33 @@ export class SettingsModal {
   private actionsPortReadout = document.getElementById(
     "actions-port-readout",
   ) as HTMLDivElement;
+  private chkSpActions = document.getElementById(
+    "set-sp-actions-enabled",
+  ) as HTMLInputElement;
+  private chkMaia = document.getElementById(
+    "set-maia-enabled",
+  ) as HTMLInputElement;
+  private maiaPlatformNote = document.getElementById(
+    "maia-platform-note",
+  ) as HTMLDivElement;
   private inpRefreshHotkey = document.getElementById(
     "set-refresh-hotkey",
   ) as HTMLInputElement;
+  private chkSkillsEnabled = document.getElementById(
+    "set-skills-enabled",
+  ) as HTMLInputElement;
+  private chkSkillsClaude = document.getElementById(
+    "set-skills-claude",
+  ) as HTMLInputElement;
+  private chkSkillsCopilot = document.getElementById(
+    "set-skills-copilot",
+  ) as HTMLInputElement;
+  private chkSkillsCodex = document.getElementById(
+    "set-skills-codex",
+  ) as HTMLInputElement;
+  private bundledSkillsList = document.getElementById(
+    "bundled-skills-list",
+  ) as HTMLUListElement;
   private bannerClose = document.getElementById(
     "banner-close",
   ) as HTMLSpanElement;
@@ -124,6 +159,9 @@ export class SettingsModal {
     this.chkMcp.addEventListener("change", () => this.onMcpEnabledChange());
     this.chkActions.addEventListener("change", () =>
       this.onActionsEnabledChange(),
+    );
+    this.chkSkillsEnabled.addEventListener("change", () =>
+      this.onSkillsEnabledChange(),
     );
     this.bannerClose.addEventListener("click", () => hideNotice());
 
@@ -222,6 +260,21 @@ export class SettingsModal {
     // No port input to disable anymore — bridge auto-binds when enabled.
   }
 
+  /** When the master Skills toggle flips, sync the per-CLI checkboxes:
+   *  - turning OFF unchecks them and disables them
+   *  - turning ON re-enables them (leaves their last values alone) */
+  private onSkillsEnabledChange() {
+    const enabled = this.chkSkillsEnabled.checked;
+    if (!enabled) {
+      this.chkSkillsClaude.checked = false;
+      this.chkSkillsCopilot.checked = false;
+      this.chkSkillsCodex.checked = false;
+    }
+    this.chkSkillsClaude.disabled = !enabled;
+    this.chkSkillsCopilot.disabled = !enabled;
+    this.chkSkillsCodex.disabled = !enabled;
+  }
+
   open() {
     this.bridge.send("openSettings");
     this.modal.classList.add("visible");
@@ -257,11 +310,23 @@ export class SettingsModal {
     // Apply enabled/disabled to children based on master state.
     this.onMcpEnabledChange();
 
-    // Actions server fields
-    this.chkActions.checked = d.actionsServerEnabled;
-    this.renderActionsPortReadout(d.actionsServerEnabled, d.actionsServerPort);
+    // Concord MCP fields
+    this.chkActions.checked = d.mcpServerEnabled;
+    this.chkSpActions.checked = d.studioProActionsEnabled;
+    this.chkMaia.checked = d.maiaIntegrationEnabled;
+    this.renderActionsPortReadout(d.mcpServerEnabled, d.mcpServerPort);
+    this.applyMaiaPlatformGate(d.platform);
     this.inpRefreshHotkey.value = d.refreshFromDiskHotkey;
     this.onMcpEnabledChange(); // also flips actions enabled state
+
+    // Skills
+    this.chkSkillsEnabled.checked = !!d.skillsEnabled;
+    const skillClients = new Set((d.skillClients ?? []).map((c) => c.toLowerCase()));
+    this.chkSkillsClaude.checked  = skillClients.has("claude");
+    this.chkSkillsCopilot.checked = skillClients.has("copilot");
+    this.chkSkillsCodex.checked   = skillClients.has("codex");
+    this.onSkillsEnabledChange();
+    this.renderBundledSkillsList(d.bundledSkills ?? []);
 
     // About section
     this.populateAbout(d.about);
@@ -277,14 +342,25 @@ export class SettingsModal {
     if (!this.actionsPortReadout) return;
     if (!enabled) {
       this.actionsPortReadout.classList.remove("warn");
-      this.actionsPortReadout.innerHTML = `Action bridge is <strong>not running</strong>. Enable to start the local HTTP server that exposes Studio Pro UI actions to the CLIs above.`;
+      this.actionsPortReadout.innerHTML = `Concord MCP is <strong>not running</strong>. Enable to start the local HTTP server that exposes Concord tools to the CLIs above.`;
       return;
     }
     this.actionsPortReadout.classList.remove("warn");
     this.actionsPortReadout.innerHTML =
-      `Action bridge is listening on <code>localhost:${boundPort}</code>. ` +
+      `Concord MCP is listening on <code>localhost:${boundPort}</code>. ` +
       `Each Save writes that URL into the CLI configs. Default is 7783; ` +
       `if that's busy on your machine the bridge falls back to a free port automatically.`;
+  }
+
+  private applyMaiaPlatformGate(platform: string): void {
+    const isWindows = platform === "windows";
+    this.chkMaia.disabled = !isWindows;
+    if (this.maiaPlatformNote) {
+      this.maiaPlatformNote.classList.remove("warn");
+      this.maiaPlatformNote.innerHTML = isWindows
+        ? `Maia integration uses Studio Pro's WebView2 debug port. Maia panel must be visible at call time.`
+        : `Maia integration is <strong>Windows-only</strong> in this Concord release.`;
+    }
   }
 
   /** Read-only port readout under the MCP enable checkbox. Surfaces what
@@ -320,6 +396,26 @@ export class SettingsModal {
     set("about-version", a?.version ?? "—");
     set("about-log", a?.logPath ?? "—");
     set("about-settings", a?.settingsPath ?? "—");
+  }
+
+  private renderBundledSkillsList(skills: BundledSkill[]) {
+    this.bundledSkillsList.replaceChildren();
+    for (const s of skills) {
+      const li = document.createElement("li");
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "skill-name";
+      nameEl.textContent = s.name;
+      li.appendChild(nameEl);
+
+      if (s.description) {
+        const descEl = document.createElement("span");
+        descEl.className = "skill-desc";
+        descEl.textContent = s.description;
+        li.appendChild(descEl);
+      }
+      this.bundledSkillsList.appendChild(li);
+    }
   }
 
   private rebuildShellSelect(currentPath: string) {
@@ -369,6 +465,11 @@ export class SettingsModal {
     if (this.chkMcpCopilot.checked) mcpClients.push("copilot");
     if (this.chkMcpCodex.checked) mcpClients.push("codex");
 
+    const skillClients: string[] = [];
+    if (this.chkSkillsClaude.checked)  skillClients.push("claude");
+    if (this.chkSkillsCopilot.checked) skillClients.push("copilot");
+    if (this.chkSkillsCodex.checked)   skillClients.push("codex");
+
     this.bridge.send("saveSettings", {
       shellPath,
       args: args ? args.split(/\s+/) : [],
@@ -376,15 +477,14 @@ export class SettingsModal {
       xtermScrollbackLines: parseInt(this.inpScroll.value, 10) || 10000,
       theme,
       mcpEnabled: this.chkMcp.checked,
-      // mcpPort intentionally omitted — C# always uses Studio Pro's actual
-      // port (probed from Settings.sqlite). Saved field kept for back-compat
-      // but no longer user-settable.
       mcpClients,
-      actionsServerEnabled: this.chkActions.checked,
-      // actionsServerPort intentionally omitted — bridge auto-binds default
-      // 7783 with free-port fallback. Saved field kept for back-compat.
+      mcpServerEnabled: this.chkActions.checked,
+      studioProActionsEnabled: this.chkSpActions.checked,
+      maiaIntegrationEnabled: this.chkMaia.checked,
       refreshFromDiskHotkey: this.inpRefreshHotkey.value,
       restoreTabsOnReopen: this.chkRestoreTabs.checked,
+      skillsEnabled: this.chkSkillsEnabled.checked,
+      skillClients,
     });
 
     this.onThemeChanged(theme);

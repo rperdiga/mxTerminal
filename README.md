@@ -80,7 +80,7 @@ Left-rail navigator (the Microsoft Teams pattern, not Studio Pro's deep tree). S
 2. **Shell** — shell selector (auto-detected list), launch arguments.
 3. **Studio Pro MCP** — enable + per-CLI client list (Claude Code, Copilot CLI, Codex).
 4. **Action bridge** — enable + refresh-from-disk hotkey.
-5. **Skills** — placeholder. Coming feature: install prescriptive skill packs that Concord writes into your Mendix project tree to teach Studio Pro patterns it doesn't ship with.
+5. **Skills** — install bundled Mendix skill packs into the open project. Master toggle + per-CLI checkboxes (Claude Code → `.claude/skills/`, Copilot CLI → `.github/skills/`, Codex → `.codex/skills/`). Each Save refreshes the bundled folders so a Concord upgrade ships new skills automatically; user-authored skills sitting alongside in the same directory are left intact.
 6. **About** — version, log file path, settings file path, the CoE Team logo (hover to spin).
 
 Modal title: "Concord Terminal Settings". Footer credit on every section: "A Siemens CoE extension for Studio Pro."

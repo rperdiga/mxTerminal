@@ -1,4 +1,5 @@
 using System.ComponentModel.Composition;
+using Mendix.StudioPro.ExtensionsAPI.Services;
 using Mendix.StudioPro.ExtensionsAPI.UI.DockablePane;
 using Mendix.StudioPro.ExtensionsAPI.UI.Events;
 using Mendix.StudioPro.ExtensionsAPI.UI.Services;
@@ -33,10 +34,15 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
     // that no longer have valid method bodies.
     private TerminalPaneViewModel? activeViewModel;
 
+    private readonly IExtensionFileService extensionFileService;
+
     [ImportingConstructor]
-    public TerminalPaneExtension(ILocalRunConfigurationsService localRunConfigs)
+    public TerminalPaneExtension(
+        ILocalRunConfigurationsService localRunConfigs,
+        IExtensionFileService extensionFileService)
     {
         this.localRunConfigs = localRunConfigs;
+        this.extensionFileService = extensionFileService;
         manager = new TerminalSessionManager(new PtyNetFactory());
     }
 
@@ -60,6 +66,11 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         if (themeQuery != null)
             indexUri = new Uri($"{indexUri}?theme={themeQuery}");
         log?.Info($"InitWebView indexUri={indexUri} theme-from-probe={themeQuery ?? "<none>"}");
+        // Resolve once at Open(); the path is stable for the lifetime of the
+        // extension (it's the deployed extensions/Concord/skills/ folder).
+        var bundledSkillsRoot = extensionFileService.ResolvePath("skills");
+        log?.Info($"[skills] bundled-root={bundledSkillsRoot}");
+
         var vm = new TerminalPaneViewModel(
             title: "Concord",
             manager: manager,
@@ -72,7 +83,8 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 if (model is null) return null;
                 try { return localRunConfigs.GetActiveConfiguration(model)?.ApplicationRootUrl; }
                 catch (Exception ex) { log?.Warn($"GetActiveConfiguration threw: {ex.Message}"); return null; }
-            });
+            },
+            bundledSkillsRoot: bundledSkillsRoot);
         activeViewModel = vm;
         return vm;
     }
@@ -208,7 +220,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         var dir = (CurrentApp?.Root as IProject)?.DirectoryPath;
         if (dir is null) return;
         var settings = TerminalSettings.Load(dir);
-        if (!settings.ActionsServerEnabled) return;
+        if (!settings.McpServerEnabled) return;
 
         try
         {
@@ -249,14 +261,40 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                     var proj = CurrentApp?.Root as IProject;
                     return (proj?.DirectoryPath, proj?.Name);
                 });
-            // Fixed default — saved settings.ActionsServerPort is ignored.
+            // Build Maia plumbing only on Windows when the toggle is on. The router
+            // probe runs in the background; the router is functional even before it
+            // returns (early calls just see all-tiers-down and fail with a clear message).
+            Terminal.Maia.MaiaActions? maia = null;
+            bool maiaEnabled = OperatingSystem.IsWindows() && settings.MaiaIntegrationEnabled;
+            if (maiaEnabled)
+            {
+                var transports = new Terminal.Maia.IMaiaTransport[]
+                {
+                    new Terminal.Maia.CdpInjectedTransport(() => new Terminal.Maia.CdpClient()),
+                    new Terminal.Maia.CdpChatTransport(() => new Terminal.Maia.CdpClient()),
+                };
+                var router = new Terminal.Maia.MaiaRouter(transports);
+                _ = router.ProbeAllAsync(CancellationToken.None);  // fire-and-forget; safe
+                maia = new Terminal.Maia.MaiaActions(router);
+            }
+
+            // Fixed default — saved settings.McpServerPort is ignored.
             // The server falls back to a free OS-assigned port if 7783 is taken.
-            manager.StartActionServer(StudioProActionServer.DefaultPort, actions, log);
-            log.Info($"[actions] auto-started server on port {settings.ActionsServerPort}");
+            manager.StartActionServer(
+                StudioProActionServer.DefaultPort,
+                actions,
+                log,
+                maia,
+                studioProActionsEnabled: settings.StudioProActionsEnabled,
+                maiaIntegrationEnabled: maiaEnabled);
+            // Log the LIVE bound port — DefaultPort may have been busy and the
+            // server quietly fell back to an OS-assigned free port.
+            var boundPort = manager.CurrentActionServerPort ?? StudioProActionServer.DefaultPort;
+            log.Info($"[concord-mcp] auto-started server on port {boundPort} (maia={maiaEnabled})");
         }
         catch (Exception ex)
         {
-            log.Error("[actions] auto-start failed", ex);
+            log.Error("[concord-mcp] auto-start failed", ex);
         }
     }
 

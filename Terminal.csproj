@@ -12,8 +12,8 @@
     <LangVersion>preview</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
-    <Version>1.2.2</Version>
-    <InformationalVersion>1.2.2+mac-defocus-webview</InformationalVersion>
+    <Version>4.0.0</Version>
+    <InformationalVersion>4.0.0+bundled-skills</InformationalVersion>
     <Authors>Ricardo Perdigao, Kelly Seale</Authors>
     <Company>Siemens Digital Industries Software — CoE Team</Company>
     <Product>Concord — Terminal for Studio Pro</Product>
@@ -57,6 +57,11 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>
+    <Content Include="skills/**/*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <EmbeddedResource Include="src/Maia/maia_agent.js" LogicalName="Terminal.Maia.maia_agent.js" />
   </ItemGroup>
 
   <Target Name="BuildUi" BeforeTargets="BeforeBuild"

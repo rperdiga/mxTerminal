@@ -21,6 +21,8 @@ public sealed record ReplayDataPayload(string TabId, string DataB64);
 
 public sealed record ShellOptionPayload(string Name, string Path);
 
+public sealed record BundledSkillPayload(string Name, string Description);
+
 public sealed record SettingsPayload(
     string ShellPath,
     string[] Args,
@@ -31,12 +33,18 @@ public sealed record SettingsPayload(
     bool McpEnabled,
     int McpPort,
     string[] McpClients,
-    bool ActionsServerEnabled,
-    int ActionsServerPort,
+    bool McpServerEnabled,
+    int McpServerPort,
+    bool StudioProActionsEnabled,
+    bool MaiaIntegrationEnabled,
+    string Platform,
     string RefreshFromDiskHotkey,
     bool RestoreTabsOnReopen,
     AboutInfoPayload About,
-    StudioProMcpInfoPayload? StudioProMcp);
+    StudioProMcpInfoPayload? StudioProMcp,
+    bool SkillsEnabled,
+    string[] SkillClients,
+    IReadOnlyList<BundledSkillPayload> BundledSkills);
 
 /// <summary>
 /// Snapshot of Studio Pro's own MCP-server preference. JS uses this to warn

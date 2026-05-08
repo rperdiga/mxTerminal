@@ -11,18 +11,20 @@ public sealed record TerminalSettings(
     bool McpEnabled,
     int McpPort,
     string[] McpClients,
-    bool ActionsServerEnabled,
-    int ActionsServerPort,
+    bool McpServerEnabled,
+    int McpServerPort,
+    bool StudioProActionsEnabled,
+    bool MaiaIntegrationEnabled,
     string RefreshFromDiskHotkey,
-    bool RestoreTabsOnReopen)
+    bool RestoreTabsOnReopen,
+    bool SkillsEnabled,
+    string[] SkillClients)
 {
     public static TerminalSettings Defaults() => new(
         ShellPath: DefaultShellPath(),
         Args: Array.Empty<string>(),
         RingBufferKB: 4096,
         XtermScrollbackLines: 10000,
-        // "auto" follows Studio Pro's WebView host theme via the page's
-        // prefers-color-scheme query. Users can pin to "dark" or "light".
         Theme: "auto",
         McpEnabled: false,
         // Studio Pro's standard MCP server port (HKLM\SOFTWARE\Mendix...).
@@ -31,12 +33,14 @@ public sealed record TerminalSettings(
         // the fallback when the probe fails (e.g. locked DB).
         McpPort: 8100,
         McpClients: Array.Empty<string>(),
-        ActionsServerEnabled: false,
-        ActionsServerPort: 7783,
+        McpServerEnabled: false,
+        McpServerPort: 7783,
+        StudioProActionsEnabled: true,
+        MaiaIntegrationEnabled: true,
         RefreshFromDiskHotkey: "F4",
-        // Restore last session's tabs on Studio Pro restart. State persists
-        // to <project>/resources/terminal-state.json. See TerminalState.cs.
-        RestoreTabsOnReopen: true);
+        RestoreTabsOnReopen: true,
+        SkillsEnabled: false,
+        SkillClients: Array.Empty<string>());
 
     private const string FileName = "terminal-settings.json";
     private const string SubDir = "resources";
@@ -88,6 +92,13 @@ public sealed record TerminalSettings(
             var dto = JsonSerializer.Deserialize<Dto>(stream, Json);
             if (dto is null) return Defaults();
             var def = Defaults();
+            // Migration: old key "actionsServerEnabled" → new key "mcpServerEnabled".
+            // Old key "actionsServerPort" → new key "mcpServerPort". If both old
+            // and new are present, new wins. Sub-toggles default true so an old
+            // settings file that just had the master flag opts into both
+            // tool families on first load.
+            bool master = dto.McpServerEnabled ?? dto.ActionsServerEnabled ?? def.McpServerEnabled;
+            int port = dto.McpServerPort ?? dto.ActionsServerPort ?? def.McpServerPort;
             return new TerminalSettings(
                 ShellPath: MigrateShellPathForPlatform(dto.ShellPath ?? def.ShellPath),
                 Args: dto.Args ?? def.Args,
@@ -97,10 +108,14 @@ public sealed record TerminalSettings(
                 McpEnabled: dto.McpEnabled ?? def.McpEnabled,
                 McpPort: dto.McpPort ?? def.McpPort,
                 McpClients: dto.McpClients ?? def.McpClients,
-                ActionsServerEnabled: dto.ActionsServerEnabled ?? def.ActionsServerEnabled,
-                ActionsServerPort: dto.ActionsServerPort ?? def.ActionsServerPort,
+                McpServerEnabled: master,
+                McpServerPort: port,
+                StudioProActionsEnabled: dto.StudioProActionsEnabled ?? def.StudioProActionsEnabled,
+                MaiaIntegrationEnabled: dto.MaiaIntegrationEnabled ?? def.MaiaIntegrationEnabled,
                 RefreshFromDiskHotkey: dto.RefreshFromDiskHotkey ?? def.RefreshFromDiskHotkey,
-                RestoreTabsOnReopen: dto.RestoreTabsOnReopen ?? def.RestoreTabsOnReopen);
+                RestoreTabsOnReopen: dto.RestoreTabsOnReopen ?? def.RestoreTabsOnReopen,
+                SkillsEnabled: dto.SkillsEnabled ?? def.SkillsEnabled,
+                SkillClients: dto.SkillClients ?? def.SkillClients);
         }
         catch (JsonException)
         {
@@ -113,7 +128,17 @@ public sealed record TerminalSettings(
         var dir = System.IO.Path.Combine(projectDir, SubDir);
         Directory.CreateDirectory(dir);
         var path = System.IO.Path.Combine(dir, FileName);
-        var dto = new Dto(ShellPath, Args, RingBufferKB, XtermScrollbackLines, Theme, McpEnabled, McpPort, McpClients, ActionsServerEnabled, ActionsServerPort, RefreshFromDiskHotkey, RestoreTabsOnReopen);
+        var dto = new Dto(
+            ShellPath, Args, RingBufferKB, XtermScrollbackLines, Theme,
+            McpEnabled, McpPort, McpClients,
+            McpServerEnabled, McpServerPort,
+            StudioProActionsEnabled, MaiaIntegrationEnabled,
+            RefreshFromDiskHotkey, RestoreTabsOnReopen,
+            SkillsEnabled, SkillClients,
+            // Legacy keys: write them too so an older Concord build that reads
+            // this file keeps the master toggle in sync. Drop after 1.4.0.
+            ActionsServerEnabled: McpServerEnabled,
+            ActionsServerPort: McpServerPort);
         File.WriteAllText(path, JsonSerializer.Serialize(dto, Json));
     }
 
@@ -126,8 +151,14 @@ public sealed record TerminalSettings(
         bool? McpEnabled,
         int? McpPort,
         string[]? McpClients,
-        bool? ActionsServerEnabled,
-        int? ActionsServerPort,
+        bool? McpServerEnabled,
+        int? McpServerPort,
+        bool? StudioProActionsEnabled,
+        bool? MaiaIntegrationEnabled,
         string? RefreshFromDiskHotkey,
-        bool? RestoreTabsOnReopen);
+        bool? RestoreTabsOnReopen,
+        bool? SkillsEnabled,
+        string[]? SkillClients,
+        bool? ActionsServerEnabled = null,
+        int? ActionsServerPort = null);
 }

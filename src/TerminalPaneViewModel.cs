@@ -18,6 +18,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     private readonly Uri webIndexUri;
     private readonly Logger log;
     private readonly Func<string?> getApplicationRootUrl;
+    private readonly string bundledSkillsRoot;
 
     private IWebView? webView;
     /// <summary>
@@ -35,7 +36,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         Func<IModel?> getCurrentApp,
         Uri webIndexUri,
         Logger log,
-        Func<string?> getApplicationRootUrl)
+        Func<string?> getApplicationRootUrl,
+        string bundledSkillsRoot)
     {
         Title = title;
         this.manager = manager;
@@ -43,6 +45,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         this.webIndexUri = webIndexUri;
         this.log = log;
         this.getApplicationRootUrl = getApplicationRootUrl;
+        this.bundledSkillsRoot = bundledSkillsRoot;
     }
 
     public override void InitWebView(IWebView webView)
@@ -211,8 +214,10 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             // saved port only if the probe fails entirely (e.g. SQLite locked).
             var probed = ProbeStudioProMcp();
             var newPort = probed?.Port ?? p.McpPort ?? current.McpPort;
-            var newActionsEnabled  = p.ActionsServerEnabled ?? current.ActionsServerEnabled;
-            var newActionsPort     = p.ActionsServerPort    ?? current.ActionsServerPort;
+            var newMcpServerEnabled  = p.McpServerEnabled ?? current.McpServerEnabled;
+            var newMcpServerPort     = p.McpServerPort   ?? current.McpServerPort;
+            var newStudioProActions = p.StudioProActionsEnabled ?? current.StudioProActionsEnabled;
+            var newMaiaIntegration  = p.MaiaIntegrationEnabled ?? current.MaiaIntegrationEnabled;
             var newRefreshHotkey   = p.RefreshFromDiskHotkey ?? current.RefreshFromDiskHotkey;
             var newRestoreTabs     = p.RestoreTabsOnReopen ?? current.RestoreTabsOnReopen;
 
@@ -233,7 +238,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             }
 
             // 2. Manage our own action-server lifecycle.
-            if (newActionsEnabled)
+            if (newMcpServerEnabled)
             {
                 // Re-create on each save when port or hotkey changed; StartActionServer is idempotent on no-op.
                 var ui = new StudioProUiAutomation(
@@ -243,7 +248,31 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     log: log);
                 var probe = new RunStateProbe(getApplicationRootUrl);
                 var actions = new StudioProActions(probe, ui);
-                manager.StartActionServer(StudioProActionServer.DefaultPort, actions, log);
+
+                // Build Maia plumbing only on Windows when the toggle is on. The router
+                // probe runs in the background; the router is functional even before it
+                // returns (early calls just see all-tiers-down and fail with a clear message).
+                Terminal.Maia.MaiaActions? maia = null;
+                bool maiaEnabled = OperatingSystem.IsWindows() && newMaiaIntegration;
+                if (maiaEnabled)
+                {
+                    var transports = new Terminal.Maia.IMaiaTransport[]
+                    {
+                        new Terminal.Maia.CdpInjectedTransport(() => new Terminal.Maia.CdpClient()),
+                        new Terminal.Maia.CdpChatTransport(() => new Terminal.Maia.CdpClient()),
+                    };
+                    var router = new Terminal.Maia.MaiaRouter(transports);
+                    _ = router.ProbeAllAsync(CancellationToken.None);  // fire-and-forget; safe
+                    maia = new Terminal.Maia.MaiaActions(router);
+                }
+
+                manager.StartActionServer(
+                    StudioProActionServer.DefaultPort,
+                    actions,
+                    log,
+                    maia,
+                    studioProActionsEnabled: newStudioProActions,
+                    maiaIntegrationEnabled: maiaEnabled);
 
                 // Probe the LIVE bound port (auto-fallback may have moved off
                 // the default if the OS said 7783 was busy).
@@ -259,10 +288,13 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     return;
                 }
             }
-            else if (current.ActionsServerEnabled)
+            else if (current.McpServerEnabled)
             {
                 manager.StopActionServer();
             }
+
+            var newSkillsEnabled = p.SkillsEnabled ?? current.SkillsEnabled;
+            var newSkillClients  = p.SkillClients  ?? current.SkillClients;
 
             var updated = current with
             {
@@ -274,20 +306,25 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 McpEnabled = newEnabled,
                 McpPort = newPort,
                 McpClients = newClients,
-                ActionsServerEnabled = newActionsEnabled,
-                ActionsServerPort = newActionsPort,
+                McpServerEnabled = newMcpServerEnabled,
+                McpServerPort = newMcpServerPort,
+                StudioProActionsEnabled = newStudioProActions,
+                MaiaIntegrationEnabled = newMaiaIntegration,
                 RefreshFromDiskHotkey = newRefreshHotkey,
                 RestoreTabsOnReopen = newRestoreTabs,
+                SkillsEnabled = newSkillsEnabled,
+                SkillClients = newSkillClients,
             };
 
             // 3. Apply file changes BEFORE saving settings.
             var touchedPrimary = ApplyMcpConfig(dir, current, updated);
             var touchedActions = ApplyActionsMcpConfig(dir, current, updated);
+            var touchedSkills  = ApplySkillsConfig(dir, current, updated);
 
             updated.Save(dir);
             Post("settings", BuildSettingsPayload(updated));
 
-            var allTouched = touchedPrimary.Concat(touchedActions).ToArray();
+            var allTouched = touchedPrimary.Concat(touchedActions).Concat(touchedSkills).ToArray();
             if (allTouched.Length > 0)
             {
                 Post("mcpResult", new McpResultPayload(true, BuildResultMessage(updated, allTouched), allTouched));
@@ -314,10 +351,39 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         }
     }
 
-    private static string BuildResultMessage(TerminalSettings s, string[] touched) =>
-        (s.McpEnabled || s.ActionsServerEnabled)
-            ? $"MCP servers updated for {string.Join(", ", touched)}. Restarting open terminals…"
-            : $"MCP servers disabled (cleaned up: {string.Join(", ", touched)}). Restarting open terminals…";
+    /// <summary>
+    /// Build the user-facing banner shown after a Settings save. The
+    /// <paramref name="touched"/> array can contain MCP-family labels
+    /// (e.g. "Claude Code", "Codex actions") and skill-family labels
+    /// (e.g. "Claude Code skills"). We split on the " skills" marker so
+    /// each family gets the wording that matches its own enable/disable
+    /// state, then join with "; " when both are present.
+    /// </summary>
+    private static string BuildResultMessage(TerminalSettings s, string[] touched)
+    {
+        var mcpTouched   = touched.Where(t => !t.Contains(" skills")).ToArray();
+        var skillTouched = touched.Where(t =>  t.Contains(" skills")).ToArray();
+
+        var parts = new List<string>();
+
+        if (mcpTouched.Length > 0)
+        {
+            parts.Add(s.McpEnabled || s.McpServerEnabled
+                ? $"MCP servers updated for {string.Join(", ", mcpTouched)}"
+                : $"MCP servers disabled (cleaned up: {string.Join(", ", mcpTouched)})");
+        }
+
+        if (skillTouched.Length > 0)
+        {
+            parts.Add(s.SkillsEnabled
+                ? $"skill packs installed for {string.Join(", ", skillTouched)}"
+                : $"skill packs removed (cleaned up: {string.Join(", ", skillTouched)})");
+        }
+
+        return parts.Count == 0
+            ? "Settings saved. Restarting open terminals…"
+            : string.Join("; ", parts) + ". Restarting open terminals…";
+    }
 
     /// <summary>
     /// Apply the diff between previous and new MCP settings to the relevant
@@ -377,19 +443,19 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     private string[] ApplyActionsMcpConfig(string projectDir, TerminalSettings prev, TerminalSettings next)
     {
         var prevClients = new HashSet<string>(prev.McpClients, StringComparer.OrdinalIgnoreCase);
-        var nextClients = next.ActionsServerEnabled
+        var nextClients = next.McpServerEnabled
             ? new HashSet<string>(next.McpClients, StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var jsonNeeded = nextClients.Contains("claude") || nextClients.Contains("copilot");
-        var jsonHadIt  = prev.ActionsServerEnabled && (prevClients.Contains("claude") || prevClients.Contains("copilot"));
+        var jsonHadIt  = prev.McpServerEnabled && (prevClients.Contains("claude") || prevClients.Contains("copilot"));
         var tomlNeeded = nextClients.Contains("codex");
-        var tomlHadIt  = prev.ActionsServerEnabled && prevClients.Contains("codex");
+        var tomlHadIt  = prev.McpServerEnabled && prevClients.Contains("codex");
 
         // Use the LIVE bound port (manager surfaces it after Start). The
         // saved value is back-compat fallback only — bridge auto-binds at
         // 7783 with free-port fallback; user can't choose anymore.
-        var port = manager.CurrentActionServerPort ?? next.ActionsServerPort;
+        var port = manager.CurrentActionServerPort ?? next.McpServerPort;
         var url = $"http://localhost:{port}/mcp";
         var json = new McpJsonConfigurator(projectDir);
         var toml = new McpTomlConfigurator();
@@ -410,6 +476,53 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             else if (tomlHadIt) { toml.RemoveActions(); log.Info($"[mcp-config-toml] removed {McpTomlConfigurator.ActionsServerName}"); touched.Add("Codex actions (removed)"); }
         }
         catch (Exception ex) { log.Error("[mcp-config-toml] actions write failed", ex); }
+
+        return touched.ToArray();
+    }
+
+    /// <summary>
+    /// Diff the skills toggle and per-CLI selection. For each newly-selected
+    /// CLI: install bundled skills into its native subdir. For each newly-
+    /// deselected CLI (or any CLI when SkillsEnabled flips off): remove only
+    /// Concord-bundled skill folders, leaving user-authored siblings intact.
+    /// Returns labels for the result banner.
+    /// </summary>
+    private string[] ApplySkillsConfig(string projectDir, TerminalSettings prev, TerminalSettings next)
+    {
+        var prevClients = prev.SkillsEnabled
+            ? new HashSet<string>(prev.SkillClients, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var nextClients = next.SkillsEnabled
+            ? new HashSet<string>(next.SkillClients, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var installer = new SkillInstaller(projectDir, bundledSkillsRoot, log);
+        var touched = new List<string>();
+
+        var perCli = new (string Key, string Label, string Subdir)[]
+        {
+            ("claude",  "Claude Code skills",       Path.Combine(".claude", "skills")),
+            ("copilot", "Copilot CLI skills",       Path.Combine(".github", "skills")),
+            ("codex",   "Codex skills",             Path.Combine(".codex",  "skills")),
+        };
+
+        log.Info($"[skills] diff prev={{{string.Join(",", prevClients)}}} next={{{string.Join(",", nextClients)}}} bundled-root={bundledSkillsRoot}");
+
+        foreach (var (key, label, subdir) in perCli)
+        {
+            var was = prevClients.Contains(key);
+            var now = nextClients.Contains(key);
+            try
+            {
+                if (now && !was)       { installer.InstallAll(subdir); touched.Add(label); }
+                else if (now && was)   { installer.InstallAll(subdir); /* refresh on every save */ }
+                else if (!now && was)  { installer.RemoveAll(subdir);  touched.Add(label + " (removed)"); }
+            }
+            catch (Exception ex)
+            {
+                log.Error($"[skills] {label} apply failed", ex);
+            }
+        }
 
         return touched.ToArray();
     }
@@ -511,6 +624,11 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         var settingsPath = dir != null
             ? System.IO.Path.Combine(dir, "resources", "terminal-settings.json")
             : null;
+
+        var bundled = BundledSkillReader.Enumerate(bundledSkillsRoot)
+            .Select(b => new BundledSkillPayload(b.Name, b.Description))
+            .ToList();
+
         return new SettingsPayload(
             ShellPath: s.ShellPath,
             Args: s.Args,
@@ -523,17 +641,23 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             McpEnabled: s.McpEnabled,
             McpPort: s.McpPort,
             McpClients: s.McpClients,
-            ActionsServerEnabled: s.ActionsServerEnabled,
+            McpServerEnabled: s.McpServerEnabled,
             // Report the LIVE bound port when the bridge is running so the JS
             // readout shows the truth (auto-fallback may have moved off 7783).
-            ActionsServerPort: manager.CurrentActionServerPort ?? s.ActionsServerPort,
+            McpServerPort: manager.CurrentActionServerPort ?? s.McpServerPort,
+            StudioProActionsEnabled: s.StudioProActionsEnabled,
+            MaiaIntegrationEnabled: s.MaiaIntegrationEnabled,
+            Platform: OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsMacOS() ? "darwin" : "linux",
             RefreshFromDiskHotkey: s.RefreshFromDiskHotkey,
             RestoreTabsOnReopen: s.RestoreTabsOnReopen,
             About: new AboutInfoPayload(
                 Version: ResolveBuildVersion(),
                 LogPath: log?.Path,
                 SettingsPath: settingsPath),
-            StudioProMcp: ProbeStudioProMcp());
+            StudioProMcp: ProbeStudioProMcp(),
+            SkillsEnabled: s.SkillsEnabled,
+            SkillClients: s.SkillClients,
+            BundledSkills: bundled);
     }
 
     /// <summary>

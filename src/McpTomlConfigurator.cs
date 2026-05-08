@@ -16,7 +16,13 @@ namespace Terminal;
 public sealed class McpTomlConfigurator
 {
     public const string ServerName        = "mendix-studio-pro";
-    public const string ActionsServerName = "mendix-studio-pro-actions";
+    public const string ActionsServerName = "concord-mcp";
+
+    /// <summary>
+    /// Pre-v1.3.0 section name. <see cref="UpsertActions"/> and <see cref="RemoveActions"/>
+    /// transparently strip this on every save so user configs migrate without manual edits.
+    /// </summary>
+    private const string LegacyActionsServerName = "mendix-studio-pro-actions";
 
     private static string HeaderFor(string serverName) => $"[mcp_servers.{serverName}]";
 
@@ -34,10 +40,20 @@ public sealed class McpTomlConfigurator
 
     public string FilePath => filePath;
 
-    public void Upsert(string url)        => UpsertNamed(ServerName, url);
-    public void Remove()                  => RemoveNamed(ServerName);
-    public void UpsertActions(string url) => UpsertNamed(ActionsServerName, url);
-    public void RemoveActions()           => RemoveNamed(ActionsServerName);
+    public void Upsert(string url) => UpsertNamed(ServerName, url);
+    public void Remove()           => RemoveNamed(ServerName);
+
+    public void UpsertActions(string url)
+    {
+        RemoveNamed(LegacyActionsServerName);
+        UpsertNamed(ActionsServerName, url);
+    }
+
+    public void RemoveActions()
+    {
+        RemoveNamed(LegacyActionsServerName);
+        RemoveNamed(ActionsServerName);
+    }
 
     private void UpsertNamed(string serverName, string url)
     {
@@ -96,7 +112,8 @@ public sealed class McpTomlConfigurator
         for (int i = 0; i < lines.Count; i++)
         {
             // Use exact-line match (after trimming leading whitespace), not StartsWith,
-            // so [mcp_servers.mendix-studio-pro-actions] doesn't match the primary header.
+            // so [mcp_servers.concord-mcp] doesn't match the primary header
+            // (and also so the primary header doesn't match anything else).
             if (lines[i].TrimStart() == sectionHeader)
             {
                 start = i;

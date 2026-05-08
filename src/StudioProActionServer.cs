@@ -23,8 +23,8 @@ namespace Terminal;
 /// </summary>
 public sealed class StudioProActionServer : IDisposable
 {
-    public const string ServerName = "mendix-studio-pro-actions";
-    public const string ServerVersion = "1.0.0";
+    public const string ServerName = "concord-mcp";
+    public const string ServerVersion = "1.3.0";
     /// <summary>
     /// Fixed default port for the Action bridge. The user has no setting for
     /// this — the bridge auto-binds 7783 (chosen because it's the original
@@ -36,6 +36,9 @@ public sealed class StudioProActionServer : IDisposable
     public const int DefaultPort = 7783;
 
     private readonly StudioProActions actions;
+    private readonly Maia.MaiaActions? maia;
+    private readonly bool studioProActionsEnabled;
+    private readonly bool maiaIntegrationEnabled;
     private readonly Logger? log;
     private TcpListener? listener;
     private int boundPort;
@@ -43,9 +46,18 @@ public sealed class StudioProActionServer : IDisposable
     private Task? loop;
     private readonly int requestedPort;
 
-    public StudioProActionServer(StudioProActions actions, int port, Logger? log = null)
+    public StudioProActionServer(
+        StudioProActions actions,
+        int port,
+        Logger? log = null,
+        Maia.MaiaActions? maia = null,
+        bool studioProActionsEnabled = true,
+        bool maiaIntegrationEnabled = false)
     {
         this.actions = actions;
+        this.maia = maia;
+        this.studioProActionsEnabled = studioProActionsEnabled;
+        this.maiaIntegrationEnabled = maiaIntegrationEnabled;
         this.log = log;
         this.requestedPort = port;
     }
@@ -328,55 +340,128 @@ public sealed class StudioProActionServer : IDisposable
         ["serverInfo"] = new JsonObject { ["name"] = ServerName, ["version"] = ServerVersion },
     };
 
-    private static JsonNode HandleToolsList() => new JsonObject
+    private JsonNode HandleToolsList()
     {
-        ["tools"] = new JsonArray
+        var arr = new JsonArray();
+        if (studioProActionsEnabled)
         {
-            ToolDef("run_app",
-                "Start the local Mendix runtime for the currently open Studio Pro app. If already running, returns 'already_running' without disturbing it."),
-            ToolDef("stop_app",
-                "Stop the local Mendix runtime. No-op if it isn't running."),
-            ToolDef("refresh_project",
-                "Reload the project model from disk. Use after editing model files (e.g. microflow XML) outside Studio Pro to make the IDE pick up the changes."),
-            ToolDef("save_all",
-                "Best-effort save: posts Ctrl+S to Studio Pro's main window. Works when the active document tab has focus; if the user's focus is elsewhere (e.g. inside this terminal), Studio Pro routes the keystroke to the focused child instead and the save may not fire. For guaranteed save, ask the user to click the document tab once first."),
-            ToolDef("get_active_run_configuration",
-                "Read-only: returns the currently selected local run configuration (id, name, applicationRootUrl). Useful for confirming which environment a run/stop will affect."),
-            ToolDef("get_app_status",
-                "Composite read-only snapshot for orienting: project path/name, run state (running|stopped|unknown), running URL if any, active run configuration. Call this first when starting work in a fresh Claude Code session."),
+            arr.Add(ToolDef("run_app",
+                "Start the local Mendix runtime for the currently open Studio Pro app. If already running, returns 'already_running' without disturbing it."));
+            arr.Add(ToolDef("stop_app",
+                "Stop the local Mendix runtime. No-op if it isn't running."));
+            arr.Add(ToolDef("refresh_project",
+                "Reload the project model from disk. Use after editing model files (e.g. microflow XML) outside Studio Pro to make the IDE pick up the changes."));
+            arr.Add(ToolDef("save_all",
+                "Best-effort save: posts Ctrl+S to Studio Pro's main window. Works when the active document tab has focus; if the user's focus is elsewhere (e.g. inside this terminal), Studio Pro routes the keystroke to the focused child instead and the save may not fire. For guaranteed save, ask the user to click the document tab once first."));
+            arr.Add(ToolDef("get_active_run_configuration",
+                "Read-only: returns the currently selected local run configuration (id, name, applicationRootUrl). Useful for confirming which environment a run/stop will affect."));
+            arr.Add(ToolDef("get_app_status",
+                "Composite read-only snapshot for orienting: project path/name, run state (running|stopped|unknown), running URL if any, active run configuration. Call this first when starting work in a fresh Claude Code session."));
         }
-    };
+        if (maiaIntegrationEnabled && maia is not null)
+        {
+            arr.Add(ToolDef("maia__send",
+                "Submit a prompt to Maia (Studio Pro's AI assistant). Non-blocking — returns a handle you can poll with maia__status or block on with maia__wait. Optional 'sentinel' for caller-controlled correlation; otherwise auto-generated.",
+                new JsonObject { ["prompt"] = SchemaString(), ["sentinel"] = SchemaString() },
+                required: new[] { "prompt" }));
+            arr.Add(ToolDef("maia__status",
+                "Non-blocking peek at an in-flight Maia prompt by handle. Returns done/response/streaming/elapsed_sec.",
+                new JsonObject { ["handle"] = SchemaString() },
+                required: new[] { "handle" }));
+            arr.Add(ToolDef("maia__wait",
+                "Block until Maia is done with the given handle, or until timeout_sec elapses. Default timeout 60s.",
+                new JsonObject { ["handle"] = SchemaString(), ["timeout_sec"] = SchemaNumber() },
+                required: new[] { "handle" }));
+            arr.Add(ToolDef("maia__ask",
+                "Send a prompt and block for Maia's response. Convenience for one-shot queries; equivalent to maia__send + maia__wait.",
+                new JsonObject { ["prompt"] = SchemaString(), ["timeout_sec"] = SchemaNumber() },
+                required: new[] { "prompt" }));
+            arr.Add(ToolDef("maia__reset",
+                "Clear the in-WebView injected agent and bridge-side ticket state. Use after Maia panel reloads or chat clears."));
+            arr.Add(ToolDef("maia__force_tier",
+                "Manual override: force a specific transport (e.g. 'cdp_chat'). For testing tier-N behavior. Mutates active state until next reprobe.",
+                new JsonObject { ["name"] = SchemaString() },
+                required: new[] { "name" }));
+        }
+        return new JsonObject { ["tools"] = arr };
+    }
 
-    private static JsonObject ToolDef(string name, string description) => new()
+    private static JsonObject SchemaString() => new() { ["type"] = "string" };
+    private static JsonObject SchemaNumber() => new() { ["type"] = "number" };
+
+    private static JsonObject ToolDef(string name, string description, JsonObject? properties = null, string[]? required = null)
     {
-        ["name"] = name,
-        ["description"] = description,
-        ["inputSchema"] = new JsonObject
+        var props = properties ?? new JsonObject();
+        var req = new JsonArray();
+        foreach (var r in required ?? Array.Empty<string>()) req.Add(r);
+        return new JsonObject
         {
-            ["type"] = "object",
-            ["properties"] = new JsonObject(),
-            ["required"] = new JsonArray(),
-        }
-    };
+            ["name"] = name,
+            ["description"] = description,
+            ["inputSchema"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = props,
+                ["required"] = req,
+            }
+        };
+    }
 
     private async Task<JsonNode> HandleToolsCallAsync(JsonObject? pars)
     {
         var name = pars?["name"]?.GetValue<string>();
-        ActionResult result = name switch
-        {
-            "run_app"                       => await actions.RunAppAsync(),
-            "stop_app"                      => await actions.StopAppAsync(),
-            "refresh_project"               => await actions.RefreshProjectAsync(),
-            "save_all"                      => await actions.SaveAllAsync(),
-            "get_active_run_configuration"  => await actions.GetActiveRunConfigurationAsync(),
-            "get_app_status"                => await actions.GetAppStatusAsync(),
-            _ => null!,
-        };
+        var args = pars?["arguments"] as JsonObject ?? new JsonObject();
+        ActionResult? result = null;
 
+        if (studioProActionsEnabled)
+        {
+            result = name switch
+            {
+                "run_app"                       => await actions.RunAppAsync(),
+                "stop_app"                      => await actions.StopAppAsync(),
+                "refresh_project"               => await actions.RefreshProjectAsync(),
+                "save_all"                      => await actions.SaveAllAsync(),
+                "get_active_run_configuration"  => await actions.GetActiveRunConfigurationAsync(),
+                "get_app_status"                => await actions.GetAppStatusAsync(),
+                _ => null,
+            };
+        }
+        if (result is null && maiaIntegrationEnabled && maia is not null)
+        {
+            result = name switch
+            {
+                "maia__send"          => await maia.SendAsync(
+                                            args["prompt"]?.GetValue<string>() ?? "",
+                                            args["sentinel"]?.GetValue<string>(),
+                                            CancellationToken.None),
+                "maia__status"        => await maia.StatusAsync(
+                                            args["handle"]?.GetValue<string>() ?? "",
+                                            CancellationToken.None),
+                "maia__wait"          => await maia.WaitAsync(
+                                            args["handle"]?.GetValue<string>() ?? "",
+                                            args["timeout_sec"]?.GetValue<double>() ?? 60.0,
+                                            CancellationToken.None),
+                "maia__ask"           => await maia.AskAsync(
+                                            args["prompt"]?.GetValue<string>() ?? "",
+                                            args["timeout_sec"]?.GetValue<double>() ?? 60.0,
+                                            CancellationToken.None),
+                "maia__reset"         => await maia.ResetAsync(CancellationToken.None),
+                "maia__force_tier"    => await maia.ForceTierAsync(
+                                            args["name"]?.GetValue<string>() ?? "",
+                                            CancellationToken.None),
+                _ => null,
+            };
+        }
         if (result is null)
             return BuildErrorBody(code: -32601, message: $"Unknown tool '{name}'");
 
-        // MCP tools/call result format: result.content = [ { type: "text", text: "<json>" } ]
+        // Log failed tool calls. ActionResult.Fail responses don't throw, so
+        // they bypass the JSON-RPC catch above — without this line, Maia/CDP
+        // failures return clean errors to the client but leave nothing in the
+        // Concord log to diagnose against.
+        if (result.Error != null)
+            log?.Warn($"[concord-mcp] tool '{name}' failed: {result.Error}");
+
         var payload = JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {
             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,

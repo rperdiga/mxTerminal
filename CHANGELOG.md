@@ -1,5 +1,30 @@
 # Changelog
 
+## 4.0.0 — 2026-05-08
+
+### Added
+
+- **Bundled Mendix skill packs.** The Skills section of the settings modal is now a working installer: enable per-CLI to write the Concord-bundled skills into `<project>/.claude/skills/`, `<project>/.github/skills/`, and/or `<project>/.codex/skills/`. Disable a CLI to remove only the Concord-bundled folders — user-authored siblings under the same directory are left intact. Each Save refreshes the bundled content so a Concord upgrade ships new or updated skills automatically.
+- **7 Mendix skills** ship in this release: `mendix-microflow-common`, `mendix-microflow-syntax`, `mendix-microflow-update`, `mendix-page-gen`, `mendix-view-entities`, `mendix-workflow-common`, `mendix-workflow-update`.
+
+### Notes
+
+- Skills are installed project-local only in this release (no `~/.claude/skills/` writes).
+- If you have hand-edited a Concord-bundled skill folder, your edits will be overwritten on the next Save. Add custom skills as siblings (e.g. `<project>/.claude/skills/my-thing/`) to keep them safe across upgrades.
+
+## 1.3.0 — 2026-05-08
+
+### Breaking
+- MCP server wire identity renamed from `mendix-studio-pro-actions` to `concord-mcp`. Update any MCP client config (Claude Code `.mcp.json`, Codex `~/.codex/config.toml`, Copilot CLI) that references the old name.
+
+### Added
+- **Maia integration** as a first-class tool family inside Concord MCP, embedded in C# (no Python, no subprocess). Tools: `maia__send`, `maia__status`, `maia__wait`, `maia__ask`, `maia__reset`, `maia__force_tier`. Two-tier transport: injected JS agent (Tier 1) + DOM-scrape fallback (Tier 2). Windows only.
+- Settings sidebar item renamed: `Action bridge` → `Concord MCP`. Two sub-toggles: `Studio Pro UI actions` and `Maia integration`. Maia disabled-with-tooltip on macOS.
+- New settings keys: `mcpServerEnabled`, `mcpServerPort`, `studioProActionsEnabled`, `maiaIntegrationEnabled`. Old keys (`actionsServerEnabled`, `actionsServerPort`) read for one minor-version migration.
+
+### Note
+- Maia integration is internal CoE tooling. The CDP-driven approach (Studio Pro's WebView2 `--remote-debugging-port`) is not Mendix-blessed and may break if Mendix changes that surface. The transport interface is the swap-out seam for future Mendix-native MCP-server-as-tool support.
+
 ## 1.2.2 — 2026-05-07
 
 ### Action bridge keystrokes now reach Studio Pro on Mac
