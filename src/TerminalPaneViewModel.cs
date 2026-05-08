@@ -211,8 +211,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             // saved port only if the probe fails entirely (e.g. SQLite locked).
             var probed = ProbeStudioProMcp();
             var newPort = probed?.Port ?? p.McpPort ?? current.McpPort;
-            var newActionsEnabled  = p.McpServerEnabled ?? current.McpServerEnabled;
-            var newActionsPort     = p.McpServerPort   ?? current.McpServerPort;
+            var newMcpServerEnabled  = p.McpServerEnabled ?? current.McpServerEnabled;
+            var newMcpServerPort     = p.McpServerPort   ?? current.McpServerPort;
             var newStudioProActions = p.StudioProActionsEnabled ?? current.StudioProActionsEnabled;
             var newMaiaIntegration  = p.MaiaIntegrationEnabled ?? current.MaiaIntegrationEnabled;
             var newRefreshHotkey   = p.RefreshFromDiskHotkey ?? current.RefreshFromDiskHotkey;
@@ -235,7 +235,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             }
 
             // 2. Manage our own action-server lifecycle.
-            if (newActionsEnabled)
+            if (newMcpServerEnabled)
             {
                 // Re-create on each save when port or hotkey changed; StartActionServer is idempotent on no-op.
                 var ui = new StudioProUiAutomation(
@@ -276,8 +276,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 McpEnabled = newEnabled,
                 McpPort = newPort,
                 McpClients = newClients,
-                McpServerEnabled = newActionsEnabled,
-                McpServerPort = newActionsPort,
+                McpServerEnabled = newMcpServerEnabled,
+                McpServerPort = newMcpServerPort,
                 StudioProActionsEnabled = newStudioProActions,
                 MaiaIntegrationEnabled = newMaiaIntegration,
                 RefreshFromDiskHotkey = newRefreshHotkey,
