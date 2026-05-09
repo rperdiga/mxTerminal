@@ -2,13 +2,13 @@
 
 > *"The terminal Studio Pro was missing."*
 
-**Current version: 1.2.0** ([CHANGELOG](./CHANGELOG.md)) — **macOS support**. Concord now runs on both Windows and Mac: hand-rolled POSIX PTY backend (`openpty` + `posix_spawnp`) that mirrors the ConPTY surface, WKWebView bridge for Studio Pro on Mac, Settings.sqlite probe under `~/Library/Application Support/Mendix/`, Homebrew-aware shell init, and platform-aware shell-path migration when projects move between OS hosts.
+**Current version: 4.0.0** ([CHANGELOG](./CHANGELOG.md)) — **Bundled Mendix skill packs**. Concord ships 7 prescriptive Mendix skill packs that install into your project's `.claude/skills/`, `.github/skills/`, or `.codex/skills/` per the CLIs you enable. Combined with the renamed Concord MCP server (Studio Pro UI actions + Maia integration housed under one HTTP endpoint), the CLI agent in your terminal is ready to drive Studio Pro from day one.
 
 Concord is a Mendix Studio Pro 11.10+ extension (Windows and macOS) that embeds a tabbed terminal as a dockable pane. The pane is the workspace where you run **Claude Code**, **Codex**, or **GitHub Copilot CLI** — and they talk directly to:
 
 - **Studio Pro's built-in MCP server** (model-tier — entities, microflows, pages, OQL, file ops on `/themes` + `/jsactions`, knowledge)
-- **Maia** (Studio Pro's in-IDE AI assistant)
-- **Concord's own Action Bridge** (UI-tier — run / stop / refresh / save / project status)
+- **Concord MCP** — Concord's own in-process MCP server with two tool families: Studio Pro UI actions (run / stop / refresh / save / status) and Maia integration (programmatic access to Studio Pro's in-IDE AI assistant)
+- **Bundled Mendix skill packs** — prescriptive playbooks installed into the project so the CLIs know how to drive the two MCP servers above
 
 The result: developer + Maia + CLI agent collaborate on Mendix apps from one workspace, with Concord wiring the integration plumbing automatically.
 
@@ -55,9 +55,11 @@ It also covers migrating from the old "Terminal" extension (clean up the orphan 
 - **Settings → Studio Pro MCP** — enable to write `.mcp.json` (Claude Code, Copilot CLI) and `~/.codex/config.toml` (Codex) entries that point each CLI at Studio Pro's MCP server.
 - The URL written into each config tracks Studio Pro's actual MCP port (probed live from `Settings.sqlite`). If you change the port in Studio Pro's preferences, Concord picks it up on the next Save in the modal — no port to keep in sync manually.
 
-### Action Bridge — what Studio Pro's MCP can't do
+### Concord MCP — what Studio Pro's MCP can't do
 
-A second MCP server inside Concord (port 7783 by default; auto-fallback to a free port if 7783 is taken). Exposes UI-tier operations to the CLIs above as MCP tools:
+A second MCP server inside Concord (server name `concord-mcp`, port 7783 by default; auto-fallback to a free port if 7783 is taken). Two tool families share the endpoint:
+
+**Studio Pro UI actions** — UI-tier operations the CLI can drive without leaving the terminal:
 
 | Tool | Effect | Mechanism |
 |---|---|---|
@@ -68,9 +70,24 @@ A second MCP server inside Concord (port 7783 by default; auto-fallback to a fre
 | `get_active_run_configuration` | Return the active local run config (id, name, applicationRootUrl) | `ILocalRunConfigurationsService` |
 | `get_app_status` | Composite snapshot — project path/name + run state + active config | Composite |
 
-The first 4 use Win32 `PostMessage` to Studio Pro's main window. The last 2 read Mendix services directly. Enable the bridge in **Settings → Action bridge**.
+The first 4 use Win32 `PostMessage` to Studio Pro's main window. The last 2 read Mendix services directly.
 
-> **macOS:** the four hotkey-based tools work on Mac via `osascript` driving System Events to keystroke Studio Pro (identified by Unix PID, so the `.app` display name doesn't matter). One-time setup: macOS prompts for Accessibility permission the first time the bridge runs — open **System Settings → Privacy & Security → Accessibility** and enable Studio Pro. Until you grant it, the bridge fails with a clear "Accessibility permission not granted" message that Claude can relay to you. The two service-based tools (`get_active_run_configuration`, `get_app_status`) work on both platforms with no permissions needed.
+**Maia integration** (Windows only) — programmatic access to Studio Pro's in-IDE AI assistant via Chrome DevTools Protocol against Studio Pro's WebView2 panel:
+
+| Tool | Effect |
+|---|---|
+| `maia__send` | Push a prompt into Maia's chat input |
+| `maia__status` | Read Maia's current state (idle / thinking / responding) |
+| `maia__wait` | Block until Maia finishes responding |
+| `maia__ask` | Send + wait + return the response in one call |
+| `maia__reset` | Clear Maia's conversation |
+| `maia__force_tier` | Override the transport tier (debug aid) |
+
+Two-tier transport: injected JS agent (Tier 1, fast) with DOM-scrape fallback (Tier 2). Both use Studio Pro's `--remote-debugging-port`; the Maia panel must be visible while these tools are in use.
+
+Enable both families in **Settings → Concord MCP** (sub-toggles for each).
+
+> **macOS:** the four hotkey-based UI-action tools work on Mac via `osascript` driving System Events to keystroke Studio Pro (identified by Unix PID, so the `.app` display name doesn't matter). One-time setup: macOS prompts for Accessibility permission the first time Concord MCP runs — open **System Settings → Privacy & Security → Accessibility** and enable Studio Pro. Until you grant it, the calls fail with a clear "Accessibility permission not granted" message that Claude can relay to you. The two service-based tools (`get_active_run_configuration`, `get_app_status`) work on both platforms with no permissions needed. **Maia integration is Windows-only in this release**; the toggle appears disabled on Mac.
 
 ### Settings panel
 
@@ -79,7 +96,7 @@ Left-rail navigator (the Microsoft Teams pattern, not Studio Pro's deep tree). S
 1. **General** — tab persistence, ring-buffer KB, scrollback lines.
 2. **Shell** — shell selector (auto-detected list), launch arguments.
 3. **Studio Pro MCP** — enable + per-CLI client list (Claude Code, Copilot CLI, Codex).
-4. **Action bridge** — enable + refresh-from-disk hotkey.
+4. **Concord MCP** — enable Concord's in-process MCP server. Two sub-toggles: **Studio Pro UI actions** (run / stop / refresh / save / status tool family) and **Maia integration** (Maia tool family, Windows-only — disabled on macOS). Refresh-from-disk hotkey is configurable here.
 5. **Skills** — install bundled Mendix skill packs into the open project. Master toggle + per-CLI checkboxes (Claude Code → `.claude/skills/`, Copilot CLI → `.github/skills/`, Codex → `.codex/skills/`). Each Save refreshes the bundled folders so a Concord upgrade ships new skills automatically; user-authored skills sitting alongside in the same directory are left intact.
 6. **About** — version, log file path, settings file path, the CoE Team logo (hover to spin).
 
@@ -133,12 +150,15 @@ The csproj's `BuildUi` target runs `npm install` (first build only) + `node esbu
 ## Project layout
 
 ```
-src/                    C# extension code (MEF, action server, theme probe)
+src/                    C# extension code (MEF, Concord MCP server, theme probe)
 src/PtySession.cs       ConPTY backend — Windows (kernel32!CreatePseudoConsole)
 src/UnixPtySession.cs   POSIX PTY backend — macOS (openpty + posix_spawnp via libSystem)
+src/Maia/               Maia bridge — CDP transports + tool registrations
+src/SkillInstaller.cs   Per-CLI bundled-skill install/uninstall (.claude/.github/.codex)
 ui/src/                 TypeScript UI (xterm.js, settings modal, bridge, icons, logo)
 ui/src/bridge.ts        WebView2 (Windows) and WKWebView (Mac) transport
 ui/index.html           Single-page UI bundled into the extension
+skills/                 7 bundled Mendix skill packs (microflow, page, view-entity, workflow patterns)
 tests/                  xunit test suite
 docs/superpowers/       Original design docs (specs + plans)
 manifest.json           Mendix extension manifest — points at Concord.dll

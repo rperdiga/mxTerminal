@@ -20,8 +20,6 @@ public class TerminalSettingsTests : IDisposable
     public void Load_NoFile_ReturnsDefaults()
     {
         var settings = TerminalSettings.Load(tmpDir);
-        // Default shell is OS-aware: powershell.exe on Windows; the user's
-        // login shell or a POSIX fallback elsewhere.
         if (OperatingSystem.IsWindows())
             settings.ShellPath.Should().Be("powershell.exe");
         else
@@ -30,9 +28,16 @@ public class TerminalSettingsTests : IDisposable
         settings.RingBufferKB.Should().Be(4096);
         settings.XtermScrollbackLines.Should().Be(10000);
         settings.Theme.Should().Be("auto");
-        settings.McpEnabled.Should().BeFalse();
+        // Defaults flipped in v4.1.0: all on except Codex (which writes to
+        // user-global ~/.codex/config.toml — opt-in only).
+        settings.McpEnabled.Should().BeTrue();
         settings.McpPort.Should().Be(8100);
-        settings.McpClients.Should().BeEmpty();
+        settings.McpClients.Should().BeEquivalentTo(new[] { "claude", "copilot" });
+        settings.McpServerEnabled.Should().BeTrue();
+        settings.StudioProActionsEnabled.Should().BeTrue();
+        settings.MaiaIntegrationEnabled.Should().BeTrue();
+        settings.SkillsEnabled.Should().BeTrue();
+        settings.SkillClients.Should().BeEquivalentTo(new[] { "claude", "copilot" });
     }
 
     [Fact]
@@ -108,7 +113,7 @@ public class TerminalSettingsTests : IDisposable
     public void Load_NoFile_McpServerDefaults()
     {
         var settings = TerminalSettings.Load(tmpDir);
-        settings.McpServerEnabled.Should().BeFalse();
+        settings.McpServerEnabled.Should().BeTrue();
         settings.McpServerPort.Should().Be(7783);
         settings.RefreshFromDiskHotkey.Should().Be("F4");
     }
@@ -131,7 +136,7 @@ public class TerminalSettingsTests : IDisposable
     }
 
     [Fact]
-    public void Load_OldFileWithoutMcpServer_DefaultsToOffOn7783F4()
+    public void Load_OldFileWithoutMcpServer_DefaultsToTrueOn7783F4()
     {
         var resourcesDir = Path.Combine(tmpDir, "resources");
         Directory.CreateDirectory(resourcesDir);
@@ -139,7 +144,7 @@ public class TerminalSettingsTests : IDisposable
             """{"shellPath":"cmd.exe","mcpEnabled":false,"mcpPort":7782}""");
 
         var loaded = TerminalSettings.Load(tmpDir);
-        loaded.McpServerEnabled.Should().BeFalse();
+        loaded.McpServerEnabled.Should().BeTrue();
         loaded.McpServerPort.Should().Be(7783);
         loaded.RefreshFromDiskHotkey.Should().Be("F4");
     }
@@ -166,28 +171,34 @@ public class TerminalSettingsTests : IDisposable
     }
 
     [Fact]
-    public void Defaults_HaveSubTogglesOnAndMasterOff()
+    public void Defaults_HaveAllTogglesOnExceptCodex()
     {
         var d = TerminalSettings.Defaults();
-        d.McpServerEnabled.Should().BeFalse();
+        d.McpEnabled.Should().BeTrue();
+        d.McpServerEnabled.Should().BeTrue();
         d.StudioProActionsEnabled.Should().BeTrue();
         d.MaiaIntegrationEnabled.Should().BeTrue();
+        d.SkillsEnabled.Should().BeTrue();
     }
 
     [Fact]
-    public void Load_NoFile_HasSkillsDisabledAndNoClients()
+    public void Load_NoFile_AllOnExceptCodex()
     {
         var settings = TerminalSettings.Load(tmpDir);
-        settings.SkillsEnabled.Should().BeFalse();
-        settings.SkillClients.Should().BeEmpty();
+        settings.SkillsEnabled.Should().BeTrue();
+        settings.SkillClients.Should().BeEquivalentTo(new[] { "claude", "copilot" });
+        settings.SkillClients.Should().NotContain("codex");
     }
 
     [Fact]
-    public void Load_LegacyFileWithoutSkillKeys_DefaultsToDisabled()
+    public void Load_VeryOldFileMissingSkillKeys_DefaultsToOnViaMigration()
     {
+        // A 1.3.x settings file without skillsEnabled/skillClients keys.
+        // Null-coalescing in Load() picks up the new v4.1.0 defaults for those
+        // keys (this is acceptable per the spec — the in-memory representation
+        // says "skills on" but disk is unchanged until next Save).
         var resourcesDir = Path.Combine(tmpDir, "resources");
         Directory.CreateDirectory(resourcesDir);
-        // A 1.3.x settings file: no skillsEnabled, no skillClients keys.
         File.WriteAllText(Path.Combine(resourcesDir, "terminal-settings.json"), """
             {
               "shellPath": "powershell.exe",
@@ -207,10 +218,9 @@ public class TerminalSettingsTests : IDisposable
             }
             """);
         var settings = TerminalSettings.Load(tmpDir);
-        settings.SkillsEnabled.Should().BeFalse();
-        settings.SkillClients.Should().BeEmpty();
-        // Sanity: existing fields still load.
         settings.McpEnabled.Should().BeTrue();
+        settings.SkillsEnabled.Should().BeTrue();
+        settings.SkillClients.Should().BeEquivalentTo(new[] { "claude", "copilot" });
     }
 
     [Fact]
@@ -227,5 +237,47 @@ public class TerminalSettingsTests : IDisposable
         var loaded = TerminalSettings.Load(tmpDir);
         loaded.SkillsEnabled.Should().BeTrue();
         loaded.SkillClients.Should().BeEquivalentTo(new[] { "claude", "codex" });
+    }
+
+    [Fact]
+    public void Load_LegacyFileWithExplicitFalse_StaysOff()
+    {
+        // A 4.0.0 settings file where the user explicitly chose to disable
+        // skills. The new v4.1.0 defaults must NOT retroactively flip them on.
+        var resourcesDir = Path.Combine(tmpDir, "resources");
+        Directory.CreateDirectory(resourcesDir);
+        File.WriteAllText(Path.Combine(resourcesDir, "terminal-settings.json"), """
+            {
+              "shellPath": "powershell.exe",
+              "args": [],
+              "ringBufferKB": 4096,
+              "xtermScrollbackLines": 10000,
+              "theme": "auto",
+              "mcpEnabled": false,
+              "mcpPort": 8100,
+              "mcpClients": [],
+              "mcpServerEnabled": false,
+              "mcpServerPort": 7783,
+              "studioProActionsEnabled": true,
+              "maiaIntegrationEnabled": true,
+              "refreshFromDiskHotkey": "F4",
+              "restoreTabsOnReopen": true,
+              "skillsEnabled": false,
+              "skillClients": []
+            }
+            """);
+        var settings = TerminalSettings.Load(tmpDir);
+        settings.McpEnabled.Should().BeFalse();
+        settings.McpServerEnabled.Should().BeFalse();
+        settings.SkillsEnabled.Should().BeFalse();
+        settings.SkillClients.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Defaults_DoesNotIncludeCodex()
+    {
+        var d = TerminalSettings.Defaults();
+        d.McpClients.Should().NotContain("codex");
+        d.SkillClients.Should().NotContain("codex");
     }
 }

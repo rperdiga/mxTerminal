@@ -26,21 +26,24 @@ public sealed record TerminalSettings(
         RingBufferKB: 4096,
         XtermScrollbackLines: 10000,
         Theme: "auto",
-        McpEnabled: false,
+        // v4.1.0: all-on except Codex. Codex writes to user-global
+        // ~/.codex/config.toml — keeping it opt-in avoids touching state
+        // outside the project tree without explicit consent.
+        McpEnabled: true,
         // Studio Pro's standard MCP server port (HKLM\SOFTWARE\Mendix...).
         // The runtime always re-probes Studio Pro's actual port from
         // %LOCALAPPDATA%\Mendix\Settings.sqlite at save time — this is just
         // the fallback when the probe fails (e.g. locked DB).
         McpPort: 8100,
-        McpClients: Array.Empty<string>(),
-        McpServerEnabled: false,
+        McpClients: new[] { "claude", "copilot" },
+        McpServerEnabled: true,
         McpServerPort: 7783,
         StudioProActionsEnabled: true,
         MaiaIntegrationEnabled: true,
         RefreshFromDiskHotkey: "F4",
         RestoreTabsOnReopen: true,
-        SkillsEnabled: false,
-        SkillClients: Array.Empty<string>());
+        SkillsEnabled: true,
+        SkillClients: new[] { "claude", "copilot" });
 
     private const string FileName = "terminal-settings.json";
     private const string SubDir = "resources";

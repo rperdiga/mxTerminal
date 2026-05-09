@@ -34,6 +34,15 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
     // that no longer have valid method bodies.
     private TerminalPaneViewModel? activeViewModel;
 
+    /// <summary>
+    /// First-run notices queued by <see cref="TryFirstRunApply"/>, drained by
+    /// the VM's "ready" handler via the consume-Func passed into its
+    /// constructor. List rather than array because the VM consumes once and
+    /// clears.
+    /// </summary>
+    private readonly List<string> pendingFirstRunNotices = new();
+    private bool firstRunChecked;
+
     private readonly IExtensionFileService extensionFileService;
 
     [ImportingConstructor]
@@ -56,6 +65,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         EnsureStatePersistenceHooked();
         EnsureManagerForwardingHooked();
         TryAutoStartActionServer();
+        TryFirstRunApply();
         TryRestoreTabsOnFirstOpen();
 
         // Append ?theme=dark|light from Studio Pro's persisted preference
@@ -84,7 +94,13 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 try { return localRunConfigs.GetActiveConfiguration(model)?.ApplicationRootUrl; }
                 catch (Exception ex) { log?.Warn($"GetActiveConfiguration threw: {ex.Message}"); return null; }
             },
-            bundledSkillsRoot: bundledSkillsRoot);
+            bundledSkillsRoot: bundledSkillsRoot,
+            consumePendingFirstRunNotices: () =>
+            {
+                var notices = pendingFirstRunNotices.ToArray();
+                pendingFirstRunNotices.Clear();
+                return notices;
+            });
         activeViewModel = vm;
         return vm;
     }
@@ -295,6 +311,122 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         catch (Exception ex)
         {
             log.Error("[concord-mcp] auto-start failed", ex);
+        }
+    }
+
+    /// <summary>
+    /// On a project that has never had Concord settings persisted, write the
+    /// new (v4.1.0) defaults to disk: <c>.mcp.json</c> for Claude + Copilot,
+    /// bundled skill folders into <c>.claude/skills</c> and
+    /// <c>.github/skills</c>, plus the settings file itself. The Concord MCP
+    /// bridge is started separately by <see cref="TryAutoStartActionServer"/>
+    /// (which runs first, sees the new defaults, and fires automatically).
+    /// Queues advisory notices for the VM to flush once the JS side is ready.
+    /// </summary>
+    private void TryFirstRunApply()
+    {
+        if (firstRunChecked) return;
+        firstRunChecked = true;
+
+        try
+        {
+            var dir = (CurrentApp?.Root as IProject)?.DirectoryPath;
+            if (dir is null) return;
+
+            var settingsPath = Path.Combine(dir, "resources", "terminal-settings.json");
+            if (File.Exists(settingsPath))
+            {
+                log.Info("[first-run] settings file exists — skipping auto-apply");
+                return;
+            }
+
+            log.Info("[first-run] no settings file — applying defaults to project");
+            var defaults = TerminalSettings.Defaults();
+
+            // "Empty prev" so the apply chain treats every CLI as newly-added
+            // and writes/installs accordingly.
+            var emptyPrev = defaults with
+            {
+                McpEnabled = false,
+                McpClients = Array.Empty<string>(),
+                McpServerEnabled = false,
+                SkillsEnabled = false,
+                SkillClients = Array.Empty<string>(),
+            };
+
+            var bundledSkillsRoot = extensionFileService.ResolvePath("skills");
+
+            var touched = SettingsApplyHelper.ApplyAll(
+                dir,
+                bundledSkillsRoot,
+                emptyPrev,
+                defaults,
+                log,
+                currentActionServerPort: () => manager.CurrentActionServerPort,
+                probeStudioProMcpPort:   () => ProbeStudioProMcpPort());
+
+            defaults.Save(dir);
+
+            pendingFirstRunNotices.AddRange(BuildFirstRunNotices(defaults, touched));
+            log.Info($"[first-run] applied {touched.Length} target(s); queued {pendingFirstRunNotices.Count} notice(s)");
+        }
+        catch (Exception ex)
+        {
+            log.Error("[first-run] apply failed", ex);
+        }
+    }
+
+    /// <summary>
+    /// Build the 1–3 advisory strings shown to the user on first run. The
+    /// "Concord wired up" line summarizes what was applied; the SP-MCP and
+    /// Maia advisories surface configuration the customer needs to handle
+    /// outside Concord.
+    /// </summary>
+    private string[] BuildFirstRunNotices(TerminalSettings s, string[] touched)
+    {
+        var notices = new List<string>();
+        if (touched.Length > 0)
+            notices.Add($"Concord wired up for first-time use: {string.Join(", ", touched)}.");
+
+        try
+        {
+            var version = StudioProVersionFromExePath();
+            if (!string.IsNullOrEmpty(version))
+            {
+                var info = StudioProThemeProbe.ReadMcpServer(version);
+                if (info.Enabled != true)
+                    notices.Add("Studio Pro's MCP server appears disabled. Enable it in Edit → Preferences → Maia → MCP Server, then reopen this pane to make the wired CLI configs functional.");
+            }
+        }
+        catch (Exception ex)
+        {
+            log.Warn($"[first-run] SP-MCP probe failed: {ex.Message}");
+        }
+
+        if (OperatingSystem.IsWindows() && s.MaiaIntegrationEnabled)
+            notices.Add("Maia tools require the Maia panel to be visible. Keep it open while Claude Code or Copilot CLI drives Maia.");
+
+        return notices.ToArray();
+    }
+
+    /// <summary>
+    /// Probe Studio Pro's MCP server port from <c>Settings.sqlite</c>.
+    /// Returns null on probe failure (caller falls back to the saved port).
+    /// Lives at extension level so both <see cref="TryFirstRunApply"/> and
+    /// the VM's save flow can use it.
+    /// </summary>
+    private int? ProbeStudioProMcpPort()
+    {
+        try
+        {
+            var version = StudioProVersionFromExePath();
+            if (string.IsNullOrEmpty(version)) return null;
+            var info = StudioProThemeProbe.ReadMcpServer(version);
+            return info.Port;
+        }
+        catch
+        {
+            return null;
         }
     }
 
