@@ -2,13 +2,13 @@
 
 > *"The terminal Studio Pro was missing."*
 
-**Current version: 4.0.0** ([CHANGELOG](./CHANGELOG.md)) — **Bundled Mendix skill packs**. Concord ships 7 prescriptive Mendix skill packs that install into your project's `.claude/skills/`, `.github/skills/`, or `.codex/skills/` per the CLIs you enable. Combined with the renamed Concord MCP server (Studio Pro UI actions + Maia integration housed under one HTTP endpoint), the CLI agent in your terminal is ready to drive Studio Pro from day one.
+**Current version: 4.1.2** ([CHANGELOG](./CHANGELOG.md)) — **Default-on settings, first-run + upgrade auto-apply, port-leak fix**. Bundled Mendix skill packs ship preinstalled into the open project (Claude Code + Copilot CLI by default; Codex opt-in). Concord ships 7 prescriptive Mendix skill packs that install into your project's `.claude/skills/`, `.github/skills/`, or `.codex/skills/` per the CLIs you enable. Combined with the renamed Concord MCP server (Studio Pro UI actions + Maia integration housed under one HTTP endpoint), the CLI agent in your terminal is ready to drive Studio Pro from day one.
 
 Concord is a Mendix Studio Pro 11.10+ extension (Windows and macOS) that embeds a tabbed terminal as a dockable pane. The pane is the workspace where you run **Claude Code**, **Codex**, or **GitHub Copilot CLI** — and they talk directly to:
 
 - **Studio Pro's built-in MCP server** (model-tier — entities, microflows, pages, OQL, file ops on `/themes` + `/jsactions`, knowledge)
 - **Concord MCP** — Concord's own in-process MCP server with two tool families: Studio Pro UI actions (run / stop / refresh / save / status) and Maia integration (programmatic access to Studio Pro's in-IDE AI assistant)
-- **Bundled Mendix skill packs** — prescriptive playbooks installed into the project so the CLIs know how to drive the two MCP servers above
+- **Bundled Mendix skill packs** — prescriptive skill packs installed into the project so the CLIs know how to drive the two MCP servers above
 
 The result: developer + Maia + CLI agent collaborate on Mendix apps from one workspace, with Concord wiring the integration plumbing automatically.
 
@@ -100,13 +100,91 @@ Left-rail navigator (the Microsoft Teams pattern, not Studio Pro's deep tree). S
 5. **Skills** — install bundled Mendix skill packs into the open project. Master toggle + per-CLI checkboxes (Claude Code → `.claude/skills/`, Copilot CLI → `.github/skills/`, Codex → `.codex/skills/`). Each Save refreshes the bundled folders so a Concord upgrade ships new skills automatically; user-authored skills sitting alongside in the same directory are left intact.
 6. **About** — version, log file path, settings file path, the CoE Team logo (hover to spin).
 
-Modal title: "Concord Terminal Settings". Footer credit on every section: "A Siemens CoE extension for Studio Pro."
+Modal title: "Concord Settings". Footer credit on every section: "Built by the Siemens CoE Team."
+
+---
+
+## Bundled skill packs (the 7 that install)
+
+Each is a single `SKILL.md` file with YAML frontmatter that the CLI agent auto-discovers when running inside the project.
+
+| Skill | What it teaches the CLI |
+|---|---|
+| `mendix-microflow-common` | Core invariants for safe microflow editing — re-read after mutate, edge spacing, batching rules |
+| `mendix-microflow-syntax` | The exact JSON shape Studio Pro's MCP expects for microflow activities, splits, loops, end events |
+| `mendix-microflow-update` | Step-by-step recipes for replace, insert, remove operations on existing microflows |
+| `mendix-page-gen` | Page templates, design-properties bindings, snippet doctrine — what to use, what to never inline |
+| `mendix-view-entities` | View-entity patterns + the OQL idioms Studio Pro's MCP supports |
+| `mendix-workflow-common` | Core invariants for workflow editing |
+| `mendix-workflow-update` | Recipes for safe workflow mutations |
+
+Per-CLI install paths: Claude Code → `.claude/skills/`; Copilot CLI → `.github/skills/`; Codex → `.codex/skills/` (opt-in).
+
+---
+
+## Keyboard shortcuts
+
+| Shortcut | What it does | Configurable? |
+|---|---|---|
+| `F5` | Run the local Mendix runtime (Studio Pro hotkey, mirrored by `concord-mcp`'s `run_app` tool) | No (Studio Pro fixed) |
+| `Shift+F5` | Stop the runtime (mirrored by `stop_app`) | No |
+| `F4` | Refresh project from disk (mirrored by `refresh_project`) | **Yes** — Settings → Concord MCP → Refresh-from-disk hotkey |
+| `Ctrl+S` | Save all (mirrored by `save_all`; best-effort — Studio Pro routes the keystroke to whichever child window has focus) | No |
+
+The hotkey-driven tools work on macOS too (via `osascript` driving System Events), provided you've granted Studio Pro Accessibility permission once.
+
+---
+
+## Upgrades
+
+Concord tracks the version that last applied wiring defaults to a project (`lastAppliedVersion` in `<project>/resources/terminal-settings.json`).
+
+- **First open of a fresh Mendix project (no Concord settings file).** Concord writes `.mcp.json` for Claude Code + Copilot CLI, installs the bundled skill packs into `.claude/skills/` and `.github/skills/`, persists the settings file, and stamps the current version. Three notice banners explain what just happened.
+- **First open after a Concord upgrade (existing settings file, older stamp).** Concord re-applies the wiring keys (MCP enables, sub-toggles, skill clients) to the new defaults so you get any new functionality materialized to disk without manually opening Settings and saving. Runtime preferences (shell, theme, ring buffer, scrollback, restore-tabs, refresh hotkey) are preserved verbatim. One banner: `Updated to {ver}. Rewired: ... Open Settings to adjust.`
+- **Already-current stamp.** No-op. Concord doesn't re-apply on every open.
+- **Stamp newer than installed Concord.** Also no-op (a colleague pulled a project last edited from a machine running a more recent Concord — Concord never downgrades the wiring).
+
+If your `terminal-settings.json` is corrupt for any reason (manual edit gone wrong, disk corruption), Concord renames it to `terminal-settings.json.broken-{timestamp}.bak` so you can recover your custom shell / theme / scrollback values, then defaults take over.
+
+---
+
+## Privacy / data
+
+Concord is loopback-only. The Concord MCP server binds to `127.0.0.1`. Maia integration uses Studio Pro's local WebView2 `--remote-debugging-port`. Nothing leaves your machine. The bundled skill packs are static `SKILL.md` files copied into your project — no telemetry, no callbacks. Your CLI agents (Claude Code, Codex, Copilot CLI) follow their own privacy contracts; Concord just wires them to local Mendix tooling.
+
+---
+
+## What Concord writes to disk
+
+Every file Concord can touch in a project:
+
+| Path | What | When |
+|---|---|---|
+| `<project>/.mcp.json` | Claude Code + Copilot CLI MCP config (entries: `mendix-studio-pro`, `concord-mcp`) | When **Studio Pro MCP** or **Concord MCP** is enabled with Claude / Copilot ticked |
+| `<project>/.claude/skills/<7 folders>` | Bundled Mendix skill packs (Claude Code path) | When **Skills** master + Claude Code ticked |
+| `<project>/.github/skills/<7 folders>` | Same skill packs (Copilot CLI path) | When **Skills** master + Copilot ticked |
+| `<project>/.codex/skills/<7 folders>` | Same skill packs (Codex path; **opt-in only**) | When **Skills** master + Codex ticked |
+| `<project>/resources/terminal-settings.json` | Concord's own settings (theme, shell, MCP toggles, version stamp) | On Save |
+| `<project>/resources/terminal-state.json` | Tab-restore state (which shells were open) | On every tab open / close / exit |
+| `<project>/resources/terminal.log` | Diagnostic log (INFO / WARN / ERROR, per-line append) | Continuously |
+| `<project>/resources/terminal-settings.json.broken-{ts}.bak` | Backup of a settings file that failed to parse | Only when the file is corrupt at Load time |
+
+**Outside the project, user-global writes:**
+
+| Path | What | When |
+|---|---|---|
+| `~/.codex/config.toml` | Codex MCP config (entries: `mendix-studio-pro`, `concord-mcp`) | Only when **Codex** is ticked under Studio Pro MCP or Concord MCP |
+| `~/Library/Application Support/Concord/zsh/.zshrc` (macOS only) | ZDOTDIR override that prepends Homebrew to PATH so `claude`, `codex`, `gh` resolve out of the box | When a `zsh` tab is spawned |
+
+Codex is opt-in only because its config lives in user-global state, not in the project tree. Auto-enabling it would touch state outside the boundary you can git-ignore from a Mendix project.
 
 ---
 
 ## Logs
 
 `<project>/resources/terminal.log` — thread-safe per-line append log. INFO / WARN / ERROR. Captures extension lifecycle, action server start/stop, MCP probe results, paste diagnostics. Path also visible in **Settings → About → Log file**.
+
+`<project>/resources/terminal-settings.json` — Concord's own settings (path also visible in **Settings → About → Settings file**).
 
 ---
 
@@ -160,7 +238,9 @@ ui/src/bridge.ts        WebView2 (Windows) and WKWebView (Mac) transport
 ui/index.html           Single-page UI bundled into the extension
 skills/                 7 bundled Mendix skill packs (microflow, page, view-entity, workflow patterns)
 tests/                  xunit test suite
+docs/PASTE.md           Paste pipeline rationale + diagnostic playbook
 docs/superpowers/       Original design docs (specs + plans)
+modules/Concord.mxmodule Studio Pro add-on module wrapper for marketplace distribution
 manifest.json           Mendix extension manifest — points at Concord.dll
 Terminal.csproj         Project file (assembly name = Concord)
 ```

@@ -31,7 +31,6 @@ public class TerminalSettingsTests : IDisposable
         // Defaults flipped in v4.1.0: all on except Codex (which writes to
         // user-global ~/.codex/config.toml — opt-in only).
         settings.McpEnabled.Should().BeTrue();
-        settings.McpPort.Should().Be(8100);
         settings.McpClients.Should().BeEquivalentTo(new[] { "claude", "copilot" });
         settings.McpServerEnabled.Should().BeTrue();
         settings.StudioProActionsEnabled.Should().BeTrue();
@@ -47,8 +46,8 @@ public class TerminalSettingsTests : IDisposable
         // migration logic in TerminalSettings.Load doesn't rewrite it.
         var shell = OperatingSystem.IsWindows() ? "bash.exe" : "/bin/bash";
         var original = new TerminalSettings(shell, new[] { "--login" }, 8192, 20000, "light",
-            McpEnabled: true, McpPort: 7782, McpClients: new[] { "claude", "codex" },
-            McpServerEnabled: false, McpServerPort: 7783,
+            McpEnabled: true, McpClients: new[] { "claude", "codex" },
+            McpServerEnabled: false,
             StudioProActionsEnabled: true, MaiaIntegrationEnabled: true,
             RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true,
             SkillsEnabled: false, SkillClients: Array.Empty<string>());
@@ -74,14 +73,20 @@ public class TerminalSettingsTests : IDisposable
     }
 
     [Fact]
-    public void Load_MalformedJson_ReturnsDefaults()
+    public void Load_MalformedJson_ReturnsDefaults_AndBacksUpBrokenFile()
     {
         var resourcesDir = Path.Combine(tmpDir, "resources");
         Directory.CreateDirectory(resourcesDir);
-        File.WriteAllText(Path.Combine(resourcesDir, "terminal-settings.json"), "{ this is not json");
+        var settingsPath = Path.Combine(resourcesDir, "terminal-settings.json");
+        File.WriteAllText(settingsPath, "{ this is not json");
 
         var loaded = TerminalSettings.Load(tmpDir);
         loaded.ShellPath.Should().Be(TerminalSettings.Defaults().ShellPath);
+
+        // Original broken file moved aside so the user can recover by hand.
+        File.Exists(settingsPath).Should().BeFalse();
+        Directory.GetFiles(resourcesDir, "terminal-settings.json.broken-*.bak")
+            .Should().HaveCount(1);
     }
 
     [Fact]
@@ -100,8 +105,8 @@ public class TerminalSettingsTests : IDisposable
     public void Save_CreatesResourcesDirIfMissing()
     {
         var settings = new TerminalSettings("powershell.exe", Array.Empty<string>(), 4096, 10000, "dark",
-            McpEnabled: false, McpPort: 7782, McpClients: Array.Empty<string>(),
-            McpServerEnabled: false, McpServerPort: 7783,
+            McpEnabled: false, McpClients: Array.Empty<string>(),
+            McpServerEnabled: false,
             StudioProActionsEnabled: true, MaiaIntegrationEnabled: true,
             RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true,
             SkillsEnabled: false, SkillClients: Array.Empty<string>());
@@ -114,16 +119,15 @@ public class TerminalSettingsTests : IDisposable
     {
         var settings = TerminalSettings.Load(tmpDir);
         settings.McpServerEnabled.Should().BeTrue();
-        settings.McpServerPort.Should().Be(7783);
         settings.RefreshFromDiskHotkey.Should().Be("F4");
     }
 
     [Fact]
-    public void Save_ThenLoad_PreservesMcpServerFields()
+    public void Save_ThenLoad_PreservesMcpServerEnabled()
     {
         var original = new TerminalSettings("bash.exe", new[] { "--login" }, 8192, 20000, "light",
-            McpEnabled: true, McpPort: 7782, McpClients: new[] { "claude" },
-            McpServerEnabled: true, McpServerPort: 7799,
+            McpEnabled: true, McpClients: new[] { "claude" },
+            McpServerEnabled: true,
             StudioProActionsEnabled: true, MaiaIntegrationEnabled: true,
             RefreshFromDiskHotkey: "Ctrl+F5", RestoreTabsOnReopen: false,
             SkillsEnabled: false, SkillClients: Array.Empty<string>());
@@ -131,22 +135,58 @@ public class TerminalSettingsTests : IDisposable
 
         var loaded = TerminalSettings.Load(tmpDir);
         loaded.McpServerEnabled.Should().BeTrue();
-        loaded.McpServerPort.Should().Be(7799);
         loaded.RefreshFromDiskHotkey.Should().Be("Ctrl+F5");
     }
 
     [Fact]
-    public void Load_OldFileWithoutMcpServer_DefaultsToTrueOn7783F4()
+    public void Load_OldFileWithoutMcpServer_DefaultsMasterTrueAndF4Hotkey()
     {
         var resourcesDir = Path.Combine(tmpDir, "resources");
         Directory.CreateDirectory(resourcesDir);
         File.WriteAllText(Path.Combine(resourcesDir, "terminal-settings.json"),
-            """{"shellPath":"cmd.exe","mcpEnabled":false,"mcpPort":7782}""");
+            """{"shellPath":"cmd.exe","mcpEnabled":false}""");
 
         var loaded = TerminalSettings.Load(tmpDir);
         loaded.McpServerEnabled.Should().BeTrue();
-        loaded.McpServerPort.Should().Be(7783);
         loaded.RefreshFromDiskHotkey.Should().Be("F4");
+    }
+
+    [Fact]
+    public void Load_OldFileWithStalePortKeys_IgnoresThemSilently()
+    {
+        // Pre-4.1.2 settings files persist mcpServerPort, mcpPort, and the
+        // legacy actionsServerPort. After 4.1.2 these fields don't exist on
+        // TerminalSettings — the runtime probes/picks ports itself. Confirm
+        // an old file deserializes fine with the stale keys ignored.
+        var resourcesDir = Path.Combine(tmpDir, "resources");
+        Directory.CreateDirectory(resourcesDir);
+        File.WriteAllText(Path.Combine(resourcesDir, "terminal-settings.json"), """
+            {
+              "shellPath": "powershell.exe",
+              "mcpEnabled": true,
+              "mcpPort": 8100,
+              "mcpServerPort": 8099,
+              "actionsServerPort": 8099,
+              "mcpServerEnabled": true
+            }
+            """);
+
+        // Should not throw.
+        var loaded = TerminalSettings.Load(tmpDir);
+        loaded.McpEnabled.Should().BeTrue();
+        loaded.McpServerEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Save_DoesNotEmitRemovedPortKeys()
+    {
+        // Belt-and-braces guard against the v4.1.x port-leak coming back:
+        // assert that a fresh Save never emits the removed port keys.
+        TerminalSettings.Defaults().Save(tmpDir);
+        var json = File.ReadAllText(Path.Combine(tmpDir, "resources", "terminal-settings.json"));
+        json.Should().NotContain("mcpPort");
+        json.Should().NotContain("mcpServerPort");
+        json.Should().NotContain("actionsServerPort");
     }
 
     [Fact]
@@ -279,5 +319,63 @@ public class TerminalSettingsTests : IDisposable
         var d = TerminalSettings.Defaults();
         d.McpClients.Should().NotContain("codex");
         d.SkillClients.Should().NotContain("codex");
+    }
+
+    [Fact]
+    public void Defaults_LastAppliedVersion_IsNull()
+    {
+        TerminalSettings.Defaults().LastAppliedVersion.Should().BeNull();
+    }
+
+    [Fact]
+    public void Save_ThenLoad_PreservesLastAppliedVersion()
+    {
+        var stamped = TerminalSettings.Defaults() with { LastAppliedVersion = "4.1.0" };
+        stamped.Save(tmpDir);
+
+        TerminalSettings.Load(tmpDir).LastAppliedVersion.Should().Be("4.1.0");
+    }
+
+    [Fact]
+    public void Load_FileWithoutVersionStamp_ReturnsNull()
+    {
+        // A pre-tracking settings file (anything written by Concord <= 4.1.0
+        // before the LastAppliedVersion field existed) has no
+        // lastAppliedVersion key. Load returns null so TryUpgradeApply can
+        // recognize the file as needing the apply pass.
+        var resourcesDir = Path.Combine(tmpDir, "resources");
+        Directory.CreateDirectory(resourcesDir);
+        File.WriteAllText(Path.Combine(resourcesDir, "terminal-settings.json"),
+            """{"shellPath":"powershell.exe","mcpEnabled":true}""");
+
+        TerminalSettings.Load(tmpDir).LastAppliedVersion.Should().BeNull();
+    }
+
+    [Fact]
+    public void Save_ThenLoad_RoundTripsNullStamp()
+    {
+        // Defaults() leaves LastAppliedVersion null. Round-trip must
+        // preserve that — the apply paths are the only places that
+        // populate the stamp.
+        TerminalSettings.Defaults().Save(tmpDir);
+        TerminalSettings.Load(tmpDir).LastAppliedVersion.Should().BeNull();
+    }
+}
+
+public class UpgradeApplyDecisionTests
+{
+    [Theory]
+    [InlineData(null,    "4.1.0", true)]   // never stamped → apply
+    [InlineData("",      "4.1.0", true)]   // empty stamp → apply
+    [InlineData("1.1.1", "4.1.0", true)]   // older → apply
+    [InlineData("4.0.0", "4.1.0", true)]   // older minor → apply
+    [InlineData("4.1.0", "4.1.0", false)]  // equal → no-op (already applied)
+    [InlineData("4.2.0", "4.1.0", false)]  // newer (colleague pulled) → no-op
+    [InlineData("999.0.0", "4.1.0", false)]// far newer → no-op
+    [InlineData("not-a-version", "4.1.0", true)]  // unparsable + mismatch → apply
+    [InlineData("not-a-version", "not-a-version", false)] // unparsable + match → no-op
+    public void IsUpgradeApplyNeeded(string? stamp, string current, bool expected)
+    {
+        TerminalPaneExtension.IsUpgradeApplyNeeded(stamp, current).Should().Be(expected);
     }
 }

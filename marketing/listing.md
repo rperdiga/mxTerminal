@@ -47,7 +47,7 @@ developers run modern CLI agents — **Claude Code**, **Codex**,
   tool families: Studio Pro UI actions (run / stop / refresh / save /
   status) and Maia integration (programmatic access to Studio Pro's
   in-IDE AI assistant)
-- **Bundled Mendix skill packs** — prescriptive playbooks installed
+- **Bundled Mendix skill packs** — prescriptive skill packs installed
   into the project so the CLIs know how to drive the two MCP servers
   above
 
@@ -74,8 +74,9 @@ Concord makes the agent-augmented Mendix workflow first-class.
 ### Tabbed PTY terminal
 - Multiple tabs per pane. Each tab spawns a real shell rooted at the
   open Mendix project's directory.
-- Default shell **PowerShell**; pick from detected shells (`bash`,
-  `cmd`, etc.) in **Settings → Shell**.
+- Default shell **PowerShell** on Windows, your `$SHELL` (typically
+  `zsh`) on macOS; pick from detected shells (`bash`, `cmd`, etc.)
+  in **Settings → Shell**.
 - Tab names follow `Pwsh - 1`, `Bash - 2`, `Cmd - 3` — gap-filling
   ordinals so the visible numbers stay tight.
 
@@ -88,8 +89,9 @@ Concord makes the agent-augmented Mendix workflow first-class.
 
 ### Theme follows Studio Pro
 - Auto-matches Studio Pro's dark / light theme by reading the host's
-  preference from `%LOCALAPPDATA%\Mendix\Settings.sqlite` at pane
-  open. No setting to keep in sync.
+  preference from `%LOCALAPPDATA%\Mendix\Settings.sqlite` (Windows)
+  or `~/Library/Application Support/Mendix/Settings.sqlite` (macOS)
+  at pane open. No setting to keep in sync.
 - The pane chrome inherits Studio Pro's exact surfaces; the xterm
   canvas blends seamlessly with the pane background.
 
@@ -98,6 +100,9 @@ Concord makes the agent-augmented Mendix workflow first-class.
   (Claude Code, Copilot CLI) and `~/.codex/config.toml` (Codex)
   entries that point each CLI at Studio Pro's MCP server.
 - One toggle, three CLI configs in sync.
+- **Codex is opt-in only.** Auto-enabling it would write to
+  user-global `~/.codex/config.toml` — outside the project tree.
+  Tick it explicitly in Settings if you use Codex.
 
 ### Concord MCP
 - A second MCP server hosted by Concord on port 7783 (auto-fallback
@@ -112,10 +117,13 @@ Concord makes the agent-augmented Mendix workflow first-class.
 - Master + per-family toggles in **Settings → Concord MCP**.
 
 ### Bundled Mendix skill packs
-- 7 prescriptive Mendix playbooks ship with the extension —
+- 7 prescriptive Mendix skill packs ship with the extension —
   microflow creation/editing, pages, view entities, workflow
   patterns. Each one is a `SKILL.md` with YAML frontmatter that the
-  CLIs auto-discover.
+  CLIs auto-discover:
+  - `mendix-microflow-common` · `mendix-microflow-syntax` · `mendix-microflow-update`
+  - `mendix-page-gen` · `mendix-view-entities`
+  - `mendix-workflow-common` · `mendix-workflow-update`
 - Toggle per-CLI in **Settings → Skills**: Concord installs the
   bundled folders into `<project>/.claude/skills/`,
   `<project>/.github/skills/`, or `<project>/.codex/skills/`.
@@ -146,28 +154,64 @@ agent on Windows ([claude-code #49337](https://github.com/anthropics/claude-code
 4. **Size-tiered UX** — notice ≥ 4 KB, warn + duration estimate
    ≥ 50 KB, refuse with "save to file" guidance ≥ 1 MB.
 
-## What's new in 4.0.0
+## What's new in 4.1.2
 
-See [CHANGELOG.md](https://github.com/rperdiga/mxTerminal/blob/main/CHANGELOG.md).
+See [CHANGELOG.md](https://github.com/rperdiga/mxTerminal/blob/main/CHANGELOG.md)
+for the complete history.
 
-- **Bundled Mendix skill packs.** 7 prescriptive Mendix playbooks
-  install into your project's `.claude/skills/`, `.github/skills/`,
-  and/or `.codex/skills/` per the CLIs you enable. Each Save refreshes
-  the bundled content; user-authored skills sitting alongside stay
-  intact.
-- **Concord MCP** — the in-process MCP server (renamed from "Action
-  Bridge") now hosts two tool families under a single `concord-mcp`
-  endpoint: Studio Pro UI actions (the original six) and Maia
-  integration (`maia__send` / `status` / `wait` / `ask` / `reset` /
-  `force_tier` — Windows only).
-- **Maia is C#-native** — no Python, no subprocess, no second port.
-  Two-tier transport (injected JS agent + DOM-scrape fallback) over
-  Studio Pro's WebView2 `--remote-debugging-port`.
-- **macOS support still shipping** — POSIX PTY backend, WKWebView
-  bridge, Mac Settings.sqlite probe, Homebrew-aware shell init.
-- **Windows paste pipeline still shipping** — ConPTY backend with
-  bracketed-paste negotiation, paced chunking, LF-bypass, size-tiered
-  UX for very large pastes.
+**4.1.2 — port-leak fix + atomic writes + cleaner copy.** The settings
+modal used to round-trip the live Concord MCP port back into the saved
+file as if it were configuration intent — so a one-time port-busy event
+on your machine could permanently inject a phantom port like `8099` into
+`terminal-settings.json`. Removed the field from the schema entirely;
+the live port now surfaces only as a read-only display value.
+File writes hardened with NTFS journaled rename (`File.Replace`).
+Corrupt settings files are renamed `terminal-settings.json.broken-{ts}.bak`
+instead of silently defaulting. Banner copy rewritten to read like a
+product, not log lines. Save vs. Cancel buttons differentiated in dark
+mode. Modal title trimmed to "Concord Settings".
+
+**4.1.1 — upgrade auto-apply.** First open after a Concord upgrade
+re-applies the wiring defaults (MCP servers + bundled skills) to disk
+without needing to open Settings and Save. Runtime preferences (shell,
+theme, ring buffer, scrollback, restore-tabs, refresh hotkey) are
+preserved. Cross-machine safe: never downgrades wiring on a colleague
+who pulls a project last edited on a newer Concord.
+
+**4.1.0 — default-on settings + first-run auto-apply.** New install on
+a fresh project writes `.mcp.json`, installs bundled skill packs into
+`.claude/skills/` and `.github/skills/`, and persists the settings file
+in one go — no modal clicks required. Three notice banners explain what
+just happened; Codex remains opt-in.
+
+**4.0.0 — bundled Mendix skill packs.** 7 prescriptive skill packs
+install into your project per the CLIs you enable. Each Save refreshes
+the bundled content; user-authored skills sitting alongside stay intact.
+
+**1.3.0 — Concord MCP + Maia bridge.** The in-process MCP server
+(formerly "Action Bridge") now hosts two tool families under a single
+`concord-mcp` endpoint: Studio Pro UI actions (the original six) and
+Maia integration (`maia__send` / `status` / `wait` / `ask` / `reset` /
+`force_tier` — Windows only). Maia is C#-native — no Python, no
+subprocess, no second port; two-tier transport over Studio Pro's
+WebView2 `--remote-debugging-port`.
+
+**1.2.x — macOS support.** POSIX PTY backend, WKWebView bridge, Mac
+`Settings.sqlite` probe, Homebrew-aware shell init.
+
+**1.1.x — Windows paste pipeline.** ConPTY backend with
+bracketed-paste negotiation, paced chunking, LF-bypass, size-tiered UX
+for very large pastes.
+
+## Privacy / data
+
+Concord is loopback-only. The Concord MCP server binds to
+`127.0.0.1`. Maia integration uses Studio Pro's local
+WebView2 `--remote-debugging-port`. Nothing leaves your machine.
+The bundled skill packs are static `SKILL.md` files copied into your
+project — no telemetry, no callbacks. Your CLI agents (Claude Code,
+Codex, Copilot CLI) follow their own privacy contracts; Concord just
+wires them to local Mendix tooling.
 
 ## Compatibility
 
@@ -192,22 +236,19 @@ Apache 2.0. Source available at https://github.com/rperdiga/mxTerminal.
 
 ## Built by
 
-The **Siemens CoE Team**.
-
-- Ricardo Perdigao — `ricardo.perdigao@siemens.com`
-- Kelly Seale — `kelly.seale@siemens.com`
-
-Published via **MxLabs**.
+The **Siemens CoE Team**. Published via **MxLabs**.
 ```
 
 ## Authors (form fields)
 
+Internal contact + reporting handled via the GitHub repository's
+issue tracker:
+[github.com/rperdiga/mxTerminal/issues](https://github.com/rperdiga/mxTerminal/issues).
+
 | Field            | Value                          |
 | ---------------- | ------------------------------ |
 | First author     | Ricardo Perdigao               |
-| First author email | ricardo.perdigao@siemens.com |
 | Second author    | Kelly Seale                    |
-| Second author email | kelly.seale@siemens.com     |
 
 ## License (form field)
 
@@ -221,8 +262,9 @@ https://github.com/rperdiga/mxTerminal
 ```
 
 Use the **GitHub Link** option on the upload form. Concord's release
-flow attaches `Concord.mxmodule` to the `v4.0.0` GitHub release tag;
-marketplace auto-syncs from the release attachment.
+flow attaches `Concord.mxmodule` to the `v4.1.2` GitHub release tag
+(or whichever version is current); marketplace auto-syncs from the
+release attachment.
 
 ## Thumbnail (600×420 PNG, ≤1 MB)
 

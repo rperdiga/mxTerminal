@@ -145,7 +145,11 @@ public sealed class McpTomlConfigurator
 
         var tmp = filePath + ".tmp";
         File.WriteAllText(tmp, string.Join(Environment.NewLine, lines) + Environment.NewLine, Encoding.UTF8);
-        if (File.Exists(filePath)) File.Delete(filePath);
-        File.Move(tmp, filePath);
+        // Journaled-rename swap (see McpJsonConfigurator.WriteAtomic for the
+        // same pattern and rationale).
+        if (File.Exists(filePath))
+            File.Replace(tmp, filePath, destinationBackupFileName: null, ignoreMetadataErrors: true);
+        else
+            File.Move(tmp, filePath);
     }
 }

@@ -12,12 +12,12 @@
     <LangVersion>preview</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
-    <Version>4.1.0</Version>
-    <InformationalVersion>4.1.0+default-on-first-run</InformationalVersion>
+    <Version>4.1.2</Version>
+    <InformationalVersion>4.1.2+port-leak-fix</InformationalVersion>
     <Authors>Ricardo Perdigao, Kelly Seale</Authors>
     <Company>Siemens Digital Industries Software — CoE Team</Company>
     <Product>Concord — Terminal for Studio Pro</Product>
-    <Description>A tabbed PTY terminal embedded as a dockable pane inside Mendix Studio Pro 11.10+ (Windows and macOS). The workspace where developers run Claude Code, Codex, or GitHub Copilot CLI alongside Studio Pro's MCP server, Maia, and Concord's own Action Bridge.</Description>
+    <Description>A tabbed PTY terminal embedded as a dockable pane inside Mendix Studio Pro 11.10+ (Windows and macOS). The workspace where developers run Claude Code, Codex, or GitHub Copilot CLI alongside Studio Pro's MCP server, Maia, and Concord MCP (Studio Pro UI actions + Maia integration in one HTTP endpoint).</Description>
     <Copyright>Copyright © 2026 Siemens Digital Industries Software — CoE Team</Copyright>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/rperdiga/mxTerminal</PackageProjectUrl>
