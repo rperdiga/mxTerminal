@@ -87,6 +87,42 @@ public class SkillInstallerTests : IDisposable
     }
 
     [Fact]
+    public void InstallAll_OverlayReplacesPrimarySkill()
+    {
+        // Seed an overlay with one skill that shares a name with a primary skill.
+        var overlayRoot = Path.Combine(tmpRoot, "overlay");
+        Directory.CreateDirectory(overlayRoot);
+        var overlayAlpha = Path.Combine(overlayRoot, "alpha");
+        Directory.CreateDirectory(overlayAlpha);
+        File.WriteAllText(Path.Combine(overlayAlpha, "SKILL.md"),
+            "---\nname: alpha\ndescription: overlay alpha.\n---\nalpha OVERLAY body\n");
+
+        var installer = new SkillInstaller(projectDir, bundledRoot, overlayAlpha is null ? null : overlayRoot, log);
+        installer.InstallAll(".claude/skills");
+
+        var alphaPath = Path.Combine(projectDir, ".claude", "skills", "alpha", "SKILL.md");
+        var betaPath  = Path.Combine(projectDir, ".claude", "skills", "beta",  "SKILL.md");
+
+        // Overlay wins for matching names; non-matching primary skill is unaffected.
+        File.ReadAllText(alphaPath).Should().Contain("alpha OVERLAY body").And.NotContain("alpha body\n");
+        File.ReadAllText(betaPath).Should().Contain("beta body");
+    }
+
+    [Fact]
+    public void InstallAll_OverlayMissingDoesNotThrow()
+    {
+        // Configure an overlay path that doesn't exist on disk — installer should
+        // ignore it and behave like the no-overlay case.
+        var overlayRoot = Path.Combine(tmpRoot, "no-such-overlay");
+        var installer = new SkillInstaller(projectDir, bundledRoot, overlayRoot, log);
+
+        installer.InstallAll(".claude/skills");
+
+        var alpha = Path.Combine(projectDir, ".claude", "skills", "alpha", "SKILL.md");
+        File.ReadAllText(alpha).Should().Contain("alpha body");
+    }
+
+    [Fact]
     public void RemoveAll_RemovesOnlyBundledFolders()
     {
         var installer = new SkillInstaller(projectDir, bundledRoot, log);

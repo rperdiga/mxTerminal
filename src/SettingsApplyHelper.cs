@@ -154,7 +154,23 @@ public static class SettingsApplyHelper
             ? new HashSet<string>(next.SkillClients, StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        var installer = new SkillInstaller(projectDir, bundledSkillsRoot, log);
+        // On Mac, overlay skills-mac/ on top of skills/ at install time.
+        // Lets us swap mendix-page-gen for the no-Maia variant without forking
+        // the other 6 packs. The overlay dir sits next to the primary bundled
+        // root inside the deployed extension layout (e.g.
+        // <ext>/skills/ + <ext>/skills-mac/).
+        string? overlayRoot = null;
+        if (OperatingSystem.IsMacOS())
+        {
+            var parent = Path.GetDirectoryName(bundledSkillsRoot);
+            if (!string.IsNullOrEmpty(parent))
+            {
+                var candidate = Path.Combine(parent, "skills-mac");
+                if (Directory.Exists(candidate)) overlayRoot = candidate;
+            }
+        }
+
+        var installer = new SkillInstaller(projectDir, bundledSkillsRoot, overlayRoot, log);
         var touched = new List<string>();
 
         var perCli = new (string Key, string Label, string Subdir)[]
@@ -164,7 +180,7 @@ public static class SettingsApplyHelper
             ("codex",   "Codex skills",             Path.Combine(".codex",  "skills")),
         };
 
-        log.Info($"[skills] diff prev={{{string.Join(",", prevClients)}}} next={{{string.Join(",", nextClients)}}} bundled-root={bundledSkillsRoot}");
+        log.Info($"[skills] diff prev={{{string.Join(",", prevClients)}}} next={{{string.Join(",", nextClients)}}} bundled-root={bundledSkillsRoot} overlay-root={overlayRoot ?? "<none>"}");
 
         foreach (var (key, label, subdir) in perCli)
         {

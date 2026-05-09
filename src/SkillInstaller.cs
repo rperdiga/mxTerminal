@@ -6,25 +6,37 @@ namespace Terminal;
 /// <c>.github/skills</c>). Mirrors the prev/next-diff lifecycle of the MCP
 /// configurators: each Save in the modal calls <see cref="InstallAll"/> for
 /// newly-selected CLIs and <see cref="RemoveAll"/> for newly-deselected ones.
+/// <para>
+/// An optional <c>overlaySkillsRoot</c> is copied on top of the primary
+/// bundled root after the primary copy. Same-named files inside same-named
+/// skill folders win. Used to swap a single skill (e.g. <c>mendix-page-gen</c>)
+/// for a platform-specific variant on Mac without forking all 7 packs.
+/// </para>
 /// </summary>
 public sealed class SkillInstaller
 {
     private readonly string projectDir;
     private readonly string bundledSkillsRoot;
+    private readonly string? overlaySkillsRoot;
     private readonly Logger log;
 
     public SkillInstaller(string projectDir, string bundledSkillsRoot, Logger log)
+        : this(projectDir, bundledSkillsRoot, overlaySkillsRoot: null, log) { }
+
+    public SkillInstaller(string projectDir, string bundledSkillsRoot, string? overlaySkillsRoot, Logger log)
     {
         this.projectDir = projectDir;
         this.bundledSkillsRoot = bundledSkillsRoot;
+        this.overlaySkillsRoot = overlaySkillsRoot;
         this.log = log;
     }
 
     /// <summary>
     /// Copy every bundled skill folder into <paramref name="targetSubdir"/>.
     /// Overwrites existing files inside matching skill folders so a Concord
-    /// upgrade refreshes content. Idempotent. No-op when the bundled root is
-    /// missing.
+    /// upgrade refreshes content. If an overlay root is configured, it is
+    /// copied on top of the primary set. Idempotent. No-op when the bundled
+    /// root is missing.
     /// </summary>
     public void InstallAll(string targetSubdir)
     {
@@ -42,6 +54,17 @@ public sealed class SkillInstaller
             var dstDir = Path.Combine(targetRoot, name);
             CopyDirectory(srcDir, dstDir);
             log.Info($"[skills] installed {name} -> {dstDir}");
+        }
+
+        if (!string.IsNullOrEmpty(overlaySkillsRoot) && Directory.Exists(overlaySkillsRoot))
+        {
+            foreach (var srcDir in Directory.EnumerateDirectories(overlaySkillsRoot))
+            {
+                var name = Path.GetFileName(srcDir);
+                var dstDir = Path.Combine(targetRoot, name);
+                CopyDirectory(srcDir, dstDir);
+                log.Info($"[skills] overlay {name} -> {dstDir}");
+            }
         }
     }
 

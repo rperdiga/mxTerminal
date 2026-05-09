@@ -1,5 +1,25 @@
 # Changelog
 
+## 4.1.3 — 2026-05-09
+
+### Added
+
+- **Mac variant of the `mendix-page-gen` skill pack.** The Windows version of this skill instructs the CLI agent to delegate page writes to Maia (via Concord MCP's `maia__ask`) because Studio Pro's MCP doesn't expose `pg_read_page` / `pg_write_page` tools. On macOS, Maia integration isn't available (WKWebView can't be inspected externally without host opt-in — see `docs/MAIA_MAC_FEASIBILITY.md`), so a new Mac-specific variant ships at `skills-mac/mendix-page-gen/SKILL.md`. Same widget catalog and rules; the head section is rewritten to print a copy-paste hand-off prompt for the user ("Open Maia in Studio Pro, paste this, send, reply `done`") and then stop and wait. After the user confirms, the CLI verifies with `ped_check_errors` directly. The other 6 skill packs (`mendix-microflow-*`, `mendix-view-entities`, `mendix-workflow-*`) don't reference Maia and remain platform-identical.
+- **`SkillInstaller` overlay support.** Optional `overlaySkillsRoot` constructor parameter. After copying the primary bundled skill folders into the target subdir, the installer copies the overlay root on top — same-named files inside same-named skill folders win. Lets us swap one skill for a platform-specific variant without forking all 7.
+- **`SettingsApplyHelper` auto-derives the Mac overlay.** When `OperatingSystem.IsMacOS()` is true and `<bundledSkillsRoot>/../skills-mac` exists, the helper passes it as the overlay to `SkillInstaller`. The diff log line now includes `overlay-root=...` so you can confirm at runtime by tailing `terminal.log`.
+- **`docs/MAIA_MAC_FEASIBILITY.md`.** Research write-up explaining why a CDP-style Maia transport on Mac isn't feasible: WKWebView's `isInspectable` requires host opt-in (Mendix would have to flip it on the Maia WebView in Studio Pro itself), `_developerExtrasEnabled` is similarly host-side, and the Mendix Extensions API 11.6.2 has no Maia-related surface. Documents three forward paths: an AX/osascript Tier-3 transport (~1-2 day prototype, brittle), a feature request to Mendix for an `IMaiaService` extension API, or a feature request for a Mac `--remote-debugging-port`-equivalent debug flag. Also records the rejected SIP-bypass route (unshippable). Linked from the README's macOS callout.
+- **Tests:** `InstallAll_OverlayReplacesPrimarySkill` and `InstallAll_OverlayMissingDoesNotThrow` in `SkillInstallerTests`.
+
+### Changed
+
+- **README's macOS callout** rewritten: `Maia integration is Windows-only in this release` → `Maia integration is Windows-only` + an explicit pointer to the feasibility doc + a new section under "Bundled skill packs" explaining the Mac variant of `mendix-page-gen`.
+
+### Notes
+
+- **No Windows-side change.** The Mac scoping is gated on `OperatingSystem.IsMacOS()`. The `skills-mac/` overlay directory is shipped with every build but only consumed on macOS. Windows users see no functional change.
+- **Existing Mac customers materialize the Mac variant on upgrade.** `IsUpgradeApplyNeeded` fires on the strict-older `lastAppliedVersion` stamp (`4.1.2 < 4.1.3`), the apply chain re-runs `SkillInstaller.InstallAll` for ticked CLIs, the Mac overlay copies on top of the primary, and `<project>/.claude/skills/mendix-page-gen/SKILL.md` ends up with the Mac hand-off copy. No manual Save needed. Banner: `Updated to 4.1.3. Rewired: Skill packs installed: Claude Code, Copilot CLI. Open Settings to adjust.`
+- **Maia gating itself was already in place in 4.1.2.** Both action-server construction sites (`TerminalPaneViewModel.cs` and `TerminalPaneExtension.cs`) already computed `maiaEnabled = OperatingSystem.IsWindows() && setting`, so the `maia__*` tool family was already excluded from the Concord MCP advertise list on Mac. 4.1.3 just documents the behavior + adds the matching Mac-side skill flow.
+
 ## 4.1.2 — 2026-05-08
 
 ### Fixed
