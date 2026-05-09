@@ -66,17 +66,19 @@ public class MessageDtoTests
             ShellPath: "pwsh", Args: Array.Empty<string>(),
             RingBufferKB: 1, XtermScrollbackLines: 1, Theme: "auto",
             AvailableShells: Array.Empty<ShellOptionPayload>(),
-            McpEnabled: false, McpPort: 0, McpClients: Array.Empty<string>(),
-            McpServerEnabled: true, McpServerPort: 7783,
+            McpEnabled: false, McpClients: Array.Empty<string>(),
+            McpServerEnabled: true,
             StudioProActionsEnabled: true, MaiaIntegrationEnabled: true,
             Platform: "windows",
             RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true,
             About: new AboutInfoPayload("1.3.0", null, null),
             StudioProMcp: null,
+            LiveActionServerPort: null,
             SkillsEnabled: false, SkillClients: Array.Empty<string>(),
             BundledSkills: Array.Empty<BundledSkillPayload>());
         p.McpServerEnabled.Should().BeTrue();
         p.MaiaIntegrationEnabled.Should().BeTrue();
         p.Platform.Should().Be("windows");
+        p.LiveActionServerPort.Should().BeNull();
     }
 }

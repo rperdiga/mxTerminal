@@ -215,16 +215,14 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             var newClients         = p.McpClients ?? current.McpClients;
             var newEnabled         = p.McpEnabled ?? current.McpEnabled;
             // Always derive the MCP port from Studio Pro's live Settings.sqlite
-            // (via ProbeStudioProMcp) — never trust the user-supplied / saved
-            // value, which can drift when the user opens the same Concord on a
-            // project that hasn't enabled Studio Pro's MCP yet (legacy default
-            // 7782 from TerminalSettings.Defaults causes the connection-timeout
-            // banner Neo hit on ConcordPublisher 2026-05-02). Fall back to the
-            // saved port only if the probe fails entirely (e.g. SQLite locked).
+            // (via ProbeStudioProMcp). Fall back to the documented default if
+            // the probe fails (SQLite locked, Studio Pro not running yet).
+            // The port is NEVER persisted — it's runtime state, re-derived on
+            // every save. Persisting it caused the v4.1.x bug where a fallback
+            // port (8099) leaked into settings via the modal round-trip.
             var probed = ProbeStudioProMcp();
-            var newPort = probed?.Port ?? p.McpPort ?? current.McpPort;
+            var newPort = probed?.Port ?? TerminalSettings.StudioProMcpDefaultPort;
             var newMcpServerEnabled  = p.McpServerEnabled ?? current.McpServerEnabled;
-            var newMcpServerPort     = p.McpServerPort   ?? current.McpServerPort;
             var newStudioProActions = p.StudioProActionsEnabled ?? current.StudioProActionsEnabled;
             var newMaiaIntegration  = p.MaiaIntegrationEnabled ?? current.MaiaIntegrationEnabled;
             var newRefreshHotkey   = p.RefreshFromDiskHotkey ?? current.RefreshFromDiskHotkey;
@@ -233,15 +231,14 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             // 1. Probe Studio Pro's primary MCP server. If unreachable, surface
             //    a notice but DO NOT abort the save — the user toggling MCP on
             //    is an intent we should persist; the connectivity is a runtime
-            //    concern they can fix in Studio Pro Preferences without losing
-            //    their Concord settings.
+            //    concern they can fix in Studio Pro Preferences.
             if (newEnabled)
             {
                 var probe = await McpProbe.ProbeAsync(newPort, log);
                 if (!probe.Ok)
                 {
                     Post("mcpResult", new McpResultPayload(false,
-                        $"Settings saved, but Studio Pro's MCP server didn't answer on port {newPort}. Enable it in Preferences -> Maia -> MCP Server, then re-save to wire up the CLI configs.",
+                        "Settings saved. Studio Pro MCP didn't respond — enable it in Edit → Preferences → Maia → MCP Server, then save again.",
                         Array.Empty<string>()));
                 }
             }
@@ -291,7 +288,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 {
                     manager.StopActionServer();
                     Post("mcpResult", new McpResultPayload(false,
-                        $"Action server failed to answer on port {actualPort}: {pr.Message}",
+                        $"Concord MCP didn't start on port {actualPort}. {pr.Message}",
                         Array.Empty<string>()));
                     Post("settings", BuildSettingsPayload(current));
                     return;
@@ -313,10 +310,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 XtermScrollbackLines = p.XtermScrollbackLines ?? current.XtermScrollbackLines,
                 Theme = p.Theme ?? current.Theme,
                 McpEnabled = newEnabled,
-                McpPort = newPort,
                 McpClients = newClients,
                 McpServerEnabled = newMcpServerEnabled,
-                McpServerPort = newMcpServerPort,
                 StudioProActionsEnabled = newStudioProActions,
                 MaiaIntegrationEnabled = newMaiaIntegration,
                 RefreshFromDiskHotkey = newRefreshHotkey,
@@ -376,25 +371,31 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         var mcpTouched   = touched.Where(t => !t.Contains(" skills")).ToArray();
         var skillTouched = touched.Where(t =>  t.Contains(" skills")).ToArray();
 
+        // Strip the " skills" suffix from skill labels so the result reads
+        // cleanly under the "Skill packs:" prefix instead of repeating "skills".
+        var skillNames = skillTouched
+            .Select(t => t.Replace(" skills", "").Replace(" (removed)", " (removed)"))
+            .ToArray();
+
         var parts = new List<string>();
 
         if (mcpTouched.Length > 0)
         {
             parts.Add(s.McpEnabled || s.McpServerEnabled
-                ? $"MCP servers updated for {string.Join(", ", mcpTouched)}"
-                : $"MCP servers disabled (cleaned up: {string.Join(", ", mcpTouched)})");
+                ? $"MCP wired for {string.Join(", ", mcpTouched)}"
+                : $"MCP removed for {string.Join(", ", mcpTouched)}");
         }
 
-        if (skillTouched.Length > 0)
+        if (skillNames.Length > 0)
         {
             parts.Add(s.SkillsEnabled
-                ? $"skill packs installed for {string.Join(", ", skillTouched)}"
-                : $"skill packs removed (cleaned up: {string.Join(", ", skillTouched)})");
+                ? $"Skill packs installed: {string.Join(", ", skillNames)}"
+                : $"Skill packs removed: {string.Join(", ", skillNames)}");
         }
 
         return parts.Count == 0
-            ? "Settings saved. Restarting open terminals…"
-            : string.Join("; ", parts) + ". Restarting open terminals…";
+            ? "Saved. Restarting terminals…"
+            : string.Join("; ", parts) + ". Restarting terminals…";
     }
 
     private async void HandleCreateTab(CreateTabPayload p)
@@ -523,12 +524,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 .Select(o => new ShellOptionPayload(o.Name, o.Path))
                 .ToList(),
             McpEnabled: s.McpEnabled,
-            McpPort: s.McpPort,
             McpClients: s.McpClients,
             McpServerEnabled: s.McpServerEnabled,
-            // Report the LIVE bound port when the bridge is running so the JS
-            // readout shows the truth (auto-fallback may have moved off 7783).
-            McpServerPort: manager.CurrentActionServerPort ?? s.McpServerPort,
             StudioProActionsEnabled: s.StudioProActionsEnabled,
             MaiaIntegrationEnabled: s.MaiaIntegrationEnabled,
             Platform: OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsMacOS() ? "darwin" : "linux",
@@ -539,6 +536,10 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 LogPath: log?.Path,
                 SettingsPath: settingsPath),
             StudioProMcp: ProbeStudioProMcp(),
+            // The live bound port — null when the bridge isn't running.
+            // Display-only; never echoed back through SaveSettings (that
+            // round-trip is exactly what caused the 8099 leak in v4.1.x).
+            LiveActionServerPort: manager.CurrentActionServerPort,
             SkillsEnabled: s.SkillsEnabled,
             SkillClients: s.SkillClients,
             BundledSkills: bundled);

@@ -64,7 +64,7 @@ public static class SettingsApplyHelper
         var tomlNeeded = nextClients.Contains("codex");
         var tomlHadIt  = prev.McpEnabled && prevClients.Contains("codex");
 
-        var probedPort = probeStudioProMcpPort() ?? next.McpPort;
+        var probedPort = probeStudioProMcpPort() ?? TerminalSettings.StudioProMcpDefaultPort;
         var url = $"http://localhost:{probedPort}/mcp";
         var json = new McpJsonConfigurator(projectDir);
         var toml = new McpTomlConfigurator();
@@ -110,7 +110,7 @@ public static class SettingsApplyHelper
         var tomlNeeded = nextClients.Contains("codex");
         var tomlHadIt  = prev.McpServerEnabled && prevClients.Contains("codex");
 
-        var port = currentActionServerPort() ?? next.McpServerPort;
+        var port = currentActionServerPort() ?? StudioProActionServer.DefaultPort;
         var url = $"http://localhost:{port}/mcp";
         var json = new McpJsonConfigurator(projectDir);
         var toml = new McpTomlConfigurator();

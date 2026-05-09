@@ -110,10 +110,14 @@ public class SettingsApplyHelperTests : IDisposable
     }
 
     [Fact]
-    public void ApplyAll_ProbedPortFallsBackToSavedPort_WhenProbeReturnsNull()
+    public void ApplyAll_ProbedPortFallsBackToConstant_WhenProbeReturnsNull()
     {
+        // v4.1.2: McpPort field was removed from TerminalSettings (it had
+        // become dead-weight that mis-displayed runtime state as user intent).
+        // The probe-failure fallback is now a documented constant, not a
+        // round-trippable saved value.
         var prev = AllOff();
-        var next = ClaudePlusCopilot() with { McpPort = 9999 };
+        var next = ClaudePlusCopilot();
 
         SettingsApplyHelper.ApplyAll(
             projectDir, bundledRoot, prev, next, log,
@@ -121,8 +125,8 @@ public class SettingsApplyHelperTests : IDisposable
             probeStudioProMcpPort:   () => null);  // probe fails
 
         var json = File.ReadAllText(Path.Combine(projectDir, ".mcp.json"));
-        // Falls back to next.McpPort when probe returns null.
-        json.Should().Contain("9999");
+        // Falls back to TerminalSettings.StudioProMcpDefaultPort = 8100.
+        json.Should().Contain(TerminalSettings.StudioProMcpDefaultPort.ToString());
     }
 
     [Fact]

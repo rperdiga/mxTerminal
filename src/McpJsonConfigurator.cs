@@ -98,7 +98,12 @@ public sealed class McpJsonConfigurator
 
         var tmp = filePath + ".tmp";
         File.WriteAllText(tmp, root.ToJsonString(WriteOpts) + Environment.NewLine);
-        if (File.Exists(filePath)) File.Delete(filePath);
-        File.Move(tmp, filePath);
+        // Journaled-rename swap on NTFS: never leaves the user without
+        // a .mcp.json mid-operation (vs. the old delete-then-move pattern,
+        // which had a window where AV/another reader saw the file gone).
+        if (File.Exists(filePath))
+            File.Replace(tmp, filePath, destinationBackupFileName: null, ignoreMetadataErrors: true);
+        else
+            File.Move(tmp, filePath);
     }
 }

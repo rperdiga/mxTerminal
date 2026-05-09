@@ -27,10 +27,8 @@ interface SettingsPayload {
   theme: string;
   availableShells: ShellOption[];
   mcpEnabled: boolean;
-  mcpPort: number;
   mcpClients: string[];
   mcpServerEnabled: boolean;
-  mcpServerPort: number;
   studioProActionsEnabled: boolean;
   maiaIntegrationEnabled: boolean;
   platform: string;
@@ -38,6 +36,9 @@ interface SettingsPayload {
   restoreTabsOnReopen: boolean;
   about: AboutInfo;
   studioProMcp: StudioProMcpInfo | null;
+  // Read-only display field. Live bound port of the Concord MCP server, or
+  // null when not running. Never echoed back through saveSettings.
+  liveActionServerPort: number | null;
   skillsEnabled: boolean;
   skillClients: string[];
   bundledSkills: BundledSkill[];
@@ -314,17 +315,19 @@ export class SettingsModal {
     this.chkActions.checked = d.mcpServerEnabled;
     this.chkSpActions.checked = d.studioProActionsEnabled;
     this.chkMaia.checked = d.maiaIntegrationEnabled;
-    this.renderActionsPortReadout(d.mcpServerEnabled, d.mcpServerPort);
+    this.renderActionsPortReadout(d.mcpServerEnabled, d.liveActionServerPort);
     this.applyMaiaPlatformGate(d.platform);
     this.inpRefreshHotkey.value = d.refreshFromDiskHotkey;
     this.onMcpEnabledChange(); // also flips actions enabled state
 
     // Skills
     this.chkSkillsEnabled.checked = !!d.skillsEnabled;
-    const skillClients = new Set((d.skillClients ?? []).map((c) => c.toLowerCase()));
-    this.chkSkillsClaude.checked  = skillClients.has("claude");
+    const skillClients = new Set(
+      (d.skillClients ?? []).map((c) => c.toLowerCase()),
+    );
+    this.chkSkillsClaude.checked = skillClients.has("claude");
     this.chkSkillsCopilot.checked = skillClients.has("copilot");
-    this.chkSkillsCodex.checked   = skillClients.has("codex");
+    this.chkSkillsCodex.checked = skillClients.has("codex");
     this.onSkillsEnabledChange();
     this.renderBundledSkillsList(d.bundledSkills ?? []);
 
@@ -336,20 +339,25 @@ export class SettingsModal {
     // the canonical state surfaces now.)
   }
 
-  /** Read-only port readout under the Action bridge enable checkbox.
-   *  Shows the live bound port (or "not running" when disabled). */
-  private renderActionsPortReadout(enabled: boolean, boundPort: number): void {
+  /** Read-only port readout under the Concord MCP enable checkbox.
+   *  Shows the live bound port (or a friendly "off" / "starting…" state). */
+  private renderActionsPortReadout(
+    enabled: boolean,
+    livePort: number | null,
+  ): void {
     if (!this.actionsPortReadout) return;
     if (!enabled) {
       this.actionsPortReadout.classList.remove("warn");
-      this.actionsPortReadout.innerHTML = `Concord MCP is <strong>not running</strong>. Enable to start the local HTTP server that exposes Concord tools to the CLIs above.`;
+      this.actionsPortReadout.innerHTML = `Concord MCP is off. Enable to let your CLIs drive Studio Pro directly.`;
+      return;
+    }
+    if (livePort == null) {
+      this.actionsPortReadout.classList.add("warn");
+      this.actionsPortReadout.innerHTML = `Concord MCP starting…`;
       return;
     }
     this.actionsPortReadout.classList.remove("warn");
-    this.actionsPortReadout.innerHTML =
-      `Concord MCP is listening on <code>localhost:${boundPort}</code>. ` +
-      `Each Save writes that URL into the CLI configs. Default is 7783; ` +
-      `if that's busy on your machine the bridge falls back to a free port automatically.`;
+    this.actionsPortReadout.innerHTML = `Connected on <code>localhost:${livePort}</code>.`;
   }
 
   private applyMaiaPlatformGate(platform: string): void {
@@ -369,23 +377,17 @@ export class SettingsModal {
     if (!this.mcpPortReadout) return;
     if (sp?.enabled === true && sp.port != null) {
       this.mcpPortReadout.classList.remove("warn");
-      this.mcpPortReadout.innerHTML =
-        `Studio Pro reports its MCP server on <code>localhost:${sp.port}</code>. ` +
-        `Each Save writes that URL into the CLI configs below.`;
+      this.mcpPortReadout.innerHTML = `Connected on <code>localhost:${sp.port}</code>.`;
       return;
     }
     if (sp?.enabled === false) {
       this.mcpPortReadout.classList.add("warn");
-      this.mcpPortReadout.innerHTML =
-        `Studio Pro's MCP server is <strong>disabled</strong>. ` +
-        `Enable it in <em>Edit → Preferences → Maia → MCP Server</em>, then reopen this pane.`;
+      this.mcpPortReadout.innerHTML = `Studio Pro MCP is off. Enable in <em>Edit → Preferences → Maia → MCP Server</em>, then reopen Concord.`;
       return;
     }
     // Probe couldn't tell — file unreadable, schema mismatch, etc.
     this.mcpPortReadout.classList.add("warn");
-    this.mcpPortReadout.innerHTML =
-      `Couldn't read Studio Pro's MCP preference. Check <em>Edit → Preferences → Maia → MCP Server</em> ` +
-      `is enabled with a port set, then reopen this pane.`;
+    this.mcpPortReadout.innerHTML = `Studio Pro MCP not detected. Check <em>Edit → Preferences → Maia → MCP Server</em> is enabled, then reopen Concord.`;
   }
 
   private populateAbout(a: AboutInfo | undefined): void {
@@ -466,9 +468,9 @@ export class SettingsModal {
     if (this.chkMcpCodex.checked) mcpClients.push("codex");
 
     const skillClients: string[] = [];
-    if (this.chkSkillsClaude.checked)  skillClients.push("claude");
+    if (this.chkSkillsClaude.checked) skillClients.push("claude");
     if (this.chkSkillsCopilot.checked) skillClients.push("copilot");
-    if (this.chkSkillsCodex.checked)   skillClients.push("codex");
+    if (this.chkSkillsCodex.checked) skillClients.push("codex");
 
     this.bridge.send("saveSettings", {
       shellPath,

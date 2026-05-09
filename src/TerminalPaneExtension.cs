@@ -42,6 +42,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
     /// </summary>
     private readonly List<string> pendingFirstRunNotices = new();
     private bool firstRunChecked;
+    private bool upgradeChecked;
 
     private readonly IExtensionFileService extensionFileService;
 
@@ -66,6 +67,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         EnsureManagerForwardingHooked();
         TryAutoStartActionServer();
         TryFirstRunApply();
+        TryUpgradeApply();
         TryRestoreTabsOnFirstOpen();
 
         // Append ?theme=dark|light from Studio Pro's persisted preference
@@ -365,7 +367,10 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 currentActionServerPort: () => manager.CurrentActionServerPort,
                 probeStudioProMcpPort:   () => ProbeStudioProMcpPort());
 
-            defaults.Save(dir);
+            // Stamp the version we just applied so TryUpgradeApply on the
+            // SAME Open() call sees a current stamp and is a no-op
+            // (otherwise it would re-run the same apply seconds later).
+            (defaults with { LastAppliedVersion = ConcordVersion() }).Save(dir);
 
             pendingFirstRunNotices.AddRange(BuildFirstRunNotices(defaults, touched));
             log.Info($"[first-run] applied {touched.Length} target(s); queued {pendingFirstRunNotices.Count} notice(s)");
@@ -377,17 +382,167 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
     }
 
     /// <summary>
-    /// Build the 1–3 advisory strings shown to the user on first run. The
-    /// "Concord wired up" line summarizes what was applied; the SP-MCP and
-    /// Maia advisories surface configuration the customer needs to handle
-    /// outside Concord.
+    /// Detects "first open after Concord upgrade" by comparing the settings
+    /// file's stored <see cref="TerminalSettings.LastAppliedVersion"/> to
+    /// the current Concord assembly version. On mismatch, re-defaults the
+    /// wiring keys (MCP + skills + sub-toggles) and runs the apply chain so
+    /// a customer who upgrades from older Concord with off-by-default keys
+    /// gets new functionality materialized to disk without needing to open
+    /// Settings and Save manually. Runtime preferences (shell, theme, ring
+    /// buffer, scrollback, restore-tabs, refresh hotkey, ports) are
+    /// preserved verbatim from the loaded settings.
+    /// Idempotent per upgrade: stamps <c>LastAppliedVersion</c> on save
+    /// so subsequent Opens at the same Concord version are no-ops, and
+    /// deliberately no-ops when the stamp is newer (a colleague pulled the
+    /// project from a machine running a more recent Concord — we never
+    /// downgrade their wiring).
+    /// </summary>
+    private void TryUpgradeApply()
+    {
+        if (upgradeChecked) return;
+        upgradeChecked = true;
+
+        try
+        {
+            var dir = (CurrentApp?.Root as IProject)?.DirectoryPath;
+            if (dir is null) return;
+
+            var settingsPath = Path.Combine(dir, "resources", "terminal-settings.json");
+            if (!File.Exists(settingsPath))
+            {
+                // No file → first-run path already handled it (and stamped
+                // the current version). Nothing to upgrade.
+                return;
+            }
+
+            var loaded = TerminalSettings.Load(dir);
+            var current = ConcordVersion();
+            if (!IsUpgradeApplyNeeded(loaded.LastAppliedVersion, current))
+            {
+                log.Info($"[upgrade] stamp '{loaded.LastAppliedVersion ?? "<null>"}' satisfies current {current} — no-op");
+                return;
+            }
+
+            log.Info($"[upgrade] applying wiring defaults: stamp '{loaded.LastAppliedVersion ?? "<null>"}' -> {current}");
+
+            var defaults = TerminalSettings.Defaults();
+            // Re-default ONLY wiring keys (MCP + skills + sub-toggles).
+            // Runtime prefs (shell/theme/ports/hotkeys/scrollback/etc.) come
+            // through from `loaded` unchanged. Trade-off accepted: a user
+            // who deliberately turned MCP off in an older Concord gets it
+            // re-enabled once on first open after upgrade — the banner
+            // points them to Settings if they want to re-disable.
+            var nextSettings = loaded with
+            {
+                McpEnabled              = defaults.McpEnabled,
+                McpClients              = defaults.McpClients,
+                McpServerEnabled        = defaults.McpServerEnabled,
+                StudioProActionsEnabled = defaults.StudioProActionsEnabled,
+                MaiaIntegrationEnabled  = defaults.MaiaIntegrationEnabled,
+                SkillsEnabled           = defaults.SkillsEnabled,
+                SkillClients            = defaults.SkillClients,
+                LastAppliedVersion      = current,
+            };
+
+            // "Empty prev" so the apply chain treats every CLI as newly-
+            // added — same pattern as TryFirstRunApply. The underlying
+            // helpers (Upsert, InstallAll) are idempotent; re-installing a
+            // skill folder that's already current is a safe overwrite.
+            var emptyPrev = nextSettings with
+            {
+                McpEnabled = false,
+                McpClients = Array.Empty<string>(),
+                McpServerEnabled = false,
+                SkillsEnabled = false,
+                SkillClients = Array.Empty<string>(),
+            };
+
+            var bundledSkillsRoot = extensionFileService.ResolvePath("skills");
+
+            var touched = SettingsApplyHelper.ApplyAll(
+                dir,
+                bundledSkillsRoot,
+                emptyPrev,
+                nextSettings,
+                log,
+                currentActionServerPort: () => manager.CurrentActionServerPort,
+                probeStudioProMcpPort:   () => ProbeStudioProMcpPort());
+
+            nextSettings.Save(dir);
+
+            var prevStamp = loaded.LastAppliedVersion ?? "pre-tracking";
+            if (touched.Length > 0)
+            {
+                pendingFirstRunNotices.Add($"Updated to {current}. Rewired: {string.Join(", ", touched)}. Open Settings to adjust.");
+                // Only re-surface SP-MCP / Maia advisories when an actual
+                // wiring change happened. Cosmetic patch upgrades (e.g.
+                // 4.1.0 → 4.1.1 with no apply diff) shouldn't re-show
+                // reminders the user already acknowledged on prior runs.
+                pendingFirstRunNotices.AddRange(BuildAdvisoryNotices(nextSettings));
+            }
+            else
+            {
+                pendingFirstRunNotices.Add($"Updated to {current}. No changes.");
+            }
+            log.Info($"[upgrade] applied {touched.Length} target(s); queued {pendingFirstRunNotices.Count} notice(s)");
+        }
+        catch (Exception ex)
+        {
+            log.Error("[upgrade] apply failed", ex);
+        }
+    }
+
+    /// <summary>
+    /// Decide whether to run upgrade-apply for a given settings stamp + the
+    /// current assembly version. Apply when stamp is missing/empty or
+    /// strictly older (semver). Equal or newer is a no-op so a colleague
+    /// who pulls a project last-edited from a machine running a newer
+    /// Concord doesn't have their wiring downgraded by an older runtime.
+    /// </summary>
+    internal static bool IsUpgradeApplyNeeded(string? stamp, string current)
+    {
+        if (string.IsNullOrEmpty(stamp)) return true;
+        if (Version.TryParse(stamp, out var prev) && Version.TryParse(current, out var curr))
+            return prev < curr;
+        // Unparsable stamp: be conservative, only apply on a strict mismatch.
+        return !string.Equals(stamp, current, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Three-part Concord version string read from the assembly (e.g. "4.1.0").
+    /// Falls back to "0.0.0" only if the assembly has no version metadata,
+    /// which would force every Open() to treat the install as the oldest
+    /// possible version — safe-but-noisy.
+    /// </summary>
+    private static string ConcordVersion()
+    {
+        var v = typeof(TerminalPaneExtension).Assembly.GetName().Version;
+        return v?.ToString(3) ?? "0.0.0";
+    }
+
+    /// <summary>
+    /// Build the 1–3 advisory strings shown to the user on first run. Leads
+    /// with a "Concord wired up" summary of what was applied, followed by
+    /// shared SP-MCP / Maia advisories from <see cref="BuildAdvisoryNotices"/>.
     /// </summary>
     private string[] BuildFirstRunNotices(TerminalSettings s, string[] touched)
     {
         var notices = new List<string>();
         if (touched.Length > 0)
-            notices.Add($"Concord wired up for first-time use: {string.Join(", ", touched)}.");
+            notices.Add($"Concord ready. Wired: {string.Join(", ", touched)}.");
+        notices.AddRange(BuildAdvisoryNotices(s));
+        return notices.ToArray();
+    }
 
+    /// <summary>
+    /// Conditional SP-MCP-disabled and Maia-panel advisories shared by the
+    /// first-run and upgrade flows. The leading "Concord wired up" /
+    /// "Concord upgraded" line is built by the caller; this helper only
+    /// emits the shared advice strings.
+    /// </summary>
+    private string[] BuildAdvisoryNotices(TerminalSettings s)
+    {
+        var notices = new List<string>();
         try
         {
             var version = StudioProVersionFromExePath();
@@ -395,16 +550,16 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
             {
                 var info = StudioProThemeProbe.ReadMcpServer(version);
                 if (info.Enabled != true)
-                    notices.Add("Studio Pro's MCP server appears disabled. Enable it in Edit → Preferences → Maia → MCP Server, then reopen this pane to make the wired CLI configs functional.");
+                    notices.Add("Studio Pro MCP is off. Enable it in Edit → Preferences → Maia → MCP Server, then reopen Concord.");
             }
         }
         catch (Exception ex)
         {
-            log.Warn($"[first-run] SP-MCP probe failed: {ex.Message}");
+            log.Warn($"[advisory] SP-MCP probe failed: {ex.Message}");
         }
 
         if (OperatingSystem.IsWindows() && s.MaiaIntegrationEnabled)
-            notices.Add("Maia tools require the Maia panel to be visible. Keep it open while Claude Code or Copilot CLI drives Maia.");
+            notices.Add("Keep the Maia panel open while Maia tools are in use.");
 
         return notices.ToArray();
     }

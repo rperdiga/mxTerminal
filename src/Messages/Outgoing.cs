@@ -31,10 +31,8 @@ public sealed record SettingsPayload(
     string Theme,
     IReadOnlyList<ShellOptionPayload> AvailableShells,
     bool McpEnabled,
-    int McpPort,
     string[] McpClients,
     bool McpServerEnabled,
-    int McpServerPort,
     bool StudioProActionsEnabled,
     bool MaiaIntegrationEnabled,
     string Platform,
@@ -42,6 +40,11 @@ public sealed record SettingsPayload(
     bool RestoreTabsOnReopen,
     AboutInfoPayload About,
     StudioProMcpInfoPayload? StudioProMcp,
+    // Read-only display field: live bound port of the Concord MCP server, or
+    // null when the bridge isn't running. Never echoed back through SaveSettings
+    // — the runtime always picks its own port at startup. Surfaced separately
+    // from the schema so display-state can never silently become user-intent.
+    int? LiveActionServerPort,
     bool SkillsEnabled,
     string[] SkillClients,
     IReadOnlyList<BundledSkillPayload> BundledSkills);

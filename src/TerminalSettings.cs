@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Terminal;
 
@@ -9,17 +10,32 @@ public sealed record TerminalSettings(
     int XtermScrollbackLines,
     string Theme,
     bool McpEnabled,
-    int McpPort,
     string[] McpClients,
     bool McpServerEnabled,
-    int McpServerPort,
     bool StudioProActionsEnabled,
     bool MaiaIntegrationEnabled,
     string RefreshFromDiskHotkey,
     bool RestoreTabsOnReopen,
     bool SkillsEnabled,
-    string[] SkillClients)
+    string[] SkillClients,
+    // Stamps the Concord version that last ran the apply-defaults chain
+    // against this project. Null on fresh-defaults / files written by
+    // pre-4.1.1 Concord. Compared against the current assembly version
+    // by TerminalPaneExtension.TryUpgradeApply to decide whether to
+    // re-default the wiring keys (MCP + skills + sub-toggles) on first
+    // open after an upgrade. Default value lets all existing positional
+    // constructors compile unchanged.
+    string? LastAppliedVersion = null)
 {
+    /// <summary>
+    /// Studio Pro's standard MCP-server port (Mendix default in Edit →
+    /// Preferences → Maia → MCP Server). The runtime always re-probes
+    /// Studio Pro's actual port from <c>%LOCALAPPDATA%\Mendix\Settings.sqlite</c>
+    /// at save time — this constant is the fallback only when the probe
+    /// fails (e.g. SQLite locked, Studio Pro not yet launched).
+    /// </summary>
+    public const int StudioProMcpDefaultPort = 8100;
+
     public static TerminalSettings Defaults() => new(
         ShellPath: DefaultShellPath(),
         Args: Array.Empty<string>(),
@@ -30,20 +46,19 @@ public sealed record TerminalSettings(
         // ~/.codex/config.toml — keeping it opt-in avoids touching state
         // outside the project tree without explicit consent.
         McpEnabled: true,
-        // Studio Pro's standard MCP server port (HKLM\SOFTWARE\Mendix...).
-        // The runtime always re-probes Studio Pro's actual port from
-        // %LOCALAPPDATA%\Mendix\Settings.sqlite at save time — this is just
-        // the fallback when the probe fails (e.g. locked DB).
-        McpPort: 8100,
         McpClients: new[] { "claude", "copilot" },
         McpServerEnabled: true,
-        McpServerPort: 7783,
         StudioProActionsEnabled: true,
         MaiaIntegrationEnabled: true,
         RefreshFromDiskHotkey: "F4",
         RestoreTabsOnReopen: true,
         SkillsEnabled: true,
-        SkillClients: new[] { "claude", "copilot" });
+        SkillClients: new[] { "claude", "copilot" },
+        // Defaults() is the in-memory "no file" representation; the
+        // version stamp is written to disk by the apply paths
+        // (TryFirstRunApply / TryUpgradeApply) once they've actually
+        // materialized state, not by Defaults() itself.
+        LastAppliedVersion: null);
 
     private const string FileName = "terminal-settings.json";
     private const string SubDir = "resources";
@@ -79,7 +94,11 @@ public sealed record TerminalSettings(
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
-        WriteIndented = true
+        WriteIndented = true,
+        // Skip null fields when serializing — keeps the saved file clean.
+        // Otherwise legacy back-compat keys like ActionsServerEnabled
+        // surface as `"actionsServerEnabled": null` noise on every save.
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
     private static string PathFor(string projectDir) =>
@@ -96,12 +115,11 @@ public sealed record TerminalSettings(
             if (dto is null) return Defaults();
             var def = Defaults();
             // Migration: old key "actionsServerEnabled" → new key "mcpServerEnabled".
-            // Old key "actionsServerPort" → new key "mcpServerPort". If both old
-            // and new are present, new wins. Sub-toggles default true so an old
-            // settings file that just had the master flag opts into both
-            // tool families on first load.
+            // Sub-toggles default true so an old settings file that just had
+            // the master flag opts into both tool families on first load.
+            // (Old port keys mcpServerPort / actionsServerPort / mcpPort are
+            // silently dropped on next save — the runtime never read them.)
             bool master = dto.McpServerEnabled ?? dto.ActionsServerEnabled ?? def.McpServerEnabled;
-            int port = dto.McpServerPort ?? dto.ActionsServerPort ?? def.McpServerPort;
             return new TerminalSettings(
                 ShellPath: MigrateShellPathForPlatform(dto.ShellPath ?? def.ShellPath),
                 Args: dto.Args ?? def.Args,
@@ -109,19 +127,30 @@ public sealed record TerminalSettings(
                 XtermScrollbackLines: dto.XtermScrollbackLines ?? def.XtermScrollbackLines,
                 Theme: dto.Theme ?? def.Theme,
                 McpEnabled: dto.McpEnabled ?? def.McpEnabled,
-                McpPort: dto.McpPort ?? def.McpPort,
                 McpClients: dto.McpClients ?? def.McpClients,
                 McpServerEnabled: master,
-                McpServerPort: port,
                 StudioProActionsEnabled: dto.StudioProActionsEnabled ?? def.StudioProActionsEnabled,
                 MaiaIntegrationEnabled: dto.MaiaIntegrationEnabled ?? def.MaiaIntegrationEnabled,
                 RefreshFromDiskHotkey: dto.RefreshFromDiskHotkey ?? def.RefreshFromDiskHotkey,
                 RestoreTabsOnReopen: dto.RestoreTabsOnReopen ?? def.RestoreTabsOnReopen,
                 SkillsEnabled: dto.SkillsEnabled ?? def.SkillsEnabled,
-                SkillClients: dto.SkillClients ?? def.SkillClients);
+                SkillClients: dto.SkillClients ?? def.SkillClients,
+                // Pass through verbatim — null is meaningful (signals
+                // "this settings file pre-dates upgrade-apply tracking"
+                // to TryUpgradeApply, which then runs against it).
+                LastAppliedVersion: dto.LastAppliedVersion);
         }
         catch (JsonException)
         {
+            // The user's settings file is corrupt. Don't silently default —
+            // back it up so the user can recover their custom shell/theme/etc.,
+            // then return defaults so the pane keeps working.
+            try
+            {
+                var backup = path + ".broken-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + ".bak";
+                File.Move(path, backup);
+            }
+            catch { /* best-effort */ }
             return Defaults();
         }
     }
@@ -133,18 +162,28 @@ public sealed record TerminalSettings(
         var path = System.IO.Path.Combine(dir, FileName);
         var dto = new Dto(
             ShellPath, Args, RingBufferKB, XtermScrollbackLines, Theme,
-            McpEnabled, McpPort, McpClients,
-            McpServerEnabled, McpServerPort,
+            McpEnabled, McpClients,
+            McpServerEnabled,
             StudioProActionsEnabled, MaiaIntegrationEnabled,
             RefreshFromDiskHotkey, RestoreTabsOnReopen,
             SkillsEnabled, SkillClients,
-            // Legacy keys: write them too so an older Concord build that reads
-            // this file keeps the master toggle in sync. Drop after 1.4.0.
-            ActionsServerEnabled: McpServerEnabled,
-            ActionsServerPort: McpServerPort);
-        File.WriteAllText(path, JsonSerializer.Serialize(dto, Json));
+            LastAppliedVersion: LastAppliedVersion);
+        // Atomic write: stage to .tmp, then File.Replace for journaled
+        // rename on NTFS so a crash mid-save can never leave an empty file.
+        var tmp = path + ".tmp";
+        File.WriteAllText(tmp, JsonSerializer.Serialize(dto, Json));
+        if (File.Exists(path)) File.Replace(tmp, path, destinationBackupFileName: null, ignoreMetadataErrors: true);
+        else File.Move(tmp, path);
     }
 
+    // The DTO has fewer fields than TerminalSettings: McpPort, McpServerPort,
+    // and ActionsServerPort were removed in v4.1.2 (they were persisted but
+    // ignored at runtime — the runtime always probes Studio Pro's live port
+    // for the primary MCP, and binds 7783 with auto-fallback for Concord MCP).
+    // Older settings files containing those keys deserialize fine — JSON
+    // ignores fields the DTO doesn't declare — and the next Save drops them.
+    // ActionsServerEnabled is kept ONLY for back-compat reads from pre-1.3.0
+    // files that used the legacy master-flag name; never written.
     private sealed record Dto(
         string? ShellPath,
         string[]? Args,
@@ -152,16 +191,15 @@ public sealed record TerminalSettings(
         int? XtermScrollbackLines,
         string? Theme,
         bool? McpEnabled,
-        int? McpPort,
         string[]? McpClients,
         bool? McpServerEnabled,
-        int? McpServerPort,
         bool? StudioProActionsEnabled,
         bool? MaiaIntegrationEnabled,
         string? RefreshFromDiskHotkey,
         bool? RestoreTabsOnReopen,
         bool? SkillsEnabled,
         string[]? SkillClients,
-        bool? ActionsServerEnabled = null,
-        int? ActionsServerPort = null);
+        string? LastAppliedVersion = null,
+        // Legacy back-compat reads only — never written:
+        bool? ActionsServerEnabled = null);
 }
