@@ -12,8 +12,8 @@
     <LangVersion>preview</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
-    <Version>4.1.2</Version>
-    <InformationalVersion>4.1.2+port-leak-fix</InformationalVersion>
+    <Version>4.1.3</Version>
+    <InformationalVersion>4.1.3+mac-scoping</InformationalVersion>
     <Authors>Ricardo Perdigao, Kelly Seale</Authors>
     <Company>Siemens Digital Industries Software — CoE Team</Company>
     <Product>Concord — Terminal for Studio Pro</Product>
@@ -58,6 +58,13 @@
       <Visible>false</Visible>
     </Content>
     <Content Include="skills/**/*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <!-- Mac-only overlay: same folder names as skills/, but their contents
+         replace the Windows-flavored ones at install time on macOS. See
+         SettingsApplyHelper.ApplySkillsConfig + SkillInstaller's overlayRoot. -->
+    <Content Include="skills-mac/**/*">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>

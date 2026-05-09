@@ -2,7 +2,7 @@
 
 > *"The terminal Studio Pro was missing."*
 
-**Current version: 4.1.2** ([CHANGELOG](./CHANGELOG.md)) — **Default-on settings, first-run + upgrade auto-apply, port-leak fix**. Bundled Mendix skill packs ship preinstalled into the open project (Claude Code + Copilot CLI by default; Codex opt-in). Concord ships 7 prescriptive Mendix skill packs that install into your project's `.claude/skills/`, `.github/skills/`, or `.codex/skills/` per the CLIs you enable. Combined with the renamed Concord MCP server (Studio Pro UI actions + Maia integration housed under one HTTP endpoint), the CLI agent in your terminal is ready to drive Studio Pro from day one.
+**Current version: 4.1.3** ([CHANGELOG](./CHANGELOG.md)) — **Mac scoping: Maia tools hidden on macOS, Mac variant of `mendix-page-gen` skill that hands off page writes to the user**. Bundled Mendix skill packs ship preinstalled into the open project (Claude Code + Copilot CLI by default; Codex opt-in). Concord ships 7 prescriptive Mendix skill packs that install into your project's `.claude/skills/`, `.github/skills/`, or `.codex/skills/` per the CLIs you enable. Combined with the renamed Concord MCP server (Studio Pro UI actions + Maia integration housed under one HTTP endpoint), the CLI agent in your terminal is ready to drive Studio Pro from day one.
 
 Concord is a Mendix Studio Pro 11.10+ extension (Windows and macOS) that embeds a tabbed terminal as a dockable pane. The pane is the workspace where you run **Claude Code**, **Codex**, or **GitHub Copilot CLI** — and they talk directly to:
 
@@ -87,7 +87,7 @@ Two-tier transport: injected JS agent (Tier 1, fast) with DOM-scrape fallback (T
 
 Enable both families in **Settings → Concord MCP** (sub-toggles for each).
 
-> **macOS:** the four hotkey-based UI-action tools work on Mac via `osascript` driving System Events to keystroke Studio Pro (identified by Unix PID, so the `.app` display name doesn't matter). One-time setup: macOS prompts for Accessibility permission the first time Concord MCP runs — open **System Settings → Privacy & Security → Accessibility** and enable Studio Pro. Until you grant it, the calls fail with a clear "Accessibility permission not granted" message that Claude can relay to you. The two service-based tools (`get_active_run_configuration`, `get_app_status`) work on both platforms with no permissions needed. **Maia integration is Windows-only in this release**; the toggle appears disabled on Mac.
+> **macOS:** the four hotkey-based UI-action tools work on Mac via `osascript` driving System Events to keystroke Studio Pro (identified by Unix PID, so the `.app` display name doesn't matter). One-time setup: macOS prompts for Accessibility permission the first time Concord MCP runs — open **System Settings → Privacy & Security → Accessibility** and enable Studio Pro. Until you grant it, the calls fail with a clear "Accessibility permission not granted" message that Claude can relay to you. The two service-based tools (`get_active_run_configuration`, `get_app_status`) work on both platforms with no permissions needed. **Maia integration is Windows-only**; the toggle appears disabled on Mac and the `maia__*` tool family is omitted from the Concord MCP advertise list when running on macOS — see [docs/MAIA_MAC_FEASIBILITY.md](./docs/MAIA_MAC_FEASIBILITY.md) for why (WKWebView vs. WebView2, no host opt-in, no Mendix Extensions API surface for Maia today).
 
 ### Settings panel
 
@@ -119,6 +119,19 @@ Each is a single `SKILL.md` file with YAML frontmatter that the CLI agent auto-d
 | `mendix-workflow-update` | Recipes for safe workflow mutations |
 
 Per-CLI install paths: Claude Code → `.claude/skills/`; Copilot CLI → `.github/skills/`; Codex → `.codex/skills/` (opt-in).
+
+### macOS skill variant — `mendix-page-gen`
+
+The Windows version of `mendix-page-gen` instructs the CLI agent to delegate page writes to Maia via the Concord MCP `maia__ask` tool (Studio Pro's MCP doesn't expose `pg_*` tools, so Maia is the only path). On macOS, those tools aren't available because Maia integration is Windows-only.
+
+To work around this, Concord ships a **Mac-specific variant of `mendix-page-gen`** at [`skills-mac/mendix-page-gen/SKILL.md`](./skills-mac/mendix-page-gen/SKILL.md). On macOS, the Skill installer overlays this file on top of the Windows version at install time, so what lands in `<project>/.claude/skills/mendix-page-gen/SKILL.md` is the Mac variant. The widget catalog and rules are identical; only the head section changes — instead of "delegate to Maia", the Mac variant tells the CLI to:
+
+1. Build the `pg_write_page` JSON locally (same recipe).
+2. **Print a copy-paste prompt to the user** with explicit instructions: "Open Maia in Studio Pro, paste this prompt, send, reply `done` when Maia finishes."
+3. **Stop and wait** for the user to confirm.
+4. Verify directly with `ped_check_errors` (CLI-side, not user-reported).
+
+The other 6 skill packs (`mendix-microflow-*`, `mendix-view-entities`, `mendix-workflow-*`) don't reference Maia and are identical on both platforms — no Mac variant needed.
 
 ---
 
