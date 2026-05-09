@@ -1,9 +1,10 @@
 # Concord — Marketplace screenshot shot list
 
-11 candidate shots; the marketplace caps the upload at 10. If forced
-to drop one, drop **#6 (Settings: About)** — it's the least sales-y
-of the set. Each is 600×420, captured by Neo, processed (cropped +
-light annotation) afterwards.
+12 candidate shots (#12 added in v4.1.2); the marketplace caps the
+upload at 10. If forced to drop, drop in this order: **#6 (Settings:
+About)**, then **#11 (Menu integration)** — both are the least
+sales-y of the set. Each is 600×420, captured by Neo, processed
+(cropped + light annotation) afterwards.
 
 ## General framing rules
 
@@ -22,7 +23,7 @@ light annotation) afterwards.
   keys, tokens, or `op://` references visible in any terminal
   output, log line, or settings field.
 - **No personal info.** Hide or obscure anything that names a real
-  person other than the OneSource credit.
+  person other than the CoE Team credit in the modal footer.
 
 ## Shot list
 
@@ -49,7 +50,7 @@ light annotation) afterwards.
 - Show Theme dropdown set to Auto, Restore tabs ON, Scrollback
   field populated
 - Capture the entire settings modal including the left rail (with
-  the OneSource logo at the bottom of the rail)
+  the CoE Team logo at the bottom of the rail)
 - Either theme
 
 ### 3 — Settings: Studio Pro MCP
@@ -93,9 +94,9 @@ light annotation) afterwards.
 **Goal:** "Built by professionals."
 
 - Open Settings → About section
-- Show the Concord ASCII art, version (4.0.0), log file path,
-  settings file path
-- Footer credit "A Siemens CoE extension for Studio Pro." visible
+- Show the Concord ASCII art, version (current; e.g. v4.1.2), log
+  file path, settings file path
+- Footer credit "Built by the Siemens CoE Team." visible
 
 ### 7 — Multi-tab terminal
 
@@ -140,6 +141,18 @@ light annotation) afterwards.
 - Goal: prove discoverability — users find Concord without reading
   docs
 
+### 12 — First-run banner (optional, added v4.1.2 cycle)
+
+**Goal:** "Concord wires itself up automatically."
+
+- Open the Concord pane on a fresh Mendix project that has never
+  had Concord installed before
+- Capture the moment the first-run banner appears at the top of
+  the pane: `Concord ready. Wired: Claude Code, Copilot CLI + skill packs.`
+- Optionally crop to include the SP-MCP advisory banner stacked
+  underneath if it fires (depends on whether Studio Pro's MCP
+  server is enabled in Preferences)
+
 ## Post-capture processing
 
 For each capture:
@@ -147,8 +160,9 @@ For each capture:
 1. Crop to 600×420 (10:7 aspect)
 2. Add a 1-pixel border in `#1F5A9F` (Mendix-blue light) — subtle
    frame so screenshots don't bleed into the marketplace background
-3. (Optional) small "Concord 4.0.0" wordmark in lower-right corner,
-   45% opacity, Cascadia Mono — reads as a watermark, not branding
+3. (Optional) small "Concord {current-version}" wordmark in
+   lower-right corner, 45% opacity, Cascadia Mono — reads as a
+   watermark, not branding
 4. Save as `marketing/screenshots/01-hero.png`,
    `02-settings-general.png`, etc.
 5. Optimize PNG (pngquant or similar) so each is ≤ 1 MB

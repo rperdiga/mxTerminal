@@ -7,11 +7,17 @@ End-to-end playbook for shipping a new version under MxLabs.
 - [ ] Source code merged to `main`, version bumped in
       `Terminal.csproj` (`<Version>` and `<InformationalVersion>`)
 - [ ] `CHANGELOG.md` updated with the new version's release notes
+- [ ] **All public docs reference the current version, no leftover
+      prior-version refs.** Grep the repo for the previous version
+      string before tagging — `README.md`, `marketing/listing.md`,
+      `marketing/SCREENSHOTS.md`, `marketing/PUBLISHING.md`, and
+      `Terminal.csproj` `<Description>` are the usual suspects.
 - [ ] Tests green (`cd ui && npm test`; `dotnet test`)
 - [ ] Production smoke test on a clean Studio Pro restart against
       the testbed (TestOSApp3) — paste matrix in `DEPLOYING.md`
 - [ ] All thumbnail / screenshot assets prepared at 600×420
 - [ ] License file present (`LICENSE` — Apache 2.0)
+- [ ] `SECURITY.md` and `CONTRIBUTING.md` present at repo root
 
 ## Step 1 — Build the deploy artifact
 
@@ -53,7 +59,7 @@ extension files inside.
    - **Description:** "The terminal Studio Pro was missing." (or
      paste the short pitch from `marketing/listing.md`)
    - **Version:** match `Terminal.csproj` `<Version>` exactly (e.g.
-     `4.0.0`)
+     `4.1.2`)
    - **Author:** Siemens CoE Team
 6. **File → Export Add-on Module Package** → save as
    `Concord.mxmodule` somewhere outside the repo (or under
@@ -80,21 +86,22 @@ If any of those fail, the wrapper is mis-built — fix before tagging.
 
 ```sh
 # from main, with all changes committed
-git tag -a v4.0.0 -m "v4.0.0 — bundled Mendix skill packs + Concord MCP / Maia"
-git push origin v4.0.0
+git tag -a v$VERSION -m "v$VERSION — <one-line theme>"
+git push origin v$VERSION
 
 # Create GitHub release with the .mxmodule attached
-gh release create v4.0.0 \
+gh release create v$VERSION \
     --repo rperdiga/mxTerminal \
-    --title "v4.0.0 — Bundled Mendix skill packs" \
+    --title "v$VERSION — <one-line theme>" \
     --notes-file CHANGELOG.md \
-    Concord.mxmodule
+    modules/Concord.mxmodule
 ```
 
-(If the tag already exists from earlier work, replace
-`gh release create` with `gh release upload v4.0.0 Concord.mxmodule`
-to attach the binary to the existing release. Substitute the actual
-version you're shipping if it isn't 4.0.0.)
+Replace `$VERSION` with the literal version (e.g. `4.1.2`) and the
+`<one-line theme>` with the release headline from CHANGELOG. If the
+tag already exists from earlier work, use
+`gh release upload v$VERSION modules/Concord.mxmodule` to attach the
+binary to the existing release.
 
 ## Step 5 — Submit to Mendix Marketplace via MxLabs
 
@@ -106,7 +113,7 @@ version you're shipping if it isn't 4.0.0.)
    - **Component Name:** "Concord — Terminal for Studio Pro"
    - **Visibility:** Public
    - **Source:** GitHub Link → paste
-     `https://github.com/rperdiga/mxTerminal/releases/tag/v4.0.0`
+     `https://github.com/rperdiga/mxTerminal/releases/tag/v4.1.2`
    - **Thumbnail:** `marketing/concord-thumbnail-600x420.png`
    - **Screenshots:** up to 10 captures from
      `marketing/screenshots/` (the SCREENSHOTS.md shot list has 11
@@ -156,6 +163,12 @@ For every subsequent release:
 - **`.mxmodule` ≠ `.mpk`.** The form field labelled "MPK" accepts
   both; Studio Pro's File menu has separate export entries — use
   **Export Add-on Module Package**, NOT Export Module Package.
+- **Marketplace dark-mode rendering.** There's an open investigation
+  that the published listing renders with broken contrast inside Studio
+  Pro's in-IDE Marketplace view (suspected dark-mode CSS bug on the
+  marketplace side). Ricardo to confirm before each publish whether
+  the new copy renders cleanly in both the web marketplace AND the
+  in-IDE marketplace surface.
 - **Trust prompt on first install.** Users installing Concord for
   the first time will see a "this extension wants to run native
   code" prompt from Studio Pro. The README's install section

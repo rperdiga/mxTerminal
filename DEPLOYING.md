@@ -59,6 +59,17 @@ YourProject/
    - Show a one-time **"Trust this extension"** prompt (per Mendix's extension-trust flow). Approve it.
 6. Open the pane: **Extensions → Concord → Open Pane**. The pane appears in the right-side pane strip (next to Properties / Toolbox / Maia). Click the **Concord** tab in that strip to focus it.
 
+**On first open of a fresh project, Concord wires itself up automatically:**
+
+- Writes `<project>/.mcp.json` with `mendix-studio-pro` + `concord-mcp` entries (Claude Code + Copilot CLI by default; Codex is opt-in)
+- Installs the 7 bundled Mendix skill packs into `<project>/.claude/skills/` and `<project>/.github/skills/`
+- Persists Concord's own settings file at `<project>/resources/terminal-settings.json`
+- Stamps the current Concord version into the settings file so subsequent opens know wiring is up-to-date
+
+You'll see 1–3 notice banners at the top of the pane explaining what just happened. The banners include "Studio Pro MCP is off" if you haven't enabled it in Studio Pro Preferences yet, and a "keep the Maia panel open" reminder if Maia integration is enabled.
+
+See [README § What Concord writes to disk](./README.md#what-concord-writes-to-disk) for the full inventory.
+
 To install in additional projects, repeat steps 1–6 in each.
 
 To remove: delete the `extensions/Concord/` folder. Restart Studio Pro.
@@ -173,6 +184,19 @@ If you're only changing TypeScript UI files (xterm tab manager, settings modal, 
 
 ---
 
+## Upgrading Concord versions
+
+Concord stores the version that last applied wiring defaults in `<project>/resources/terminal-settings.json` (field `lastAppliedVersion`). On first open after an upgrade, Concord compares the saved stamp against the running version:
+
+- **Stamp is older than installed Concord** — Concord re-applies the wiring keys (MCP enables, sub-toggles, skill clients) to the current defaults so any new functionality lands on disk without manually opening Settings and saving. Runtime preferences (shell, theme, ring buffer, scrollback, restore-tabs, refresh hotkey) are preserved verbatim. Banner: `Updated to {ver}. Rewired: ... Open Settings to adjust.`
+- **Stamp matches installed Concord** — no-op.
+- **Stamp is newer than installed Concord** — also no-op (a colleague pulled a project last edited from a more-recent-Concord machine — Concord never downgrades the wiring).
+- **Settings file is corrupt** — Concord renames it to `terminal-settings.json.broken-{timestamp}.bak` and falls back to defaults. You can recover your custom shell / theme / etc. by hand-editing the backup.
+
+The trade-off you should know about: the upgrade-apply re-defaults a small number of wiring keys, including the per-CLI client lists. If you had **deliberately** disabled MCP or removed a CLI from the wiring in an older version, the upgrade will re-enable the new defaults once. The banner points you to Settings to re-disable if needed. This is by design — most users want new defaults on; the rare deliberate opt-out is a one-time annoyance.
+
+---
+
 ## Migrating from "Terminal" (the old name)
 
 If you used the predecessor extension (named `Terminal` / `mxTerminal`), Studio Pro will load BOTH the old `Terminal.dll` and the new `Concord.dll` if both folders exist in `<project>\extensions\`. They have different MEF identities so they won't conflict, but you'll get redundant menus and the old Terminal pane will still register itself.
@@ -221,7 +245,9 @@ If you previously had a `terminal-settings.json` in `<project>\resources\`, Conc
 
 ### "save_all worked / didn't work"
 
-`save_all` is best-effort. It posts Ctrl+S to Studio Pro's main window, which routes the keystroke to whichever child window has focus. If the user's focus is in the terminal pane (typical when Claude is calling tools), Ctrl+S goes to OUR pane and Studio Pro's documents don't save. Workaround: click the document tab once first, then ask Claude. Or just save manually — it's one keystroke. F5 (run), Shift+F5 (stop), F4 (refresh) are global hotkeys and work regardless of focus.
+`save_all` is best-effort. It posts Ctrl+S to Studio Pro's main window, which routes the keystroke to whichever child window has focus. If the user's focus is in the terminal pane (typical when Claude is calling tools), Ctrl+S goes to OUR pane and Studio Pro's documents don't save. Workaround: click the document tab once first, then ask Claude. Or just save manually — it's one keystroke.
+
+**F5 (run) and Shift+F5 (stop) are Studio Pro fixed hotkeys** and work regardless of focus. **F4 (refresh from disk) is the Concord default** and is **configurable** in **Settings → Concord MCP → Refresh-from-disk hotkey**.
 
 ### macOS-specific issues
 

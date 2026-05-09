@@ -1,5 +1,44 @@
 # Changelog
 
+## 4.1.2 — 2026-05-08
+
+### Fixed
+
+- **Port-leak in `terminal-settings.json`.** The settings modal's outgoing payload was sending the LIVE bound port of the Concord MCP server to the JS side (so the readout could display "listening on `localhost:8099`" when 7783 was busy). The incoming Save handler then persisted that live port to disk as if it were configuration intent. Next launch the runtime ignored it (correct — the server always probes a free port) but the saved value stuck in the file forever, displayed as a phantom "configured port" the user never chose. **Fix:** `McpServerPort`, `McpPort`, and the legacy `ActionsServerPort` keys are removed from the settings schema entirely. Old keys in existing files deserialize as ignored fields and disappear on the next save. The Concord MCP listening port is now exposed only through a read-only display field (`liveActionServerPort`) that is never echoed back through Save.
+- **Settings modal title.** "Concord Terminal Settings" → "Concord Settings" (the modal already lives inside the terminal pane).
+- **Save vs. Cancel button affordance** in dark mode. Both rendered as the same gray surface, making the primary action invisible. Save now carries an accent-colored border without violating Studio Pro's no-filled-primary-button convention. Cancel relabeled to "Close" — settings UX never "cancels" pending intent the user already saw applied.
+
+### Changed
+
+- **Banner copy** rewritten to read like product, not like log lines:
+  - First-run: `Concord wired up for first-time use: ...` → `Concord ready. Wired: ...`
+  - Upgrade with changes: `Concord upgraded (X → Y). Refreshed wiring: ... Open Settings to customize.` → `Updated to Y. Rewired: ... Open Settings to adjust.`
+  - Upgrade no changes: `Concord upgraded to Y. No wiring changes needed.` → `Updated to Y. No changes.`
+  - SP-MCP advisory: `Studio Pro's MCP server appears disabled. Enable it in Edit → Preferences → Maia → MCP Server, then reopen this pane to make the wired CLI configs functional.` → `Studio Pro MCP is off. Enable it in Edit → Preferences → Maia → MCP Server, then reopen Concord.`
+  - Maia advisory: `Maia tools require the Maia panel to be visible. Keep it open while Claude Code or Copilot CLI drives Maia.` → `Keep the Maia panel open while Maia tools are in use.`
+- **Save-result strings** cleaned up: `MCP servers updated for ...` → `MCP wired for ...`; `skill packs installed for X skills` → `Skill packs installed: X` (no more triple "skills").
+- **Concord MCP port readout** reduced from a 5-line wall of prose to a single status line: `Connected on localhost:7783.` (or `Concord MCP starting…` / `Concord MCP is off.`).
+- **Modal open animation** trimmed from 180ms to 140ms (modal-in-modal context, the slower curve read sluggish).
+- **Footer credit** reworded: `A Siemens CoE extension for Studio Pro.` → `Built by the Siemens CoE Team.`
+- **README current-version** corrected (was stale at 4.0.0; this release is 4.1.2).
+
+### Added
+
+- **Atomic file writes** (`File.Replace`) in `McpJsonConfigurator`, `McpTomlConfigurator`, and `TerminalSettings.Save`. Previous delete-then-move pattern had a brief window where AV scanners or concurrent readers saw the file gone; if the move then failed, the user was left with no file at all. Journaled NTFS rename closes the window.
+- **Corrupt-file backup** in `TerminalSettings.Load`. A malformed `terminal-settings.json` no longer silently defaults — it's renamed to `terminal-settings.json.broken-{timestamp}.bak` so the user can recover their custom shell/theme/etc., then defaults take over.
+- **JSON serializer skips nulls** when writing settings. Removes residual `"actionsServerEnabled": null` (and any future legacy back-compat field that goes null) from the saved file.
+
+### Notes
+
+- **Existing customers automatically benefit.** The upgrade-apply path (introduced in 4.1.1) fires on first open after the 4.1.2 install, runs the apply chain, writes a fresh `terminal-settings.json` without the stale port keys, and stamps `lastAppliedVersion: 4.1.2`. No manual cleanup required.
+
+## 4.1.1 — 2026-05-08
+
+### Added
+
+- **Upgrade auto-apply.** When Concord opens against a project that has a `terminal-settings.json` file from an older Concord version (compared via `lastAppliedVersion` semver stamp), the wiring keys (`McpEnabled`, `McpClients`, `McpServerEnabled`, sub-toggles, `SkillsEnabled`, `SkillClients`) are re-defaulted to current `Defaults()` values and re-applied to disk — so customers who upgrade from 1.x or 4.0.0 get the new MCP wiring + skill packs materialized without needing to open Settings and Save manually. Runtime preferences (shell, theme, ring buffer, scrollback, restore-tabs, refresh hotkey) are preserved verbatim. Banner: `Updated to {ver}. Rewired: ... Open Settings to adjust.`
+- **Cross-machine safety.** `IsUpgradeApplyNeeded` only fires on a strict-older stamp (`prev < curr` in System.Version semantics). A colleague pulling a project from a machine running a more recent Concord version sees no apply (their wiring wins; no downgrade). Once stamped current, subsequent opens at the same version are no-ops.
+
 ## 4.1.0 — 2026-05-08
 
 ### Added
@@ -18,6 +57,15 @@
 - The apply-on-save chain (MCP json/toml writers + skill installer) was extracted from `TerminalPaneViewModel` into a static `SettingsApplyHelper` so the extension's first-run path can call the same code without taking a ViewModel dependency. The orchestration layer now has unit-test coverage that didn't exist before.
 
 ## 4.0.0 — 2026-05-08
+
+> **About the version jump (1.3.0 → 4.0.0).** The 4.0 major reflects
+> the MCP wire-identity rename shipped in 1.3.0 (`mendix-studio-pro-actions`
+> → `concord-mcp`) — a breaking change for any client config that
+> referenced the old name — combined with the bundled-skills ship in
+> 4.0.0. The 2.x and 3.x series are intentionally skipped to align the
+> major version with the Concord product brand (a 4.0 launches feels
+> right for what shipped together on 2026-05-08; renumbering historical
+> commits would be a worse trade-off).
 
 ### Added
 
