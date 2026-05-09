@@ -19,6 +19,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     private readonly Logger log;
     private readonly Func<string?> getApplicationRootUrl;
     private readonly string bundledSkillsRoot;
+    private readonly Func<string[]> consumePendingFirstRunNotices;
 
     private IWebView? webView;
     /// <summary>
@@ -37,7 +38,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         Uri webIndexUri,
         Logger log,
         Func<string?> getApplicationRootUrl,
-        string bundledSkillsRoot)
+        string bundledSkillsRoot,
+        Func<string[]> consumePendingFirstRunNotices)
     {
         Title = title;
         this.manager = manager;
@@ -46,6 +48,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         this.log = log;
         this.getApplicationRootUrl = getApplicationRootUrl;
         this.bundledSkillsRoot = bundledSkillsRoot;
+        this.consumePendingFirstRunNotices = consumePendingFirstRunNotices;
     }
 
     public override void InitWebView(IWebView webView)
@@ -104,6 +107,12 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             switch (e.Message)
             {
                 case "ready":
+                    Post("tabsList", new TabsListPayload(
+                        manager.ListSessions().Select(s => new SessionInfoPayload(s.TabId, s.Title, s.ShellPath, s.Cwd, s.Alive)).ToList()
+                    ));
+                    FlushPendingFirstRunNotices();
+                    break;
+
                 case "listTabs":
                     Post("tabsList", new TabsListPayload(
                         manager.ListSessions().Select(s => new SessionInfoPayload(s.TabId, s.Title, s.ShellPath, s.Cwd, s.Alive)).ToList()
@@ -469,6 +478,28 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         }
         var v = asm.GetName().Version;
         return v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "v?";
+    }
+
+    /// <summary>
+    /// Pull queued first-run notices from the extension and surface each one
+    /// as an <c>mcpResult</c> banner. Idempotent — the consume-Func clears
+    /// the queue on first call, so subsequent invocations no-op.
+    /// </summary>
+    private void FlushPendingFirstRunNotices()
+    {
+        try
+        {
+            var notices = consumePendingFirstRunNotices();
+            foreach (var notice in notices)
+            {
+                Post("mcpResult", new Messages.McpResultPayload(true, notice, Array.Empty<string>()));
+                log.Info($"[first-run] flushed notice: {notice}");
+            }
+        }
+        catch (Exception ex)
+        {
+            log.Warn($"[first-run] flush failed: {ex.Message}");
+        }
     }
 
     private SettingsPayload BuildSettingsPayload(TerminalSettings s)

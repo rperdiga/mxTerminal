@@ -94,7 +94,13 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 try { return localRunConfigs.GetActiveConfiguration(model)?.ApplicationRootUrl; }
                 catch (Exception ex) { log?.Warn($"GetActiveConfiguration threw: {ex.Message}"); return null; }
             },
-            bundledSkillsRoot: bundledSkillsRoot);
+            bundledSkillsRoot: bundledSkillsRoot,
+            consumePendingFirstRunNotices: () =>
+            {
+                var notices = pendingFirstRunNotices.ToArray();
+                pendingFirstRunNotices.Clear();
+                return notices;
+            });
         activeViewModel = vm;
         return vm;
     }
