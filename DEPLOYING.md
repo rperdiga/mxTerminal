@@ -50,6 +50,8 @@ YourProject/
          manifest.json
          wwwroot/
          skills/             (7 bundled Mendix skill packs)
+         skills-mac/         (Mac overlay — mendix-page-gen variant for macOS)
+         rules/              (always-loaded build rules — concord-build-rules.md)
          (...other DLLs and assets)
 ```
 

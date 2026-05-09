@@ -12,8 +12,8 @@
     <LangVersion>preview</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
-    <Version>4.1.3</Version>
-    <InformationalVersion>4.1.3+mac-scoping</InformationalVersion>
+    <Version>4.1.4</Version>
+    <InformationalVersion>4.1.4+rules-installer</InformationalVersion>
     <Authors>Ricardo Perdigao, Kelly Seale</Authors>
     <Company>Siemens Digital Industries Software — CoE Team</Company>
     <Product>Concord — Terminal for Studio Pro</Product>
@@ -65,6 +65,13 @@
          replace the Windows-flavored ones at install time on macOS. See
          SettingsApplyHelper.ApplySkillsConfig + SkillInstaller's overlayRoot. -->
     <Content Include="skills-mac/**/*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <!-- Rules: Concord-managed always-loaded rules file + room for project-
+         specific user additions. Mirrors the skills/ pattern. See
+         SettingsApplyHelper.ApplyRulesConfig + RulesInstaller + ClaudeMdManager. -->
+    <Content Include="rules/**/*">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>

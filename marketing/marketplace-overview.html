@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Concord — Marketplace Overview (paste this)</title>
+<style>
+  body {
+    font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+    max-width: 820px;
+    margin: 2em auto;
+    padding: 0 1.2em;
+    color: #1f1f1f;
+    line-height: 1.55;
+    font-size: 15px;
+  }
+  h1 { color: #1F5A9F; font-size: 1.8em; margin-top: 1em; }
+  h2 { color: #1F5A9F; font-size: 1.3em; margin-top: 1.6em; padding-bottom: 4px; border-bottom: 1px solid #E7E7E9; }
+  h3 { font-size: 1.05em; margin-top: 1.2em; }
+  p, li { line-height: 1.55; }
+  table { border-collapse: collapse; margin: 1em 0; width: 100%; }
+  th, td { border: 1px solid #E7E7E9; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #F2F4F7; font-weight: 600; }
+  code { background: #F2F4F7; padding: 1px 5px; border-radius: 3px; font-family: 'Cascadia Code', Consolas, monospace; font-size: 0.92em; }
+  ul, ol { padding-left: 1.4em; }
+  li { margin-bottom: 0.3em; }
+  .copy-instruction { background: #FFF8E1; border-left: 4px solid #E89641; padding: 12px 16px; margin: 0 0 24px; font-size: 14px; color: #5D4A1F; }
+  hr { border: none; border-top: 1px solid #E7E7E9; margin: 2em 0; }
+</style>
+</head>
+<body>
+
+<div class="copy-instruction">
+  <strong>How to use this file:</strong> open in a browser → select all (Ctrl+A) → copy (Ctrl+C) → paste into the Marketplace <strong>Overview</strong> rich-text field. The headings, lists, and table will survive. Then delete this yellow box and the title above (which are not part of the actual content).
+</div>
+
+<h1>Concord — Marketplace Overview (paste this)</h1>
+
+<hr>
+
+<h1>Concord brings AI agent CLIs into Studio Pro</h1>
+
+<p>Concord installs as a dockable pane inside Mendix Studio Pro 11.10+. Inside that pane is a real terminal. Inside that terminal you run <strong>Claude Code</strong>, <strong>OpenAI Codex</strong>, or <strong>GitHub Copilot CLI</strong> — and those CLIs talk to your Mendix project through Studio Pro's MCP server and through Concord's own MCP server. No window-switching, no config-file plumbing, no yak-shaving to set up.</p>
+
+<p>Mendix's recent investment in <strong>Studio Pro's MCP server</strong> unlocked something genuinely new — a structured, programmatic surface that AI agents can read and write through. Concord is the workspace built around that opportunity. We add the second piece — the embedded terminal where the agents actually live — and we wire the integration plumbing so it just works on first open.</p>
+
+<h2>Why you'd want this</h2>
+
+<p><strong>You can build Mendix apps with AI agent CLIs as full collaborators.</strong> Not "ask AI to draft a bit of code outside the IDE" — actual collaborators who can read your domain model, edit your microflows, generate pages, run the app, watch the run state, and hand work back to you in the same window where Studio Pro lives.</p>
+
+<p><strong>Setup is automatic on the first open.</strong> Drop Concord into your Mendix project, restart Studio Pro, open the Concord pane. The MCP wiring lands on disk for Claude Code and Copilot CLI, the bundled Mendix skill packs install themselves, and the Concord MCP server starts listening — all before you click anything.</p>
+
+<p><strong>The terminal itself is good.</strong> Multi-tab PTY (PowerShell, bash, cmd, zsh — all auto-detected). Theme follows Studio Pro automatically. Tabs survive Studio Pro restarts. Multi-line paste actually works (50 lines paste as 50 lines, not 50 separate prompt submissions). xterm.js with Cascadia Mono, the works.</p>
+
+<h2>What ships in the extension</h2>
+
+<table>
+  <thead>
+    <tr><th>What</th><th>Where</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Concord pane + tabbed PTY terminal</strong></td>
+      <td>Dockable pane in Studio Pro's right rail</td>
+    </tr>
+    <tr>
+      <td><strong>Concord MCP server</strong></td>
+      <td>In-process, on <code>localhost:7783</code> (auto-fallback if busy)</td>
+    </tr>
+    <tr>
+      <td><strong>Studio Pro UI tools</strong></td>
+      <td>6 MCP tools — <code>run_app</code>, <code>stop_app</code>, <code>refresh_project</code>, <code>save_all</code>, <code>get_active_run_configuration</code>, <code>get_app_status</code> — so the CLI can drive the IDE itself, not just read the model</td>
+    </tr>
+    <tr>
+      <td><strong>Maia integration</strong> <em>(Windows)</em></td>
+      <td>6 MCP tools — <code>maia__send</code>, <code>maia__status</code>, <code>maia__wait</code>, <code>maia__ask</code>, <code>maia__reset</code>, <code>maia__force_tier</code> — programmatic access to Studio Pro's in-IDE AI assistant</td>
+    </tr>
+    <tr>
+      <td><strong>7 bundled Mendix skill packs</strong></td>
+      <td>Installed into your project's <code>.claude/skills/</code> and <code>.github/skills/</code> (and <code>.codex/skills/</code> if you opt in) — prescriptive playbooks that teach the CLIs how to drive Mendix correctly</td>
+    </tr>
+    <tr>
+      <td><strong>Always-loaded build rules</strong> <em>(Claude Code, new in 4.1.4)</em></td>
+      <td>A project-level <code>concord-build-rules.md</code> that auto-loads into every Claude Code session in the project (via a managed block in your <code>CLAUDE.md</code>). Governs <em>how</em> the agent works — tool hierarchy, page-via-Maia doctrine, layout-first for branded apps, sibling-theme-module pattern, the named failure modes to guard against, three-part verification gate. Plus a <code>.claude/rules/project/</code> folder for your own project-specific additions that survives Concord upgrades</td>
+    </tr>
+    <tr>
+      <td><strong>Auto-wired CLI configs</strong></td>
+      <td><code>.mcp.json</code> (Claude Code + Copilot CLI) and <code>~/.codex/config.toml</code> (Codex, opt-in) point at both MCP servers</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>How a session looks</h2>
+
+<ol>
+  <li>Open your Mendix project in Studio Pro 11.10+.</li>
+  <li>Click the <strong>Concord</strong> tab in the right pane strip.</li>
+  <li>New tab → <code>claude</code> (or <code>codex</code>, or <code>gh copilot</code>).</li>
+  <li>Ask it anything about your project. It reads through Studio Pro's MCP, writes through Concord's MCP, drives the IDE through the UI-action tools, and hands you back to verify.</li>
+  <li>F5 still runs your app. Maia is still right there. Concord just makes the agent a peer.</li>
+</ol>
+
+<h2>Built for Mendix, by Mendix builders</h2>
+
+<p>Concord is built and maintained by the <strong>Siemens CoE Team</strong> — Mendix builders ourselves, shipping the workflow we wanted on our own projects. Apache 2.0, source on GitHub, free to use. The CLIs you run inside Concord (Claude Code, Codex, Copilot CLI) follow their own pricing.</p>
+
+<h2>Compatibility</h2>
+
+<ul>
+  <li><strong>Studio Pro:</strong> 11.10.0 or newer</li>
+  <li><strong>Operating system:</strong> Windows 10 build 17763 (1809) or newer · macOS 10.15 (Catalina) or newer</li>
+  <li><strong>.NET runtime:</strong> 8.0 (bundled with Studio Pro 11)</li>
+  <li><strong>Optional:</strong> any combination of Claude Code, OpenAI Codex, GitHub Copilot CLI installed on your machine</li>
+</ul>
+
+</body>
+</html>

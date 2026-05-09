@@ -9,6 +9,7 @@ public class SettingsApplyHelperTests : IDisposable
     private readonly string tmpRoot;
     private readonly string projectDir;
     private readonly string bundledRoot;
+    private readonly string bundledRulesRoot;
     private readonly Logger log;
 
     public SettingsApplyHelperTests()
@@ -16,11 +17,14 @@ public class SettingsApplyHelperTests : IDisposable
         tmpRoot = Path.Combine(Path.GetTempPath(), "settings-apply-tests-" + Guid.NewGuid().ToString("N"));
         projectDir = Path.Combine(tmpRoot, "project");
         bundledRoot = Path.Combine(tmpRoot, "bundled");
+        bundledRulesRoot = Path.Combine(tmpRoot, "bundled-rules");
         Directory.CreateDirectory(projectDir);
         Directory.CreateDirectory(bundledRoot);
+        Directory.CreateDirectory(bundledRulesRoot);
         log = new Logger(projectDir);
         SeedBundledSkill("alpha");
         SeedBundledSkill("beta");
+        File.WriteAllText(Path.Combine(bundledRulesRoot, "concord-build-rules.md"), "# bundled rules\n");
     }
 
     public void Dispose() => Directory.Delete(tmpRoot, recursive: true);
@@ -56,7 +60,7 @@ public class SettingsApplyHelperTests : IDisposable
     {
         var s = AllOff();
         var touched = SettingsApplyHelper.ApplyAll(
-            projectDir, bundledRoot, s, s, log,
+            projectDir, bundledRoot, bundledRulesRoot, s, s, log,
             currentActionServerPort: () => null,
             probeStudioProMcpPort:   () => null);
         touched.Should().BeEmpty();
@@ -69,7 +73,7 @@ public class SettingsApplyHelperTests : IDisposable
         var next = ClaudePlusCopilot();
 
         var touched = SettingsApplyHelper.ApplyAll(
-            projectDir, bundledRoot, prev, next, log,
+            projectDir, bundledRoot, bundledRulesRoot, prev, next, log,
             currentActionServerPort: () => 7783,
             probeStudioProMcpPort:   () => 8100);
 
@@ -93,12 +97,12 @@ public class SettingsApplyHelperTests : IDisposable
         var next = AllOff();
 
         // Pre-populate the project so we have something to remove.
-        SettingsApplyHelper.ApplyAll(projectDir, bundledRoot, AllOff(), prev, log,
+        SettingsApplyHelper.ApplyAll(projectDir, bundledRoot, bundledRulesRoot, AllOff(), prev, log,
             currentActionServerPort: () => 7783, probeStudioProMcpPort: () => 8100);
         File.Exists(Path.Combine(projectDir, ".mcp.json")).Should().BeTrue();
 
         var touched = SettingsApplyHelper.ApplyAll(
-            projectDir, bundledRoot, prev, next, log,
+            projectDir, bundledRoot, bundledRulesRoot, prev, next, log,
             currentActionServerPort: () => 7783,
             probeStudioProMcpPort:   () => 8100);
 
@@ -120,7 +124,7 @@ public class SettingsApplyHelperTests : IDisposable
         var next = ClaudePlusCopilot();
 
         SettingsApplyHelper.ApplyAll(
-            projectDir, bundledRoot, prev, next, log,
+            projectDir, bundledRoot, bundledRulesRoot, prev, next, log,
             currentActionServerPort: () => 7783,
             probeStudioProMcpPort:   () => null);  // probe fails
 
@@ -140,7 +144,7 @@ public class SettingsApplyHelperTests : IDisposable
         };
 
         var touched = SettingsApplyHelper.ApplyAll(
-            projectDir, bundledRoot, prev, next, log,
+            projectDir, bundledRoot, bundledRulesRoot, prev, next, log,
             currentActionServerPort: () => 7783,
             probeStudioProMcpPort:   () => 8100);
 
