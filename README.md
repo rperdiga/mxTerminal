@@ -2,7 +2,7 @@
 
 > *"The terminal Studio Pro was missing."*
 
-**Current version: 4.1.3** ([CHANGELOG](./CHANGELOG.md)) — **Mac scoping: Maia tools hidden on macOS, Mac variant of `mendix-page-gen` skill that hands off page writes to the user**. Bundled Mendix skill packs ship preinstalled into the open project (Claude Code + Copilot CLI by default; Codex opt-in). Concord ships 7 prescriptive Mendix skill packs that install into your project's `.claude/skills/`, `.github/skills/`, or `.codex/skills/` per the CLIs you enable. Combined with the renamed Concord MCP server (Studio Pro UI actions + Maia integration housed under one HTTP endpoint), the CLI agent in your terminal is ready to drive Studio Pro from day one.
+**Current version: 4.1.4** ([CHANGELOG](./CHANGELOG.md)) — **Always-loaded build rules for Claude Code: ships `concord-build-rules.md` into every Mendix project (`.claude/rules/`), auto-imports via a managed `<!-- BEGIN/END CONCORD MANAGED -->` block in `<project>/CLAUDE.md`, plus a user-owned `.claude/rules/project/` folder that survives Concord upgrades**. Bundled Mendix skill packs ship preinstalled into the open project (Claude Code + Copilot CLI by default; Codex opt-in). Concord ships 7 prescriptive Mendix skill packs that install into your project's `.claude/skills/`, `.github/skills/`, or `.codex/skills/` per the CLIs you enable. Combined with the renamed Concord MCP server (Studio Pro UI actions + Maia integration housed under one HTTP endpoint), the CLI agent in your terminal is ready to drive Studio Pro from day one.
 
 Concord is a Mendix Studio Pro 11.10+ extension (Windows and macOS) that embeds a tabbed terminal as a dockable pane. The pane is the workspace where you run **Claude Code**, **Codex**, or **GitHub Copilot CLI** — and they talk directly to:
 
@@ -120,6 +120,18 @@ Each is a single `SKILL.md` file with YAML frontmatter that the CLI agent auto-d
 
 Per-CLI install paths: Claude Code → `.claude/skills/`; Copilot CLI → `.github/skills/`; Codex → `.codex/skills/` (opt-in).
 
+### Always-loaded build rules (Claude Code only, for now)
+
+Alongside the skill packs, Concord installs a project-level rules document for Claude Code:
+
+- **`<project>/.claude/rules/concord-build-rules.md`** — ~360 lines, 15 sections. Governs *how* Claude Code works inside this Mendix project: tool hierarchy (Studio Pro MCP / Concord MCP / Maia / web search / docs.mendix.com — and what's forbidden), page-via-Maia doctrine, persistence + recovery ladders for MCP errors, the named failure modes to guard against (orphan pages, shell microflows, ActionButton wiring trap, letter-not-spirit compliance, end-of-build punt-lists), Studio Pro UI handoff catalog (layouts, Navigation document, Mark-as-UI-resources, etc.), new-project-equals-new-module rule, layout-first for branded apps, sibling-theme-module + Atlas pattern, three-part verification gate, plan-before-write, persisting learnings during a build.
+- **`<project>/.claude/rules/project/`** — your space for project-specific rules (domain glossary, design-system tokens, integration patterns). Pre-created on first install with a README stub; never overwritten thereafter. Drop any `.md` files in here and they auto-import into Claude Code on the next session start.
+- **`<project>/CLAUDE.md`** — created or updated with a fenced `<!-- BEGIN CONCORD MANAGED -->` block that `@`-imports the rules file plus every `.md` in `.claude/rules/project/`. Anything you write outside the fence is preserved across Saves and across Concord upgrades.
+
+The rules refresh on every Save (so a Concord upgrade ships rule changes automatically). Top-level rule files prefixed `concord-` are Concord-managed; user-authored siblings without that prefix are left untouched.
+
+Phase 1 covers Claude Code only. Codex (`AGENTS.md`) and Copilot CLI (`.github/copilot-instructions.md`) follow the same fenced-block pattern in their respective files; they're wired as no-ops in v4.1.4 and light up in a follow-up phase.
+
 ### macOS skill variant — `mendix-page-gen`
 
 The Windows version of `mendix-page-gen` instructs the CLI agent to delegate page writes to Maia via the Concord MCP `maia__ask` tool (Studio Pro's MCP doesn't expose `pg_*` tools, so Maia is the only path). On macOS, those tools aren't available because Maia integration is Windows-only.
@@ -177,6 +189,9 @@ Every file Concord can touch in a project:
 | `<project>/.claude/skills/<7 folders>` | Bundled Mendix skill packs (Claude Code path) | When **Skills** master + Claude Code ticked |
 | `<project>/.github/skills/<7 folders>` | Same skill packs (Copilot CLI path) | When **Skills** master + Copilot ticked |
 | `<project>/.codex/skills/<7 folders>` | Same skill packs (Codex path; **opt-in only**) | When **Skills** master + Codex ticked |
+| `<project>/.claude/rules/concord-build-rules.md` | Always-loaded build rules for Claude Code (tool hierarchy, page-via-Maia doctrine, layout-first, theme-module pattern, verification gates) — refreshed every Save | When **Skills** master + Claude Code ticked |
+| `<project>/.claude/rules/project/README.md` | Stub README for the user-owned project-specific rules folder | Pre-created **once** on first install; never overwritten thereafter |
+| `<project>/CLAUDE.md` | Project-root file with a managed block (`<!-- BEGIN CONCORD MANAGED -->` ... `<!-- END CONCORD MANAGED -->`) that `@`-imports the rules file plus every `.md` in `.claude/rules/project/`. Content outside the fence is preserved verbatim | On every Save when Claude rules are installed |
 | `<project>/resources/terminal-settings.json` | Concord's own settings (theme, shell, MCP toggles, version stamp) | On Save |
 | `<project>/resources/terminal-state.json` | Tab-restore state (which shells were open) | On every tab open / close / exit |
 | `<project>/resources/terminal.log` | Diagnostic log (INFO / WARN / ERROR, per-line append) | Continuously |

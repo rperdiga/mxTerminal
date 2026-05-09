@@ -19,6 +19,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     private readonly Logger log;
     private readonly Func<string?> getApplicationRootUrl;
     private readonly string bundledSkillsRoot;
+    private readonly string bundledRulesRoot;
     private readonly Func<string[]> consumePendingFirstRunNotices;
 
     private IWebView? webView;
@@ -39,6 +40,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         Logger log,
         Func<string?> getApplicationRootUrl,
         string bundledSkillsRoot,
+        string bundledRulesRoot,
         Func<string[]> consumePendingFirstRunNotices)
     {
         Title = title;
@@ -48,6 +50,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         this.log = log;
         this.getApplicationRootUrl = getApplicationRootUrl;
         this.bundledSkillsRoot = bundledSkillsRoot;
+        this.bundledRulesRoot = bundledRulesRoot;
         this.consumePendingFirstRunNotices = consumePendingFirstRunNotices;
     }
 
@@ -324,6 +327,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             var allTouched = SettingsApplyHelper.ApplyAll(
                 dir,
                 bundledSkillsRoot,
+                bundledRulesRoot,
                 current,
                 updated,
                 log,

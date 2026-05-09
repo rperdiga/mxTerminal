@@ -10,11 +10,21 @@ End-to-end playbook for shipping a new version under MxLabs.
 - [ ] **All public docs reference the current version, no leftover
       prior-version refs.** Grep the repo for the previous version
       string before tagging — `README.md`, `marketing/listing.md`,
-      `marketing/SCREENSHOTS.md`, `marketing/PUBLISHING.md`, and
+      `marketing/SCREENSHOTS.md`, `marketing/PUBLISHING.md`,
+      `marketing/marketplace-overview.html` + `.md`,
+      `marketing/marketplace-documentation.html` + `.md`,
+      `marketing/marketplace-release-notes.html`, and
       `Terminal.csproj` `<Description>` are the usual suspects.
 - [ ] Tests green (`cd ui && npm test`; `dotnet test`)
 - [ ] Production smoke test on a clean Studio Pro restart against
       the testbed (TestOSApp3) — paste matrix in `DEPLOYING.md`
+- [ ] **Rules + CLAUDE.md install verified end-to-end** on TestOSApp3:
+      `.claude/rules/concord-build-rules.md` present, `.claude/rules/project/README.md`
+      present, `<project>/CLAUDE.md` contains the `<!-- BEGIN CONCORD MANAGED -->`
+      block with `@`-imports, and a fresh Claude Code session in the Concord pane
+      can list and quote a rule from `concord-build-rules.md`.
+- [ ] **Build artifact contains `rules/concord-build-rules.md`** at the deploy root
+      (`bin/x64/Debug/net8.0/rules/concord-build-rules.md`).
 - [ ] All thumbnail / screenshot assets prepared at 600×420
 - [ ] License file present (`LICENSE` — Apache 2.0)
 - [ ] `SECURITY.md` and `CONTRIBUTING.md` present at repo root

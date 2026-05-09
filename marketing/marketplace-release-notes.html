@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Concord 4.1.4 — Release Notes (paste this)</title>
+<style>
+  body {
+    font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+    max-width: 820px;
+    margin: 2em auto;
+    padding: 0 1.2em;
+    color: #1f1f1f;
+    line-height: 1.55;
+    font-size: 15px;
+  }
+  h1 { color: #1F5A9F; font-size: 1.8em; margin-top: 1em; }
+  h2 { color: #1F5A9F; font-size: 1.3em; margin-top: 1.6em; padding-bottom: 4px; border-bottom: 1px solid #E7E7E9; }
+  h3 { font-size: 1.05em; margin-top: 1.2em; }
+  p, li { line-height: 1.55; }
+  table { border-collapse: collapse; margin: 1em 0; width: 100%; }
+  th, td { border: 1px solid #E7E7E9; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #F2F4F7; font-weight: 600; }
+  code { background: #F2F4F7; padding: 1px 5px; border-radius: 3px; font-family: 'Cascadia Code', Consolas, monospace; font-size: 0.92em; }
+  ul, ol { padding-left: 1.4em; }
+  li { margin-bottom: 0.3em; }
+  .copy-instruction { background: #FFF8E1; border-left: 4px solid #E89641; padding: 12px 16px; margin: 0 0 24px; font-size: 14px; color: #5D4A1F; }
+  hr { border: none; border-top: 1px solid #E7E7E9; margin: 2em 0; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+  .badge-new { background: #E8F4EA; color: #2E7D32; }
+  .badge-fix { background: #FFF3E0; color: #E65100; }
+  .badge-mac { background: #E3F2FD; color: #1565C0; }
+</style>
+</head>
+<body>
+
+<div class="copy-instruction">
+  <strong>How to use this file:</strong> open in a browser → select all (Ctrl+A) → copy (Ctrl+C) → paste into the Marketplace <strong>Release Notes</strong> rich-text field for the v4.1.4 release. The headings, lists, and badges will survive the paste. Then delete this yellow box and the title above (which are not part of the actual content).
+</div>
+
+<h1>Concord 4.1.4 — Release Notes (paste this)</h1>
+
+<hr>
+
+<h1>Concord 4.1.4</h1>
+
+<p>The headline of this release is <strong>always-loaded build rules for Claude Code</strong>. Concord now ships a project-level rules document that auto-loads into every Claude Code session running inside your Mendix project, alongside a user-owned folder for your own project-specific additions. The rules govern <em>how</em> the agent works (tool hierarchy, page-via-Maia doctrine, layout-first for branded apps, theme-module pattern, the named failure modes to guard against) — designed to make Claude Code materially better at building Mendix apps end-to-end without bailing on the hard parts.</p>
+
+<p>This release also rolls forward everything since 1.1.1 — macOS support, the Maia bridge, bundled Mendix skill packs, default-on first-run wiring, an upgrade-apply path that takes care of itself, a port-leak fix, and the Mac-specific page-gen skill from 4.1.3.</p>
+
+<h2>What you'll experience</h2>
+
+<p>If you upgrade an existing install: <strong>open the Concord pane once after upgrading, and Concord wires itself up.</strong> The Concord MCP server starts, the bundled Mendix skill packs refresh, the new always-loaded rules install at <code>&lt;project&gt;/.claude/rules/concord-build-rules.md</code>, the user-owned <code>.claude/rules/project/</code> folder is pre-created with a README, and a managed <code>@</code>-import block is added to <code>&lt;project&gt;/CLAUDE.md</code> so Claude Code loads the rules on every session. You'll see a short banner at the top of the pane explaining what just happened. Your existing terminal preferences (shell, theme, scrollback, etc.) are preserved verbatim.</p>
+
+<p>If you're installing fresh: same flow, just without the "previous version" comparison. Drop Concord in, restart Studio Pro, open the pane — the wiring is automatic.</p>
+
+<h2>Headlines since 1.1.1</h2>
+
+<table>
+  <thead>
+    <tr><th>What</th><th>Shipped in</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>macOS support</strong> — Concord runs on Studio Pro 11.10+ Mac (POSIX PTY, WKWebView bridge, theme probe of Mac <code>Settings.sqlite</code>, Homebrew-aware shell PATH)</td><td>1.2.x</td></tr>
+    <tr><td><strong>Maia integration</strong> — six new MCP tools (<code>maia__send</code>, <code>status</code>, <code>wait</code>, <code>ask</code>, <code>reset</code>, <code>force_tier</code>) that give the CLI programmatic access to Studio Pro's in-IDE AI assistant. The Concord MCP server (formerly "Action Bridge") now hosts both the Studio Pro UI actions and Maia under one HTTP endpoint named <code>concord-mcp</code></td><td>1.3.0</td></tr>
+    <tr><td><strong>Bundled Mendix skill packs</strong> — seven prescriptive playbooks (microflow editing, page generation, view-entity patterns, workflow patterns) install per-CLI when you enable Skills. Each save refreshes them; user-authored skills sitting alongside are left intact</td><td>4.0.0</td></tr>
+    <tr><td><strong>Default-on first-run + auto-apply</strong> — first open against a fresh project writes <code>.mcp.json</code>, installs skill packs, starts Concord MCP, persists settings — all without modal clicks</td><td>4.1.0</td></tr>
+    <tr><td><strong>Upgrade auto-apply</strong> — first open after a Concord upgrade re-applies the wiring keys to current defaults so new functionality lands on disk automatically. Cross-machine safe (never downgrades wiring on a colleague who pulls a project last edited from a newer Concord)</td><td>4.1.1</td></tr>
+    <tr><td><strong>Port-leak fix + atomic file writes + corrupt-file backup</strong> — a phantom port could permanently inject itself into <code>terminal-settings.json</code> via the modal round-trip; that's structurally impossible now. File writes use NTFS journaled rename. Corrupt settings get backed up before defaults take over</td><td>4.1.2</td></tr>
+    <tr><td><strong>Mac variant of <code>mendix-page-gen</code></strong> — the Windows version delegates page writes to Maia via <code>maia__ask</code>; on Mac (where Maia integration isn't available) the variant prints a copy-paste prompt for you to hand to Maia in Studio Pro and waits for confirmation, then verifies with <code>ped_check_errors</code> directly</td><td>4.1.3</td></tr>
+    <tr><td><strong>Always-loaded build rules for Claude Code</strong> — a project-level <code>concord-build-rules.md</code> (~360 lines, 15 sections) that governs <em>how</em> the agent works (tool hierarchy, page-via-Maia doctrine, layout-first for branded apps, sibling-theme-module pattern, three-part verification gate, the named failure modes to guard against). Plus a user-owned <code>.claude/rules/project/</code> folder for project-specific additions that survives Concord upgrades. Plus auto-management of a fenced <code>&lt;!-- BEGIN CONCORD MANAGED --&gt;</code> block in <code>&lt;project&gt;/CLAUDE.md</code> so Claude Code <code>@</code>-imports the rules on every session. Future Concord releases ship rule updates automatically — refreshed on every Save</td><td>4.1.4</td></tr>
+  </tbody>
+</table>
+
+<h2>Cross-platform note</h2>
+
+<p>Concord ships on Windows and macOS. Most features are platform-identical; two differences worth calling out:</p>
+
+<ul>
+  <li><strong>Maia integration</strong> is Windows-only — driving Maia from outside Studio Pro requires inspecting its WebView, which works on Windows (WebView2 + CDP) but isn't available on macOS (WKWebView requires host opt-in by Mendix). Concord ships a Mac-specific variant of the page-gen skill that hands the work to Maia through you instead of programmatically.</li>
+  <li><strong>Hotkey-driven Studio Pro tools on Mac</strong> need Accessibility permission the first time — macOS prompts for it; you grant Studio Pro one-time access in System Settings → Privacy &amp; Security → Accessibility.</li>
+</ul>
+
+<h2>Compatibility</h2>
+
+<ul>
+  <li><strong>Studio Pro:</strong> 11.10.0 or newer</li>
+  <li><strong>Operating system:</strong> Windows 10 build 17763 (1809)+ · macOS 10.15 (Catalina)+</li>
+  <li><strong>.NET runtime:</strong> 8.0 (bundled with Studio Pro 11)</li>
+</ul>
+
+<h2>Privacy</h2>
+
+<p>Concord is loopback-only — the Concord MCP server binds to <code>127.0.0.1</code>; Maia integration uses Studio Pro's local WebView2 debug port. Nothing leaves your machine through Concord itself. The bundled skill packs are static Markdown files copied into your project. The CLI agents you run inside Concord follow their own privacy contracts.</p>
+
+<h2>Built by</h2>
+
+<p>The <strong>Siemens CoE Team</strong>. Apache 2.0. Source on GitHub. Powered by Mendix's Studio Pro MCP server.</p>
+
+</body>
+</html>

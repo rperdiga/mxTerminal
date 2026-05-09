@@ -29,6 +29,7 @@ public static class SettingsApplyHelper
     public static string[] ApplyAll(
         string projectDir,
         string bundledSkillsRoot,
+        string bundledRulesRoot,
         TerminalSettings prev,
         TerminalSettings next,
         Logger log,
@@ -39,6 +40,7 @@ public static class SettingsApplyHelper
         touched.AddRange(ApplyMcpConfig(projectDir, prev, next, log, probeStudioProMcpPort));
         touched.AddRange(ApplyActionsMcpConfig(projectDir, prev, next, log, currentActionServerPort));
         touched.AddRange(ApplySkillsConfig(projectDir, bundledSkillsRoot, prev, next, log));
+        touched.AddRange(ApplyRulesConfig(projectDir, bundledRulesRoot, prev, next, log));
         return touched.ToArray();
     }
 
@@ -197,6 +199,68 @@ public static class SettingsApplyHelper
                 log.Error($"[skills] {label} apply failed", ex);
             }
         }
+
+        return touched.ToArray();
+    }
+
+    /// <summary>
+    /// Diff for rules: install bundled <c>concord-build-rules.md</c> and
+    /// manage the <c>CLAUDE.md</c> fenced block for newly-selected CLIs;
+    /// remove on newly-deselected CLIs. Tracks the same enable+per-CLI
+    /// toggle as skills (<see cref="TerminalSettings.SkillsEnabled"/> +
+    /// <see cref="TerminalSettings.SkillClients"/>) since rules are
+    /// conceptually part of the skill-pack contract.
+    /// <para>
+    /// Phase 1: Claude only. Codex (<c>AGENTS.md</c>) and Copilot CLI
+    /// (<c>.github/copilot-instructions.md</c>) follow the same fenced-block
+    /// pattern in their respective files; they are wired here as no-ops with
+    /// TODO markers and will light up in a follow-up phase once Concord has
+    /// validated the Claude path on real builds.
+    /// </para>
+    /// </summary>
+    private static string[] ApplyRulesConfig(
+        string projectDir,
+        string bundledRulesRoot,
+        TerminalSettings prev,
+        TerminalSettings next,
+        Logger log)
+    {
+        var prevClients = prev.SkillsEnabled
+            ? new HashSet<string>(prev.SkillClients, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var nextClients = next.SkillsEnabled
+            ? new HashSet<string>(next.SkillClients, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var touched = new List<string>();
+        log.Info($"[rules] diff prev={{{string.Join(",", prevClients)}}} next={{{string.Join(",", nextClients)}}} bundled-root={bundledRulesRoot}");
+
+        // Claude — install rules + manage CLAUDE.md fenced block.
+        {
+            var key = "claude";
+            var label = "Claude Code rules";
+            var rulesSubdir = Path.Combine(".claude", "rules");
+            var was = prevClients.Contains(key);
+            var now = nextClients.Contains(key);
+            try
+            {
+                var installer = new RulesInstaller(projectDir, bundledRulesRoot, log);
+                var manager = new ClaudeMdManager(projectDir, rulesSubdir, log);
+                if (now && !was)      { installer.InstallAll(rulesSubdir); manager.Apply(); touched.Add(label); }
+                else if (now && was)  { installer.InstallAll(rulesSubdir); manager.Apply(); /* refresh on every save */ }
+                else if (!now && was) { installer.RemoveAll(rulesSubdir);  manager.Remove();  touched.Add(label + " (removed)"); }
+            }
+            catch (Exception ex)
+            {
+                log.Error($"[rules] {label} apply failed", ex);
+            }
+        }
+
+        // TODO Phase 2: Codex (AGENTS.md + .codex/rules/), Copilot CLI
+        // (.github/copilot-instructions.md + .github/skills/<x>/rules.md or
+        // a parallel folder). Same fenced-block pattern; same lifecycle. The
+        // RulesInstaller class works against any rules-subdir target — only
+        // the per-CLI manager (file path + import-directive syntax) varies.
 
         return touched.ToArray();
     }

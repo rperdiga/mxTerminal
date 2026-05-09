@@ -81,7 +81,9 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         // Resolve once at Open(); the path is stable for the lifetime of the
         // extension (it's the deployed extensions/Concord/skills/ folder).
         var bundledSkillsRoot = extensionFileService.ResolvePath("skills");
+        var bundledRulesRoot = extensionFileService.ResolvePath("rules");
         log?.Info($"[skills] bundled-root={bundledSkillsRoot}");
+        log?.Info($"[rules] bundled-root={bundledRulesRoot}");
 
         var vm = new TerminalPaneViewModel(
             title: "Concord",
@@ -97,6 +99,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 catch (Exception ex) { log?.Warn($"GetActiveConfiguration threw: {ex.Message}"); return null; }
             },
             bundledSkillsRoot: bundledSkillsRoot,
+            bundledRulesRoot: bundledRulesRoot,
             consumePendingFirstRunNotices: () =>
             {
                 var notices = pendingFirstRunNotices.ToArray();
@@ -357,10 +360,12 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
             };
 
             var bundledSkillsRoot = extensionFileService.ResolvePath("skills");
+            var bundledRulesRoot = extensionFileService.ResolvePath("rules");
 
             var touched = SettingsApplyHelper.ApplyAll(
                 dir,
                 bundledSkillsRoot,
+                bundledRulesRoot,
                 emptyPrev,
                 defaults,
                 log,
@@ -458,10 +463,12 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
             };
 
             var bundledSkillsRoot = extensionFileService.ResolvePath("skills");
+            var bundledRulesRoot = extensionFileService.ResolvePath("rules");
 
             var touched = SettingsApplyHelper.ApplyAll(
                 dir,
                 bundledSkillsRoot,
+                bundledRulesRoot,
                 emptyPrev,
                 nextSettings,
                 log,

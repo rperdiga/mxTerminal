@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Concord — Marketplace Documentation (paste this)</title>
+<style>
+  body {
+    font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+    max-width: 820px;
+    margin: 2em auto;
+    padding: 0 1.2em;
+    color: #1f1f1f;
+    line-height: 1.55;
+    font-size: 15px;
+  }
+  h1 { color: #1F5A9F; font-size: 1.8em; margin-top: 1em; }
+  h2 { color: #1F5A9F; font-size: 1.3em; margin-top: 1.8em; padding-bottom: 4px; border-bottom: 1px solid #E7E7E9; }
+  h3 { font-size: 1.05em; margin-top: 1.4em; }
+  p, li { line-height: 1.55; }
+  table { border-collapse: collapse; margin: 1em 0; width: 100%; }
+  th, td { border: 1px solid #E7E7E9; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #F2F4F7; font-weight: 600; }
+  code { background: #F2F4F7; padding: 1px 5px; border-radius: 3px; font-family: 'Cascadia Code', Consolas, monospace; font-size: 0.92em; }
+  ul, ol { padding-left: 1.4em; }
+  li { margin-bottom: 0.3em; }
+  .copy-instruction { background: #FFF8E1; border-left: 4px solid #E89641; padding: 12px 16px; margin: 0 0 24px; font-size: 14px; color: #5D4A1F; }
+  hr { border: none; border-top: 1px solid #E7E7E9; margin: 2em 0; }
+</style>
+</head>
+<body>
+
+<div class="copy-instruction">
+  <strong>How to use this file:</strong> open in a browser → select all (Ctrl+A) → copy (Ctrl+C) → paste into the Marketplace <strong>Documentation</strong> rich-text field. The headings, lists, and tables will survive. Then delete this yellow box and the title above (which are not part of the actual content).
+</div>
+
+<h1>Concord — Marketplace Documentation (paste this)</h1>
+
+<hr>
+
+<h1>Documentation</h1>
+
+<p>Concord is a Mendix Studio Pro extension. It installs as a dockable pane that holds a tabbed terminal, plus an in-process MCP server, plus a set of bundled Mendix skill packs. Together those three pieces make AI agent CLIs (Claude Code, OpenAI Codex, GitHub Copilot CLI) first-class collaborators on your Mendix project.</p>
+
+<h2>Installing</h2>
+
+<p>The Marketplace <strong>Use in Studio Pro</strong> button installs Concord into the Mendix project you're currently working on. After install:</p>
+
+<ol>
+  <li><strong>Restart Studio Pro.</strong> Loaded extensions don't hot-reload.</li>
+  <li><strong>Approve the trust prompt.</strong> Studio Pro asks once, the first time Concord wants to load native code (the PTY backend). Approve to enable.</li>
+  <li><strong>Open the Concord pane.</strong> It appears in the right-pane strip alongside Properties, Toolbox, and Maia. Click the <strong>Concord</strong> tab.</li>
+</ol>
+
+<p>The first time Concord opens against a project that has no Concord settings yet, <strong>it wires itself up automatically</strong>:</p>
+
+<ul>
+  <li>Writes <code>&lt;project&gt;/.mcp.json</code> so Claude Code and Copilot CLI both see Studio Pro's MCP server <em>and</em> Concord's own MCP server</li>
+  <li>Installs the 7 bundled Mendix skill packs into <code>&lt;project&gt;/.claude/skills/</code> (Claude Code) and <code>&lt;project&gt;/.github/skills/</code> (Copilot CLI)</li>
+  <li>Installs the always-loaded build rules into <code>&lt;project&gt;/.claude/rules/concord-build-rules.md</code> (Claude Code) and creates a managed <code>@</code>-import block in <code>&lt;project&gt;/CLAUDE.md</code> so the rules auto-load on every session</li>
+  <li>Pre-creates <code>&lt;project&gt;/.claude/rules/project/</code> (with a README stub) for your own project-specific rule additions</li>
+  <li>Starts the Concord MCP server on <code>localhost:7783</code> (or auto-fallback if busy)</li>
+  <li>Persists Concord's settings file at <code>&lt;project&gt;/resources/terminal-settings.json</code> and stamps the current Concord version into it</li>
+</ul>
+
+<p>You'll see one to three short banners explaining what just happened. After that, click <code>+</code> on the tab strip to spawn a tab and run any CLI you have installed.</p>
+
+<h2>What Concord adds</h2>
+
+<h3>A real terminal pane</h3>
+<p>Multi-tab PTY rooted at the open project's directory. PowerShell on Windows, your <code>$SHELL</code> (typically <code>zsh</code>) on macOS — pick from auto-detected shells in <strong>Settings → Shell</strong>. Tab names follow <code>Pwsh - 1</code>, <code>Bash - 2</code>, <code>Cmd - 3</code> — short, readable, gap-filling. Tabs persist across Studio Pro restarts so an interrupted session reopens where you left it. Theme follows Studio Pro automatically.</p>
+
+<h3>The Concord MCP server</h3>
+<p>A second MCP server hosted in Concord itself, wire identity <code>concord-mcp</code>, listening on <code>127.0.0.1:7783</code>. It exposes two tool families:</p>
+
+<ul>
+  <li><strong>Studio Pro UI actions</strong> — <code>run_app</code>, <code>stop_app</code>, <code>refresh_project</code>, <code>save_all</code>, <code>get_active_run_configuration</code>, <code>get_app_status</code>. Lets the CLI drive the IDE: start the runtime, stop it, refresh the project from disk, save all open documents, ask whether the app is running, what configuration is active. The hotkey-driven tools work on macOS too via Accessibility (one-time permission prompt).</li>
+  <li><strong>Maia integration</strong> <em>(Windows)</em> — <code>maia__send</code>, <code>maia__status</code>, <code>maia__wait</code>, <code>maia__ask</code>, <code>maia__reset</code>, <code>maia__force_tier</code>. Programmatic access to Studio Pro's in-IDE AI assistant. The CLI can ask Maia to do something Maia is uniquely good at (page generation, for instance) and wait for the response, all without you context-switching.</li>
+</ul>
+
+<p>Toggle each family independently in <strong>Settings → Concord MCP</strong>.</p>
+
+<h3>Bundled Mendix skill packs</h3>
+<p>Skills are short Markdown files that CLIs auto-discover and follow. Concord ships seven, designed specifically for driving Mendix through both MCP servers correctly:</p>
+
+<table>
+  <thead>
+    <tr><th>Skill</th><th>What it teaches the CLI</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>mendix-microflow-common</code></td><td>Core invariants — re-read after mutate, edge spacing, batching rules</td></tr>
+    <tr><td><code>mendix-microflow-syntax</code></td><td>Exact JSON shape Studio Pro's MCP expects for activities, splits, loops</td></tr>
+    <tr><td><code>mendix-microflow-update</code></td><td>Step-by-step recipes for replace, insert, remove on existing microflows</td></tr>
+    <tr><td><code>mendix-page-gen</code></td><td>Page templates, design-properties bindings, snippet doctrine</td></tr>
+    <tr><td><code>mendix-view-entities</code></td><td>View-entity patterns and the OQL idioms Studio Pro's MCP supports</td></tr>
+    <tr><td><code>mendix-workflow-common</code></td><td>Core invariants for workflow editing</td></tr>
+    <tr><td><code>mendix-workflow-update</code></td><td>Recipes for safe workflow mutations</td></tr>
+  </tbody>
+</table>
+
+<p>Concord installs these per-CLI when you tick <strong>Settings → Skills → Claude Code / Copilot CLI / Codex</strong>. Each save refreshes the bundled content; user-authored skills in the same directory are left intact.</p>
+
+<h3>Always-loaded build rules <em>(Claude Code, new in 4.1.4)</em></h3>
+
+<p>Alongside the skill packs, Concord installs a project-level rules document that auto-loads into every Claude Code session running inside the project:</p>
+
+<ul>
+  <li><strong><code>&lt;project&gt;/.claude/rules/concord-build-rules.md</code></strong> (~360 lines, 15 sections). Governs <em>how</em> Claude Code works inside this Mendix project, not <em>what</em> to build. Covers the closed tool hierarchy (Studio Pro MCP / Concord MCP / Maia / web search / <code>docs.mendix.com</code> — and what's forbidden), the page-via-Maia doctrine, persistence + recovery ladders for unexpected MCP errors, the named failure modes to guard against (orphan pages, shell microflows, ActionButton wiring trap, letter-not-spirit compliance, end-of-build "manual steps required" punt-lists), the Studio Pro UI handoff catalog, the new-project-equals-new-module rule, layout-first for branded apps, the sibling-theme-module + Atlas pattern, the three-part verification gate, plan-before-write for non-trivial builds, and persisting learnings during a build.</li>
+  <li><strong><code>&lt;project&gt;/.claude/rules/project/</code></strong> — your space for project-specific rules: domain glossary, design-system tokens, integration patterns, anything you want every Claude Code session in this project to load on startup. Pre-created on first install with a README stub; never overwritten thereafter. Survives every Concord upgrade.</li>
+  <li><strong><code>&lt;project&gt;/CLAUDE.md</code></strong> — created or refreshed with a fenced <code>&lt;!-- BEGIN CONCORD MANAGED --&gt;</code> ... <code>&lt;!-- END CONCORD MANAGED --&gt;</code> block that <code>@</code>-imports the rules file plus every <code>.md</code> in <code>.claude/rules/project/</code>. Anything you write outside the fence is preserved verbatim across Saves and Concord upgrades.</li>
+</ul>
+
+<p>The rules file is refreshed on every Save (so future Concord releases ship rule updates automatically). Top-level rule files prefixed <code>concord-</code> are Concord-managed; user-authored siblings without that prefix are left untouched.</p>
+
+<p>Phase 1 covers Claude Code only. Codex (<code>AGENTS.md</code>) and Copilot CLI (<code>.github/copilot-instructions.md</code>) follow the same fenced-block pattern in their respective files; they're wired as no-ops in v4.1.4 and light up in a follow-up phase once the Claude path is proven on more real builds.</p>
+
+<h3>Auto-wired CLI configs</h3>
+<p>When you enable <strong>Studio Pro MCP</strong> or <strong>Concord MCP</strong> in Settings, Concord writes the connection details into:</p>
+
+<ul>
+  <li><code>&lt;project&gt;/.mcp.json</code> — read by Claude Code and Copilot CLI</li>
+  <li><code>~/.codex/config.toml</code> — read by Codex (only if you tick Codex)</li>
+</ul>
+
+<p>Existing entries in those files are preserved; Concord upserts only the entries it owns (<code>mendix-studio-pro</code>, <code>concord-mcp</code>).</p>
+
+<h2>Working day-to-day</h2>
+
+<p>A typical session: open Studio Pro, open the Concord pane, your previous tabs come back. Spawn a new tab, type <code>claude</code>, ask it to scaffold a microflow that handles "Approve Loan Request." Claude reads your domain model through Studio Pro's MCP, drafts the microflow, asks you to confirm. You approve. Claude writes the microflow through Studio Pro's MCP, calls Concord MCP's <code>run_app</code> to start the runtime, then <code>get_app_status</code> to confirm it's up. You alt-tab to the browser, smoke-test, come back, ask Claude for a tweak.</p>
+
+<p>Three windows — IDE, terminal, browser — collapse into two.</p>
+
+<p>Other patterns that work well:</p>
+
+<ul>
+  <li><strong>Run Codex in tab 2 for a refactor</strong> while Claude Code stays in tab 1 with project context.</li>
+  <li><strong>Long-running build in tab 3.</strong> Tab persistence keeps it alive across Studio Pro restarts.</li>
+  <li><strong>Paste a multi-page chat transcript or 50-line policy doc</strong> straight into Claude Code's prompt. Concord's paste pipeline handles it as one atomic paste with the native <code>[Pasted text +N lines]</code> collapse.</li>
+</ul>
+
+<h2>Settings panel — what's where</h2>
+
+<p>Open Settings via the gear icon at the top-right of the Concord pane. Six sections:</p>
+
+<ol>
+  <li><strong>General</strong> — tab persistence, ring buffer, scrollback lines.</li>
+  <li><strong>Shell</strong> — default shell each new tab spawns into; auto-detected shell list; per-shell launch arguments.</li>
+  <li><strong>Studio Pro MCP</strong> — enable + per-CLI client list (Claude Code, Copilot CLI, Codex). Concord auto-probes Studio Pro's actual MCP port from <code>Settings.sqlite</code> so you never have to keep ports in sync manually. <strong>Codex is opt-in</strong> because its config lives in user-global state, not in your project tree.</li>
+  <li><strong>Concord MCP</strong> — enable Concord's in-process MCP server. Two sub-toggles for the tool families above. Refresh-from-disk hotkey configurable here (default F4).</li>
+  <li><strong>Skills</strong> — install the bundled Mendix skill packs into the open project, per-CLI.</li>
+  <li><strong>About</strong> — version, log file path, settings file path, the CoE Team logo.</li>
+</ol>
+
+<h2>Updates and upgrades</h2>
+
+<p>Concord remembers the version that last applied wiring defaults to your project. On first open after an upgrade:</p>
+
+<ul>
+  <li><strong>Older stamp</strong> → the wiring defaults are re-applied automatically. New skills install, new MCP entries land, new sub-toggles enable. Your runtime preferences (shell, theme, ring buffer, scrollback, restore-tabs, refresh hotkey) are preserved verbatim. A short banner explains what changed and points you to Settings if you want to adjust anything.</li>
+  <li><strong>Same or newer stamp</strong> → no-op. Concord doesn't re-apply on every open, and never downgrades the wiring of a project a colleague last edited from a newer Concord version.</li>
+</ul>
+
+<p>If your settings file is somehow corrupted (manual edit gone wrong, disk corruption), Concord renames it to <code>terminal-settings.json.broken-{timestamp}.bak</code> so you can recover your custom values, and falls back to defaults instead of failing silently.</p>
+
+<h2>macOS notes</h2>
+
+<p>Concord runs on macOS 10.15+ on Studio Pro 11.10+. Most of what's in this doc applies identically. Two differences worth knowing:</p>
+
+<ul>
+  <li><strong>Maia integration is Windows-only.</strong> Driving Maia from outside Studio Pro requires inspecting its WebView; on Windows that's WebView2's Chrome DevTools Protocol; on macOS that's WKWebView, which only allows external inspection if the host app explicitly opts in (Studio Pro doesn't). To work around this, Concord ships a Mac-specific variant of <code>mendix-page-gen</code> that prints a copy-paste prompt for <em>you</em> to hand to Maia in Studio Pro instead of calling Maia programmatically. Other skills don't reference Maia and are platform-identical.</li>
+  <li><strong>Accessibility permission for hotkey tools.</strong> The four hotkey-driven Studio Pro UI tools (<code>run_app</code>, <code>stop_app</code>, <code>refresh_project</code>, <code>save_all</code>) work on Mac via <code>osascript</code> driving System Events. macOS prompts for Accessibility permission the first time. Open <strong>System Settings → Privacy &amp; Security → Accessibility</strong>, find Studio Pro, enable. Until you grant it, the calls fail with a clear "Accessibility permission not granted" message that the CLI can relay back to you.</li>
+</ul>
+
+<h2>What Concord writes to your disk</h2>
+
+<p><strong>Project-local writes:</strong></p>
+
+<ul>
+  <li><code>&lt;project&gt;/.mcp.json</code> — Claude Code + Copilot CLI MCP config</li>
+  <li><code>&lt;project&gt;/.claude/skills/&lt;7 folders&gt;</code> — bundled skills, Claude Code path</li>
+  <li><code>&lt;project&gt;/.github/skills/&lt;7 folders&gt;</code> — bundled skills, Copilot CLI path</li>
+  <li><code>&lt;project&gt;/.codex/skills/&lt;7 folders&gt;</code> — bundled skills, Codex path <em>(opt-in)</em></li>
+  <li><code>&lt;project&gt;/.claude/rules/concord-build-rules.md</code> — always-loaded build rules (Claude Code; refreshed every Save) <em>(new in 4.1.4)</em></li>
+  <li><code>&lt;project&gt;/.claude/rules/project/README.md</code> — stub for the user-owned project-rules folder; <strong>pre-created once on first install, never overwritten thereafter</strong> <em>(new in 4.1.4)</em></li>
+  <li><code>&lt;project&gt;/CLAUDE.md</code> — managed <code>&lt;!-- BEGIN CONCORD MANAGED --&gt;</code> block at project root that <code>@</code>-imports the rules; content outside the fence preserved verbatim <em>(new in 4.1.4)</em></li>
+  <li><code>&lt;project&gt;/resources/terminal-settings.json</code> — Concord's settings + version stamp</li>
+  <li><code>&lt;project&gt;/resources/terminal-state.json</code> — tab-restore state</li>
+  <li><code>&lt;project&gt;/resources/terminal.log</code> — diagnostic log (lifecycle, MCP probes, paste diagnostics — never clipboard contents)</li>
+</ul>
+
+<p><strong>User-global writes (only when you opt in):</strong></p>
+
+<ul>
+  <li><code>~/.codex/config.toml</code> — Codex MCP config (only when Codex is ticked)</li>
+  <li><em>(macOS only)</em> <code>~/Library/Application Support/Concord/zsh/.zshrc</code> — ZDOTDIR override that prepends Homebrew to PATH so <code>claude</code>, <code>codex</code>, <code>gh</code> resolve out of the box</li>
+</ul>
+
+<h2>Privacy</h2>
+
+<p>Concord is loopback-only. The Concord MCP server binds to <code>127.0.0.1</code>. Maia integration uses Studio Pro's local WebView2 debug port. Nothing leaves your machine through Concord itself. The bundled skill packs are static Markdown files copied into your project — no telemetry, no callbacks, no analytics. The CLI agents you run inside Concord follow their own privacy contracts.</p>
+
+<h2>FAQ</h2>
+
+<p><strong>Does Concord cost anything?</strong> No — Apache 2.0, source on GitHub. The CLI agents you run inside it have their own pricing.</p>
+
+<p><strong>Will it touch my git history?</strong> Only inside the open Mendix project, and only files you can choose to git-ignore. Concord doesn't run git for you.</p>
+
+<p><strong>Does it work with my existing <code>.mcp.json</code>?</strong> Yes. Concord upserts only its own named entries; everything else in the file is preserved.</p>
+
+<p><strong>What if I already have my own skills in <code>.claude/skills/</code>?</strong> They're left alone. Concord installs and removes only its own bundled skill folders.</p>
+
+<p><strong>Can a teammate share my Concord settings?</strong> The MCP wiring lives in <code>&lt;project&gt;/.mcp.json</code> which is in your project tree, so yes — any teammate who clones the project gets the same wiring when they open it in Studio Pro.</p>
+
+<p><strong>Will Mendix build something like this natively?</strong> Probably some of it. The agent-augmented IDE is where the platform is heading — and that's a good thing. Concord is the bridge for teams who want first-class agent workflows today; expect Mendix to absorb pieces of this pattern over time. We'll keep Concord open-source and build on whatever Mendix ships.</p>
+
+<p><strong>Where do I report a bug or ask for a feature?</strong> Open an issue on the GitHub repository. Security issues — please use a private security advisory.</p>
+
+<h2>Built by</h2>
+
+<p>The <strong>Siemens CoE Team</strong> — Mendix builders shipping the workflow we wanted on our own projects. Apache 2.0. Source on GitHub. Powered by Mendix's Studio Pro MCP server.</p>
+
+</body>
+</html>

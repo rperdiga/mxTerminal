@@ -1,5 +1,28 @@
 # Changelog
 
+## 4.1.4 — 2026-05-09
+
+### Added
+
+- **Always-loaded build rules** (`concord-build-rules.md`). Concord now ships a project-level rules document that auto-loads into every Claude Code session running inside the Mendix project. The rules govern *how* the agent works (tool hierarchy, page-via-Maia doctrine, recovery ladders, layout-first for branded apps, sibling-theme-module pattern, verification gates, persisting learned conventions) — not *what* to build. Authored to prevent the named failure modes from forensic build sessions: orphan pages, shell microflows, ActionButton wiring trap, letter-not-spirit compliance, end-of-build "manual steps required" punt-lists. ~360 lines across 15 sections. Installed at `<project>/.claude/rules/concord-build-rules.md` on every Save. Refreshed on every Concord upgrade so future releases ship rule changes automatically.
+- **Project-specific rules folder** (`<project>/.claude/rules/project/`). User-owned space for project-specific instructional content (domain glossary, design-system tokens, integration patterns, learnings the agent persists during a build per §14 of the rules). Pre-created with a `README.md` stub on first install only. **Concord never overwrites contents** — survives every upgrade. Every `.md` file dropped here is auto-imported into `CLAUDE.md` on the next Save.
+- **`CLAUDE.md` auto-management** at the project root. Concord creates or refreshes a fenced `<!-- BEGIN CONCORD MANAGED -->` ... `<!-- END CONCORD MANAGED -->` block that `@`-imports the rules file plus every `.md` in `.claude/rules/project/`. User content outside the markers is preserved verbatim. Existing well-formed block is replaced **in place** — block does not migrate to the top of the file on every Save. Atomic write (write-temp-then-move) so an interrupted Save can never leave a half-written `CLAUDE.md`.
+- **Orphan-bundled-file cleanup on upgrade.** Top-level rule files prefixed `concord-` are Concord-managed; if a future release stops shipping a particular rules file, it's removed from upgraded installs automatically. User-authored siblings (no `concord-` prefix) are never touched.
+- **`RulesInstaller` and `ClaudeMdManager` classes** + **35 new unit tests** (13 RulesInstaller + 22 ClaudeMdManager). Full coverage: idempotency, byte-stable repeated saves, `project/`-folder preservation, orphan-BEGIN edge cases (no END at all + intervening BEGIN before END), block-position preservation (top / middle / bottom), corrupt-state recovery (multiple managed blocks collapse to one), reference-equality optimization for no-op writes, atomic-write semantics, orphan-cleanup on bundle shrinkage.
+- **Rules ship in the build pipeline** (`<Content Include="rules/**/*">` in `Terminal.csproj`). Available in deploy output and the per-project extension cache on both Windows and macOS — same shape as `skills/`.
+
+### Changed
+
+- **`SettingsApplyHelper.ApplyAll` signature** gains a `bundledRulesRoot` parameter (mirrors `bundledSkillsRoot`). Both call sites in `TerminalPaneViewModel.cs` and the three call sites in `TerminalPaneExtension.cs` (Open + first-run + upgrade-apply) updated to resolve and pass it via `extensionFileService.ResolvePath("rules")`. `SettingsApplyHelperTests.cs` updated for the new parameter.
+- **Rules track the same enable-toggle as skills** for v4.1.4 (no separate `RulesEnabled` field). When the user toggles Skills off in Settings, both skill packs AND the always-loaded rules are removed; the `CLAUDE.md` managed block is stripped. Phase 2 may split this if user feedback warrants.
+
+### Notes
+
+- **Existing customers materialize the rules on upgrade.** First open of any Mendix project after the 4.1.4 install fires the upgrade-apply path (`stamp '4.1.3' < 4.1.4`), which runs the apply chain including the new `ApplyRulesConfig` step. Rules land on disk + the `CLAUDE.md` block is created — no manual Save needed. Banner: `Updated to 4.1.4. Rewired: ... Open Settings to adjust.`
+- **End-to-end loading verified.** Smoke test on TestOSApp3 confirmed Claude Code in a Concord pane lists `concord-build-rules.md` and `project/README.md` in its loaded set and quotes §2 verbatim. The `@`-import chain (project-root `CLAUDE.md` → `.claude/rules/*`) works end-to-end.
+- **Phase 1 = Claude only.** Codex (`AGENTS.md`) and Copilot CLI (`.github/copilot-instructions.md`) are wired in `ApplyRulesConfig` as no-ops with explicit TODO markers. They light up in a follow-up phase once the Claude path is validated on more real builds.
+- **Rules content is doctrine, grounded in evidence.** §2's "Pages always go through Maia, never `ped_*`" comes from the Studio Pro MCP system prompt itself. §7's five named failure modes (orphan pages, shell microflows, ActionButton wiring trap, letter-not-spirit compliance, end-of-build punt-lists) come from forensic analysis of session JSONLs from real Mendix-clone build attempts. §2's Maia warm-up ladder addresses the cold-panel false-positive observed in the field. The full file went through three rounds of fresh-context adversarial review before shipping.
+
 ## 4.1.3 — 2026-05-09
 
 ### Added
