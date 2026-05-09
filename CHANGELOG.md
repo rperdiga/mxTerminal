@@ -1,5 +1,22 @@
 # Changelog
 
+## 4.1.0 — 2026-05-08
+
+### Added
+
+- **Default-on settings + first-run auto-apply.** `TerminalSettings.Defaults()` now returns all toggles on (Claude Code + Copilot CLI for both MCP families and skills). When Concord opens against a project that has no `resources/terminal-settings.json` yet, it writes `.mcp.json`, installs bundled skill packs into `.claude/skills/` and `.github/skills/`, and persists the settings file in one go — no modal clicks required. The Concord MCP bridge starts automatically through the existing `TryAutoStartActionServer` path now that the trigger condition is on by default.
+- **First-run advisory banners.** On a fresh install, three banners appear via the existing `mcpResult` channel: a "Concord wired up" summary, a Studio Pro MCP-disabled advisory (if the SQLite probe shows it disabled in Preferences), and a Maia-pane-open advisory on Windows.
+
+### Notes
+
+- **Codex stays opt-in.** Auto-enabling Codex would write to user-global `~/.codex/config.toml` and `~/.codex/skills/` (a side effect outside the project tree). The customer can flip Codex on per-section in Settings.
+- **Existing customers are not retroactively flipped.** The auto-apply only runs when no `resources/terminal-settings.json` file exists. Anyone with a saved settings file from 4.0.0 keeps their explicit choices.
+- **Edge case (very old settings files).** If a 1.x or 2.x settings file is loaded that's missing `skillsEnabled`/`skillClients` keys entirely, `Load()` migration applies the new defaults in memory (skills appear enabled in the modal). The disk state isn't auto-applied — the next Save makes it consistent.
+
+### Refactor
+
+- The apply-on-save chain (MCP json/toml writers + skill installer) was extracted from `TerminalPaneViewModel` into a static `SettingsApplyHelper` so the extension's first-run path can call the same code without taking a ViewModel dependency. The orchestration layer now has unit-test coverage that didn't exist before.
+
 ## 4.0.0 — 2026-05-08
 
 ### Added
