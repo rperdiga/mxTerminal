@@ -32,10 +32,17 @@ public sealed class CdpClient : ICdpClient
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(3) };
 
-    private ClientWebSocket? ws;
+    private IWebSocketAdapter? ws;
     private int messageId;
     private readonly SemaphoreSlim evalGate = new(1, 1);
     private readonly SemaphoreSlim connectGate = new(1, 1);
+
+    // v4.2.1: socket factory + discovery override let unit tests inject
+    // controllable fakes for reconnect-on-drop coverage. Production uses
+    // the default factory (() => new ClientWebSocketAdapter()) and the
+    // built-in WMI/HTTP discovery; tests override either or both.
+    private readonly Func<IWebSocketAdapter> webSocketFactory;
+    private readonly Func<CancellationToken, Task<(int port, string targetWsUrl)>>? discoveryOverride;
 
     private int? cachedPort;
     private string? cachedTargetWsUrl;
@@ -62,11 +69,31 @@ public sealed class CdpClient : ICdpClient
     private Task? heartbeatTask;
 
     public CdpClient() : this(null) { }
-    public CdpClient(Logger? log) { this.log = log; }
+    public CdpClient(Logger? log)
+        : this(log, webSocketFactory: null, discoveryOverride: null) { }
+
+    /// <summary>
+    /// Test-friendly constructor. <paramref name="webSocketFactory"/>: returns
+    /// a fresh adapter per (re)connect; defaults to a real ClientWebSocket.
+    /// <paramref name="discoveryOverride"/>: returns the (port, ws-url) pair
+    /// without running the WMI / HTTP scan; null falls through to the
+    /// production discovery path.
+    /// </summary>
+    internal CdpClient(
+        Logger? log,
+        Func<IWebSocketAdapter>? webSocketFactory,
+        Func<CancellationToken, Task<(int port, string targetWsUrl)>>? discoveryOverride)
+    {
+        this.log = log;
+        this.webSocketFactory = webSocketFactory ?? (() => new ClientWebSocketAdapter());
+        this.discoveryOverride = discoveryOverride;
+    }
 
     public async Task ConnectMaiaAsync(CancellationToken ct)
     {
-        if (!OperatingSystem.IsWindows())
+        // The Windows-only guard applies to production discovery; tests using
+        // discoveryOverride can run on any platform.
+        if (discoveryOverride is null && !OperatingSystem.IsWindows())
             throw new TransportUnavailable("Maia bridge is Windows-only in this Concord release.");
 
         await connectGate.WaitAsync(ct);
@@ -91,6 +118,15 @@ public sealed class CdpClient : ICdpClient
             targetWsUrl = url;
             log?.Debug($"[cdp] reusing cached discovery port={port}");
         }
+        else if (discoveryOverride is not null)
+        {
+            // v4.2.1 test seam — bypass WMI/HTTP scan entirely.
+            (port, targetWsUrl) = await discoveryOverride(ct);
+            cachedPort = port;
+            cachedTargetWsUrl = targetWsUrl;
+            cachedDiscoveryAt = DateTime.UtcNow;
+            log?.Debug($"[cdp] discovery override -> port={port}");
+        }
         else
         {
             port = FindDebugPort();
@@ -108,7 +144,7 @@ public sealed class CdpClient : ICdpClient
             ws = null;
         }
 
-        ws = new ClientWebSocket();
+        ws = webSocketFactory();
         try
         {
             using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -163,9 +199,21 @@ public sealed class CdpClient : ICdpClient
             if (ws is null || ws.State != WebSocketState.Open) return;
             try
             {
-                await EvaluateOnceAsync("return 1+1;", HeartbeatEvalTimeout, ct);
+                // v4.2.1: heartbeat also triggers __maiaBridge.scan() when the
+                // bridge is installed. Defeats Chromium's WebView2 background-
+                // tab throttling that otherwise drifts the JS-side
+                // setInterval(scanForCompletions, 500) from 500ms toward
+                // seconds when Maia is hidden behind another pane. The
+                // persistent CDP socket is unaffected by tab visibility, so
+                // pulling the scan from C#'s heartbeat keeps detection
+                // latency bounded at HeartbeatInterval (10s) regardless of
+                // pane visibility. Cheap when no tickets are pending; the
+                // scan is O(n) on the ticket map (capped at 100 entries).
+                await EvaluateOnceAsync(
+                    "if (window.__maiaBridge && window.__maiaBridge.scan) { window.__maiaBridge.scan(); } return 1+1;",
+                    HeartbeatEvalTimeout, ct);
                 consecutiveSkips = 0;
-                log?.Debug("[cdp] heartbeat ok");
+                log?.Debug("[cdp] heartbeat ok (scan triggered if bridge present)");
             }
             catch (TransportUnavailable ex) when (!ex.IsDisconnect && ex.Message.Contains("timed out"))
             {
@@ -341,7 +389,7 @@ public sealed class CdpClient : ICdpClient
             sendCts.CancelAfter(timeout ?? EvaluateDefaultTimeout);
             try
             {
-                await ws.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: true, sendCts.Token);
+                await ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, endOfMessage: true, sendCts.Token);
             }
             catch (WebSocketException wex)
             {

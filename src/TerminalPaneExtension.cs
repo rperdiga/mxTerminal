@@ -105,6 +105,32 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 var notices = pendingFirstRunNotices.ToArray();
                 pendingFirstRunNotices.Clear();
                 return notices;
+            },
+            // v4.2.1: pass the run-config + project-info callbacks through so the
+            // VM's HandleSaveSettings rebuild produces a fully-wired StudioProActions
+            // (matches what TryAutoStartActionServer already does). Without these,
+            // get_active_run_configuration returned "Active-run-configuration
+            // callback not wired" after any Settings save.
+            getActiveRunConfig: () =>
+            {
+                var model = CurrentApp;
+                if (model is null) return null;
+                try
+                {
+                    var c = localRunConfigs.GetActiveConfiguration(model);
+                    if (c is null) return null;
+                    dynamic d = c;
+                    string? id  = TryStr(() => (string?)d.Id?.ToString());
+                    string? nm  = TryStr(() => (string?)d.Name);
+                    string? url = TryStr(() => (string?)d.ApplicationRootUrl);
+                    return new RunConfigurationInfo(id, nm, url);
+                }
+                catch (Exception ex) { log?.Warn($"getActiveRunConfig threw: {ex.Message}"); return null; }
+            },
+            getProjectInfo: () =>
+            {
+                var proj = CurrentApp?.Root as IProject;
+                return (proj?.DirectoryPath, proj?.Name);
             });
         activeViewModel = vm;
         return vm;
@@ -292,6 +318,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
             // probe runs in the background; the router is functional even before it
             // returns (early calls just see all-tiers-down and fail with a clear message).
             Terminal.Maia.MaiaActions? maia = null;
+            Terminal.Maia.CdpClient? sharedCdp = null;
             bool maiaEnabled = OperatingSystem.IsWindows() && settings.MaiaIntegrationEnabled;
             if (maiaEnabled)
             {
@@ -302,7 +329,11 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 // call, which DoS'd Studio Pro's CDP under the cocktail-test
                 // workload (45+ status/wait calls in 30 min). See
                 // docs/superpowers/specs/2026-05-09-bridge-hardening-implementation.md.
-                var sharedCdp = new Terminal.Maia.CdpClient(log);
+                // v4.2.1: lifetime owned by the manager — disposed when the
+                // action server is restarted (settings toggle off→on) so a
+                // long-lived Studio Pro session doesn't accumulate orphan
+                // ClientWebSockets per Maia toggle cycle.
+                sharedCdp = new Terminal.Maia.CdpClient(log);
                 var transports = new Terminal.Maia.IMaiaTransport[]
                 {
                     new Terminal.Maia.CdpInjectedTransport(() => sharedCdp),
@@ -321,7 +352,8 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 log,
                 maia,
                 studioProActionsEnabled: settings.StudioProActionsEnabled,
-                maiaIntegrationEnabled: maiaEnabled);
+                maiaIntegrationEnabled: maiaEnabled,
+                cdpClient: sharedCdp);
             // Log the LIVE bound port — DefaultPort may have been busy and the
             // server quietly fell back to an OS-assigned free port.
             var boundPort = manager.CurrentActionServerPort ?? StudioProActionServer.DefaultPort;

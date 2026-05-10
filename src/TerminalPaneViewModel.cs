@@ -21,6 +21,13 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     private readonly string bundledSkillsRoot;
     private readonly string bundledRulesRoot;
     private readonly Func<string[]> consumePendingFirstRunNotices;
+    // v4.2.1: passed through from TerminalPaneExtension so the StudioProActions
+    // built during HandleSaveSettings is wired the same way as the one built
+    // during TryAutoStartActionServer. Without these the get_active_run_configuration
+    // tool returned "Active-run-configuration callback not wired" any time the
+    // user saved Settings and the action server was rebuilt.
+    private readonly Func<RunConfigurationInfo?>? getActiveRunConfig;
+    private readonly Func<(string? path, string? name)>? getProjectInfo;
 
     private IWebView? webView;
     /// <summary>
@@ -41,7 +48,9 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         Func<string?> getApplicationRootUrl,
         string bundledSkillsRoot,
         string bundledRulesRoot,
-        Func<string[]> consumePendingFirstRunNotices)
+        Func<string[]> consumePendingFirstRunNotices,
+        Func<RunConfigurationInfo?>? getActiveRunConfig = null,
+        Func<(string? path, string? name)>? getProjectInfo = null)
     {
         Title = title;
         this.manager = manager;
@@ -52,6 +61,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         this.bundledSkillsRoot = bundledSkillsRoot;
         this.bundledRulesRoot = bundledRulesRoot;
         this.consumePendingFirstRunNotices = consumePendingFirstRunNotices;
+        this.getActiveRunConfig = getActiveRunConfig;
+        this.getProjectInfo = getProjectInfo;
     }
 
     public override void InitWebView(IWebView webView)
@@ -263,19 +274,27 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     refreshHotkey: newRefreshHotkey,
                     log: log);
                 var probe = new RunStateProbe(getApplicationRootUrl);
-                var actions = new StudioProActions(probe, ui);
+                // v4.2.1: pass the same callbacks the TryAutoStartActionServer
+                // path uses so get_active_run_configuration / get_app_status
+                // continue to work after a Settings save rebuilds the server.
+                var actions = new StudioProActions(probe, ui,
+                    getActiveRunConfig: getActiveRunConfig,
+                    getProjectInfo: getProjectInfo);
 
                 // Build Maia plumbing only on Windows when the toggle is on. The router
                 // probe runs in the background; the router is functional even before it
                 // returns (early calls just see all-tiers-down and fail with a clear message).
                 Terminal.Maia.MaiaActions? maia = null;
+                Terminal.Maia.CdpClient? sharedCdp = null;
                 bool maiaEnabled = OperatingSystem.IsWindows() && newMaiaIntegration;
                 if (maiaEnabled)
                 {
                     // v4.2.0: singleton CdpClient (see TerminalPaneExtension.cs
                     // for the full rationale). Closure captures the same
                     // instance for both transports.
-                    var sharedCdp = new Terminal.Maia.CdpClient(log);
+                    // v4.2.1: lifetime owned by the manager so a settings save
+                    // disposes the previous client before swapping in this one.
+                    sharedCdp = new Terminal.Maia.CdpClient(log);
                     var transports = new Terminal.Maia.IMaiaTransport[]
                     {
                         new Terminal.Maia.CdpInjectedTransport(() => sharedCdp),
@@ -292,7 +311,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     log,
                     maia,
                     studioProActionsEnabled: newStudioProActions,
-                    maiaIntegrationEnabled: maiaEnabled);
+                    maiaIntegrationEnabled: maiaEnabled,
+                    cdpClient: sharedCdp);
 
                 // Probe the LIVE bound port (auto-fallback may have moved off
                 // the default if the OS said 7783 was busy).
