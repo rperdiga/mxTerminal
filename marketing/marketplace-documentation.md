@@ -129,9 +129,11 @@ Project-local writes:
 - `<project>/.claude/skills/<7 folders>` — bundled skills, Claude Code path
 - `<project>/.github/skills/<7 folders>` — bundled skills, Copilot CLI path
 - `<project>/.codex/skills/<7 folders>` — bundled skills, Codex path *(opt-in)*
-- `<project>/.claude/rules/concord-build-rules.md` — always-loaded build rules (Claude Code; refreshed every Save) *(new in 4.1.4)*
+- `<project>/.claude/rules/concord-build-rules.md` — always-loaded build rules, core operational discipline (Claude Code; refreshed every Save) *(new in 4.1.4)*
+- `<project>/.claude/rules/concord-pages-and-themes.md` — always-loaded build rules, UI construction (page-via-Maia, layouts, sibling theme module, soft-stop handoffs) *(new in 4.2.0)*
+- `<project>/.claude/rules/concord-model-discipline.md` — always-loaded build rules, model rules (`ped_*` discipline, update-operation traps, named failure modes, project-module discipline) *(new in 4.2.0)*
 - `<project>/.claude/rules/project/README.md` — stub for the user-owned project-rules folder; **pre-created once on first install, never overwritten thereafter** *(new in 4.1.4)*
-- `<project>/CLAUDE.md` — managed `<!-- BEGIN CONCORD MANAGED -->` block at project root that `@`-imports the rules; content outside the fence preserved verbatim *(new in 4.1.4)*
+- `<project>/CLAUDE.md` — managed `<!-- BEGIN CONCORD MANAGED -->` block at project root that `@`-imports all `concord-*.md` rules files plus user-authored `project/*.md`; content outside the fence preserved verbatim *(new in 4.1.4, sibling-imports added in 4.2.0)*
 - `<project>/resources/terminal-settings.json` — Concord's settings + version stamp
 - `<project>/resources/terminal-state.json` — tab-restore state
 - `<project>/resources/terminal.log` — diagnostic log (lifecycle, MCP probes, paste diagnostics — never clipboard contents)
