@@ -31,7 +31,10 @@ public sealed class CdpChatTransport : IMaiaTransport
         var sw = Stopwatch.StartNew();
         try
         {
-            await using var cdp = clientFactory();
+            // v4.2.0: clientFactory returns the singleton CdpClient — do NOT
+            // `await using`, the singleton's DisposeAsync would close the
+            // shared WebSocket and cancel the heartbeat.
+            var cdp = clientFactory();
             await cdp.ConnectMaiaAsync(ct);
             var node = await cdp.EvaluateAsync(
                 "return !!document.getElementById('MX_CHAT_INPUT');", ct: ct);
@@ -47,7 +50,7 @@ public sealed class CdpChatTransport : IMaiaTransport
 
     public async Task<SendResult> SendAsync(string prompt, string sentinel, CancellationToken ct)
     {
-        await using var cdp = clientFactory();
+        var cdp = clientFactory();
         await cdp.ConnectMaiaAsync(ct);
         var folded = string.Join(' ', prompt.Split('\n', '\r', '\t').Where(s => s.Length > 0));
         var full = $"{folded} Respond, then write {sentinel} on a new line so the pipeline knows you are done.";
@@ -80,10 +83,16 @@ public sealed class CdpChatTransport : IMaiaTransport
         lock (gate)
         {
             if (!tickets.TryGetValue(handle, out sentAt))
-                throw new TransportUnavailable($"Unknown handle: {handle}");
+            {
+                // v4.2.0: surface UnknownHandle instead of throwing so the
+                // router can decide lost-vs-unknown using its own bindings.
+                return new StatusResult(
+                    Done: false, Response: "", Streaming: false,
+                    ElapsedSec: 0, TransportUsed: Name, UnknownHandle: true);
+            }
         }
 
-        await using var cdp = clientFactory();
+        var cdp = clientFactory();
         await cdp.ConnectMaiaAsync(ct);
         var js = $$"""
             return [...document.querySelectorAll({{JsonSerializer.Serialize(BubbleSelector)}})]

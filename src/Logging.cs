@@ -7,9 +7,28 @@ public sealed class Logger
 
     public Logger(string projectDir) => this.projectDir = projectDir;
 
+    /// <summary>
+    /// v4.2.0+: when true, <see cref="Debug"/> calls write to the log;
+    /// otherwise they no-op. Toggled by the settings save-path when the user
+    /// flips "Diagnostic logging" in Settings → Concord MCP. Default false:
+    /// keeps the log free of CDP traffic for users who don't need it.
+    /// </summary>
+    public bool DiagnosticEnabled { get; set; }
+
     public void Info(string message)  => Write("INFO",  message, exception: null);
     public void Warn(string message)  => Write("WARN",  message, exception: null);
     public void Error(string message, Exception? ex = null) => Write("ERROR", message, ex);
+
+    /// <summary>
+    /// v4.2.0+: diagnostic-only line. No-op when <see cref="DiagnosticEnabled"/>
+    /// is false. Used by Maia / CDP code to trace request/response shapes
+    /// without polluting the terminal.log of users who don't have the toggle on.
+    /// </summary>
+    public void Debug(string message)
+    {
+        if (!DiagnosticEnabled) return;
+        Write("DEBUG", message, exception: null);
+    }
 
     public void Clear()
     {

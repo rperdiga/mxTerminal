@@ -35,6 +35,9 @@ public sealed class MaiaActions
         try
         {
             var s = await router.StatusAsync(handle, ct);
+            // v4.2.0: every status payload carries lost. Callers can switch on
+            // it: false=normal, true=JS-side ticket vanished after a WebView
+            // reload (re-ask). MCP clients that don't care can ignore the field.
             return ActionResult.OkWith("polled", new
             {
                 done = s.Done,
@@ -42,6 +45,7 @@ public sealed class MaiaActions
                 streaming = s.Streaming,
                 elapsed_sec = s.ElapsedSec,
                 transport = s.TransportUsed,
+                lost = s.Lost,
             });
         }
         catch (TransportError ex) { return ActionResult.Fail(ex.Message); }
@@ -65,6 +69,23 @@ public sealed class MaiaActions
                         elapsed_sec = s.ElapsedSec,
                         transport = s.TransportUsed,
                         timed_out = false,
+                        lost = false,
+                    });
+                }
+                if (s.Lost)
+                {
+                    // v4.2.0: WebView reloaded mid-wait — JS ticket vanished.
+                    // Exit the polling loop early with the lost discriminator
+                    // so the caller can re-ask instead of polling for the
+                    // remainder of the timeout against a doomed handle.
+                    return ActionResult.OkWith("lost", new
+                    {
+                        done = false,
+                        response = "",
+                        elapsed_sec = deadline.Elapsed.TotalSeconds,
+                        transport = s.TransportUsed,
+                        timed_out = false,
+                        lost = true,
                     });
                 }
             }
@@ -78,6 +99,7 @@ public sealed class MaiaActions
             response = "",
             elapsed_sec = deadline.Elapsed.TotalSeconds,
             timed_out = true,
+            lost = false,
         });
     }
 

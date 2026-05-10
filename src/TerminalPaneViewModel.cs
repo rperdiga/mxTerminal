@@ -265,10 +265,14 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 bool maiaEnabled = OperatingSystem.IsWindows() && newMaiaIntegration;
                 if (maiaEnabled)
                 {
+                    // v4.2.0: singleton CdpClient (see TerminalPaneExtension.cs
+                    // for the full rationale). Closure captures the same
+                    // instance for both transports.
+                    var sharedCdp = new Terminal.Maia.CdpClient(log);
                     var transports = new Terminal.Maia.IMaiaTransport[]
                     {
-                        new Terminal.Maia.CdpInjectedTransport(() => new Terminal.Maia.CdpClient()),
-                        new Terminal.Maia.CdpChatTransport(() => new Terminal.Maia.CdpClient()),
+                        new Terminal.Maia.CdpInjectedTransport(() => sharedCdp),
+                        new Terminal.Maia.CdpChatTransport(() => sharedCdp),
                     };
                     var router = new Terminal.Maia.MaiaRouter(transports);
                     _ = router.ProbeAllAsync(CancellationToken.None);  // fire-and-forget; safe

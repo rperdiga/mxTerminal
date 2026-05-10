@@ -15,6 +15,15 @@ namespace Terminal.Maia;
 /// directly because Concord targets net8.0 — System.Management requires
 /// net8.0-windows, and we can't change TFM without breaking macOS support.
 /// Shelling out to powershell.exe is what the Python prototype did too.)
+///
+/// v4.2.0+: instances are intended to be long-lived. ConnectMaiaAsync is
+/// idempotent under a connect gate — first call performs port discovery and
+/// the WebSocket handshake; subsequent calls return immediately when the
+/// underlying socket is healthy. EvaluateAsync wraps EvaluateOnceAsync with
+/// a one-shot reconnect when the WebSocket drops mid-call. Discovery results
+/// (port + targetWsUrl) are cached and invalidated on connect failure.
+/// Callers MUST NOT `await using var cdp = clientFactory()` — the singleton
+/// is owned by the action-server lifecycle.
 /// </summary>
 public sealed class CdpClient : ICdpClient
 {
@@ -26,14 +35,60 @@ public sealed class CdpClient : ICdpClient
     private ClientWebSocket? ws;
     private int messageId;
     private readonly SemaphoreSlim evalGate = new(1, 1);
+    private readonly SemaphoreSlim connectGate = new(1, 1);
+
+    private int? cachedPort;
+    private string? cachedTargetWsUrl;
+    private DateTime cachedDiscoveryAt;
+
+    private readonly Logger? log;
+
+    public CdpClient() : this(null) { }
+    public CdpClient(Logger? log) { this.log = log; }
 
     public async Task ConnectMaiaAsync(CancellationToken ct)
     {
         if (!OperatingSystem.IsWindows())
             throw new TransportUnavailable("Maia bridge is Windows-only in this Concord release.");
 
-        int port = FindDebugPort();
-        string targetWsUrl = await DiscoverMaiaTargetAsync(port, ct);
+        await connectGate.WaitAsync(ct);
+        try
+        {
+            if (ws is { State: WebSocketState.Open }) return;   // already healthy
+            await ConnectInternalAsync(ct);
+        }
+        finally { connectGate.Release(); }
+    }
+
+    private async Task ConnectInternalAsync(CancellationToken ct)
+    {
+        // Reuse cached discovery when present; the WMI scan and /json GET are
+        // the expensive parts. Cache is invalidated on connect failure below
+        // so a Studio Pro restart self-heals after one failed call.
+        int port;
+        string targetWsUrl;
+        if (cachedPort is int p && cachedTargetWsUrl is string url)
+        {
+            port = p;
+            targetWsUrl = url;
+            log?.Debug($"[cdp] reusing cached discovery port={port}");
+        }
+        else
+        {
+            port = FindDebugPort();
+            targetWsUrl = await DiscoverMaiaTargetAsync(port, ct);
+            cachedPort = port;
+            cachedTargetWsUrl = targetWsUrl;
+            cachedDiscoveryAt = DateTime.UtcNow;
+            log?.Debug($"[cdp] discovered port={port}");
+        }
+
+        // Tear down any half-open socket from a previous failed attempt.
+        if (ws is not null)
+        {
+            try { ws.Dispose(); } catch { }
+            ws = null;
+        }
 
         ws = new ClientWebSocket();
         try
@@ -41,12 +96,20 @@ public sealed class CdpClient : ICdpClient
             using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             connectCts.CancelAfter(TimeSpan.FromSeconds(5));
             await ws.ConnectAsync(new Uri(targetWsUrl), connectCts.Token);
+            log?.Debug($"[cdp] websocket connected port={port}");
         }
         catch (Exception ex) when (ex is not TransportUnavailable)
         {
-            ws.Dispose();
+            try { ws.Dispose(); } catch { }
             ws = null;
-            throw new TransportUnavailable($"WebSocket connect to Maia target failed: {ex.Message}", ex);
+            // Discovery may have gone stale (Studio Pro restarted on a different
+            // port). Invalidate cache so the next call re-probes.
+            cachedPort = null;
+            cachedTargetWsUrl = null;
+            throw new TransportUnavailable($"WebSocket connect to Maia target failed: {ex.Message}", ex)
+            {
+                IsDisconnect = true,
+            };
         }
     }
 
@@ -150,8 +213,27 @@ public sealed class CdpClient : ICdpClient
 
     public async Task<JsonNode?> EvaluateAsync(string js, TimeSpan? timeout = null, CancellationToken ct = default)
     {
+        try
+        {
+            return await EvaluateOnceAsync(js, timeout, ct);
+        }
+        catch (TransportUnavailable ex) when (ex.IsDisconnect)
+        {
+            // One-shot reconnect on transport-level drop. This is the v4.2.0
+            // anti-storm path: instead of every caller seeing IOException +
+            // bridge-dead, the next eval transparently reconnects + retries.
+            log?.Debug($"[cdp] socket drop detected; reconnecting once: {ex.Message}");
+            await connectGate.WaitAsync(ct);
+            try { await ConnectInternalAsync(ct); }
+            finally { connectGate.Release(); }
+            return await EvaluateOnceAsync(js, timeout, ct);
+        }
+    }
+
+    private async Task<JsonNode?> EvaluateOnceAsync(string js, TimeSpan? timeout, CancellationToken ct)
+    {
         if (ws is null || ws.State != WebSocketState.Open)
-            throw new TransportUnavailable("CDP client is not connected.");
+            throw new TransportUnavailable("CDP client is not connected.") { IsDisconnect = true };
 
         await evalGate.WaitAsync(ct);
         try
@@ -168,11 +250,28 @@ public sealed class CdpClient : ICdpClient
                     ["awaitPromise"] = true,
                 }
             };
-            var bytes = Encoding.UTF8.GetBytes(req.ToJsonString());
+            var requestText = req.ToJsonString();
+            log?.Debug($"[cdp] >> id={id} bytes={requestText.Length}");
+            var bytes = Encoding.UTF8.GetBytes(requestText);
 
             using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             sendCts.CancelAfter(timeout ?? EvaluateDefaultTimeout);
-            await ws.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: true, sendCts.Token);
+            try
+            {
+                await ws.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: true, sendCts.Token);
+            }
+            catch (WebSocketException wex)
+            {
+                try { ws.Dispose(); } catch { }
+                ws = null;
+                throw new TransportUnavailable($"WebSocket send failed: {wex.Message}", wex) { IsDisconnect = true };
+            }
+            catch (System.IO.IOException ioex)
+            {
+                try { ws.Dispose(); } catch { }
+                ws = null;
+                throw new TransportUnavailable($"WebSocket send failed: {ioex.Message}", ioex) { IsDisconnect = true };
+            }
 
             // Read until we see our id.
             var deadline = DateTime.UtcNow + (timeout ?? EvaluateDefaultTimeout);
@@ -194,6 +293,24 @@ public sealed class CdpClient : ICdpClient
                     {
                         throw new TransportUnavailable($"CDP Runtime.evaluate timed out after {(timeout ?? EvaluateDefaultTimeout).TotalSeconds:0.0}s");
                     }
+                    catch (WebSocketException wex)
+                    {
+                        try { ws.Dispose(); } catch { }
+                        ws = null;
+                        throw new TransportUnavailable($"WebSocket receive failed: {wex.Message}", wex) { IsDisconnect = true };
+                    }
+                    catch (System.IO.IOException ioex)
+                    {
+                        try { ws.Dispose(); } catch { }
+                        ws = null;
+                        throw new TransportUnavailable($"WebSocket receive failed: {ioex.Message}", ioex) { IsDisconnect = true };
+                    }
+                    if (r.MessageType == WebSocketMessageType.Close)
+                    {
+                        try { ws.Dispose(); } catch { }
+                        ws = null;
+                        throw new TransportUnavailable("WebSocket closed by remote.") { IsDisconnect = true };
+                    }
                     sb.Append(Encoding.UTF8.GetString(buf.Array!, 0, r.Count));
                     if (r.EndOfMessage) break;
                 }
@@ -201,6 +318,7 @@ public sealed class CdpClient : ICdpClient
                 if (msg is null) continue;
                 if (msg["id"] is JsonValue v && v.TryGetValue<int>(out var msgId) && msgId == id)
                 {
+                    log?.Debug($"[cdp] << id={id} bytes={sb.Length}");
                     if (msg["error"] is JsonObject err)
                         throw new CdpProtocolException("Runtime.evaluate", msg, $"CDP error: {err["message"]?.GetValue<string>()}");
                     var result = msg["result"]?["result"];
@@ -225,9 +343,10 @@ public sealed class CdpClient : ICdpClient
                     await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None);
             }
             catch { /* best-effort */ }
-            ws.Dispose();
+            try { ws.Dispose(); } catch { }
             ws = null;
         }
-        evalGate.Dispose();
+        try { evalGate.Dispose(); } catch { }
+        try { connectGate.Dispose(); } catch { }
     }
 }

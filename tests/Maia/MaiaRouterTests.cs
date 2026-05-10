@@ -116,4 +116,55 @@ public class MaiaRouterTests
 
         act.Should().Throw<ArgumentException>().WithMessage("*nope*");
     }
+
+    private sealed class UnknownHandleTransport : IMaiaTransport
+    {
+        public string Name { get; }
+        public int Tier { get; }
+        public UnknownHandleTransport(string name, int tier) { Name = name; Tier = tier; }
+        public Task<HealthStatus> HealthCheckAsync(CancellationToken ct)
+            => Task.FromResult(new HealthStatus(true, Tier, Name, 1.0));
+        public Task<SendResult> SendAsync(string prompt, string sentinel, CancellationToken ct)
+            => Task.FromResult(new SendResult(sentinel, sentinel, Name, DateTimeOffset.UtcNow));
+        public Task<StatusResult> StatusAsync(string handle, CancellationToken ct)
+            => Task.FromResult(new StatusResult(false, "", false, 0, Name, Lost: false, UnknownHandle: true));
+        public Task ResetAsync(CancellationToken ct) => Task.CompletedTask;
+    }
+
+    // v4.2.0: when the router has no binding for a handle, an UnknownHandle
+    // signal from the transport bubbles up as a structured Unknown-handle
+    // exception. Caller passed a typo / never-sent handle.
+    [Fact]
+    public async Task StatusAsync_UnknownHandle_NoRouterBinding_Throws()
+    {
+        var t = new UnknownHandleTransport("t1", 1);
+        var router = new MaiaRouter(new IMaiaTransport[] { t });
+        await router.ProbeAllAsync(CancellationToken.None);
+
+        Func<Task> act = () => router.StatusAsync("<MX-NEVERSEEN>", CancellationToken.None);
+
+        await act.Should().ThrowAsync<TransportUnavailable>()
+            .Where(e => e.Message.Contains("Unknown handle: <MX-NEVERSEEN>"));
+    }
+
+    // v4.2.0: when the router DID bind the handle (we sent it) but the
+    // transport now reports UnknownHandle, the WebView reloaded — translate
+    // to Lost=true so the caller can re-ask cleanly.
+    [Fact]
+    public async Task StatusAsync_UnknownHandle_RouterHasBinding_ReturnsLost()
+    {
+        var t = new UnknownHandleTransport("t1", 1);
+        var router = new MaiaRouter(new IMaiaTransport[] { t });
+        await router.ProbeAllAsync(CancellationToken.None);
+
+        // Bind the handle by sending first.
+        var send = await router.SendAsync("hi", "<MX-BOUND>", CancellationToken.None);
+        send.Handle.Should().Be("<MX-BOUND>");
+
+        var s = await router.StatusAsync("<MX-BOUND>", CancellationToken.None);
+
+        s.Lost.Should().BeTrue();
+        s.UnknownHandle.Should().BeFalse();   // router cleared the flag
+        s.Done.Should().BeFalse();
+    }
 }
