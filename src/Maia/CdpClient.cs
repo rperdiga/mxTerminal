@@ -43,6 +43,24 @@ public sealed class CdpClient : ICdpClient
 
     private readonly Logger? log;
 
+    // Heartbeat: every HeartbeatIntervalSec, fire a no-op `1+1` Runtime.evaluate
+    // over the persistent socket. Defeats Chromium's WebView2 background-tab
+    // throttling that otherwise drifts the maia_agent.js setInterval timer
+    // from 500ms to seconds when Maia is hidden behind another pane.
+    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(10);
+    // Bounded heartbeat eval timeout — must be SHORTER than the eval-gate
+    // wait we'd otherwise hang on if the gate is held by a long maia__wait.
+    // 3s is long enough for a healthy round-trip and short enough that a
+    // gate-held skip is observable in DEBUG logs without burning a full beat.
+    private static readonly TimeSpan HeartbeatEvalTimeout = TimeSpan.FromSeconds(3);
+    // Safety cap: if N consecutive beats time out (gate held forever, or
+    // socket wedged), treat as a bridge problem and stop the loop. The next
+    // real Evaluate triggers reconnect via the EvaluateAsync wrapper, which
+    // also restarts the heartbeat via ConnectInternalAsync.
+    private const int HeartbeatMaxConsecutiveSkips = 12;   // 2 minutes of skips
+    private CancellationTokenSource? heartbeatCts;
+    private Task? heartbeatTask;
+
     public CdpClient() : this(null) { }
     public CdpClient(Logger? log) { this.log = log; }
 
@@ -110,6 +128,71 @@ public sealed class CdpClient : ICdpClient
             {
                 IsDisconnect = true,
             };
+        }
+
+        // Heartbeat lifecycle: cancel the previous loop and AWAIT it (with a
+        // bounded timeout) before swapping in the new one. Without the await,
+        // a reconnect mid-flight could leave the old loop in the middle of an
+        // Evaluate, racing the new loop on the same gate / correlation IDs.
+        await StartHeartbeatAsync();
+    }
+
+    private async Task StartHeartbeatAsync()
+    {
+        // Cancel the previous loop and let it drain.
+        if (heartbeatTask is { } old)
+        {
+            try { heartbeatCts?.Cancel(); } catch { }
+            try { await old.WaitAsync(TimeSpan.FromSeconds(1)); }
+            catch { /* best-effort drain */ }
+            try { heartbeatCts?.Dispose(); } catch { }
+        }
+        heartbeatCts = new CancellationTokenSource();
+        var token = heartbeatCts.Token;
+        heartbeatTask = Task.Run(() => HeartbeatLoopAsync(token));
+    }
+
+    private async Task HeartbeatLoopAsync(CancellationToken ct)
+    {
+        int consecutiveSkips = 0;
+        while (!ct.IsCancellationRequested)
+        {
+            try { await Task.Delay(HeartbeatInterval, ct); }
+            catch (OperationCanceledException) { return; }
+
+            if (ws is null || ws.State != WebSocketState.Open) return;
+            try
+            {
+                await EvaluateOnceAsync("return 1+1;", HeartbeatEvalTimeout, ct);
+                consecutiveSkips = 0;
+                log?.Debug("[cdp] heartbeat ok");
+            }
+            catch (TransportUnavailable ex) when (!ex.IsDisconnect && ex.Message.Contains("timed out"))
+            {
+                // Gate held by a long Evaluate — DON'T treat as a real failure.
+                // Just skip this beat. Reviewer B2: returning here would kill
+                // the heartbeat for the rest of this connection's life.
+                consecutiveSkips++;
+                log?.Debug($"[cdp] heartbeat skipped (gate held), {consecutiveSkips}/{HeartbeatMaxConsecutiveSkips}");
+                if (consecutiveSkips >= HeartbeatMaxConsecutiveSkips)
+                {
+                    log?.Debug("[cdp] heartbeat skip cap reached — stopping loop; next eval will reconnect");
+                    return;
+                }
+            }
+            catch (TransportUnavailable ex)
+            {
+                // Real disconnect — let the loop die. The next user-driven
+                // Evaluate will trigger reconnect via the EvaluateAsync wrapper,
+                // which calls StartHeartbeatAsync inside ConnectInternalAsync.
+                log?.Debug($"[cdp] heartbeat failed: {ex.Message}");
+                return;
+            }
+            catch (Exception ex)
+            {
+                log?.Debug($"[cdp] heartbeat unexpected: {ex.GetType().Name}: {ex.Message}");
+                return;
+            }
         }
     }
 
@@ -335,6 +418,19 @@ public sealed class CdpClient : ICdpClient
 
     public async ValueTask DisposeAsync()
     {
+        // Stop the heartbeat first so it doesn't try to grab the gate during
+        // teardown. Every step is wrapped — DisposeAsync must be safe under
+        // double-call (e.g. settings toggle off → on, or shutdown after a
+        // failed start).
+        try { heartbeatCts?.Cancel(); } catch { }
+        if (heartbeatTask is { } ht)
+        {
+            try { await ht.WaitAsync(TimeSpan.FromSeconds(2)); } catch { }
+        }
+        try { heartbeatCts?.Dispose(); } catch { }
+        heartbeatCts = null;
+        heartbeatTask = null;
+
         if (ws is not null)
         {
             try
