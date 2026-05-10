@@ -179,9 +179,11 @@
   <li><code>&lt;project&gt;/.claude/skills/&lt;7 folders&gt;</code> — bundled skills, Claude Code path</li>
   <li><code>&lt;project&gt;/.github/skills/&lt;7 folders&gt;</code> — bundled skills, Copilot CLI path</li>
   <li><code>&lt;project&gt;/.codex/skills/&lt;7 folders&gt;</code> — bundled skills, Codex path <em>(opt-in)</em></li>
-  <li><code>&lt;project&gt;/.claude/rules/concord-build-rules.md</code> — always-loaded build rules (Claude Code; refreshed every Save) <em>(new in 4.1.4)</em></li>
+  <li><code>&lt;project&gt;/.claude/rules/concord-build-rules.md</code> — always-loaded build rules, core operational discipline (Claude Code; refreshed every Save) <em>(new in 4.1.4)</em></li>
+  <li><code>&lt;project&gt;/.claude/rules/concord-pages-and-themes.md</code> — always-loaded build rules, UI construction (page-via-Maia, layouts, sibling theme module, soft-stop handoffs) <em>(new in 4.2.0)</em></li>
+  <li><code>&lt;project&gt;/.claude/rules/concord-model-discipline.md</code> — always-loaded build rules, model rules (<code>ped_*</code> discipline, update-operation traps, named failure modes, project-module discipline) <em>(new in 4.2.0)</em></li>
   <li><code>&lt;project&gt;/.claude/rules/project/README.md</code> — stub for the user-owned project-rules folder; <strong>pre-created once on first install, never overwritten thereafter</strong> <em>(new in 4.1.4)</em></li>
-  <li><code>&lt;project&gt;/CLAUDE.md</code> — managed <code>&lt;!-- BEGIN CONCORD MANAGED --&gt;</code> block at project root that <code>@</code>-imports the rules; content outside the fence preserved verbatim <em>(new in 4.1.4)</em></li>
+  <li><code>&lt;project&gt;/CLAUDE.md</code> — managed <code>&lt;!-- BEGIN CONCORD MANAGED --&gt;</code> block at project root that <code>@</code>-imports all <code>concord-*.md</code> rules files plus user-authored <code>project/*.md</code>; content outside the fence preserved verbatim <em>(new in 4.1.4, sibling-imports added in 4.2.0)</em></li>
   <li><code>&lt;project&gt;/resources/terminal-settings.json</code> — Concord's settings + version stamp</li>
   <li><code>&lt;project&gt;/resources/terminal-state.json</code> — tab-restore state</li>
   <li><code>&lt;project&gt;/resources/terminal.log</code> — diagnostic log (lifecycle, MCP probes, paste diagnostics — never clipboard contents)</li>

@@ -96,12 +96,31 @@ public sealed class MaiaRouter
     {
         await MaybeReprobeAsync(ct);
         string? transportName;
-        lock (gate) handleToTransport.TryGetValue(handle, out transportName);
+        bool routerHadBinding;
+        lock (gate)
+        {
+            routerHadBinding = handleToTransport.TryGetValue(handle, out transportName);
+        }
 
         var t = transports.FirstOrDefault(x => x.Name == transportName)
             ?? ActiveSnapshot().FirstOrDefault()
             ?? throw new TransportUnavailable(BuildExhaustedMessage());
-        return await t.StatusAsync(handle, ct);
+        var result = await t.StatusAsync(handle, ct);
+
+        // v4.2.0 (per reviewer C6): translate UnknownHandle into Lost=true
+        // ONLY when the router itself had previously bound this handle. A
+        // genuinely-unknown handle (caller typo, never sent) bubbles up as
+        // an Unknown-handle exception. The transport returns UnknownHandle
+        // as a structured signal; this is the layer that decides.
+        if (result.UnknownHandle)
+        {
+            if (routerHadBinding)
+            {
+                return result with { Lost = true, UnknownHandle = false };
+            }
+            throw new TransportUnavailable($"Unknown handle: {handle}");
+        }
+        return result;
     }
 
     public async Task ResetAsync(CancellationToken ct)

@@ -12,8 +12,8 @@
     <LangVersion>preview</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
-    <Version>4.1.4</Version>
-    <InformationalVersion>4.1.4+rules-installer</InformationalVersion>
+    <Version>4.2.0</Version>
+    <InformationalVersion>4.2.0+bridge-hardening</InformationalVersion>
     <Authors>Ricardo Perdigao, Kelly Seale</Authors>
     <Company>Siemens Digital Industries Software — CoE Team</Company>
     <Product>Concord — Terminal for Studio Pro</Product>

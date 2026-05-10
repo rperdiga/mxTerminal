@@ -228,8 +228,15 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             var newMcpServerEnabled  = p.McpServerEnabled ?? current.McpServerEnabled;
             var newStudioProActions = p.StudioProActionsEnabled ?? current.StudioProActionsEnabled;
             var newMaiaIntegration  = p.MaiaIntegrationEnabled ?? current.MaiaIntegrationEnabled;
+            var newMaiaDiagLogging = p.MaiaDiagnosticLogging ?? current.MaiaDiagnosticLogging;
             var newRefreshHotkey   = p.RefreshFromDiskHotkey ?? current.RefreshFromDiskHotkey;
             var newRestoreTabs     = p.RestoreTabsOnReopen ?? current.RestoreTabsOnReopen;
+
+            // v4.2.0: apply the diagnostic-logging flag immediately so any CDP
+            // traces during the rest of THIS save (the action-server restart
+            // below re-creates a CdpClient that captures the live log) reflect
+            // the user's just-saved intent, not the pre-save state.
+            log.DiagnosticEnabled = newMaiaDiagLogging;
 
             // 1. Probe Studio Pro's primary MCP server. If unreachable, surface
             //    a notice but DO NOT abort the save — the user toggling MCP on
@@ -265,10 +272,14 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 bool maiaEnabled = OperatingSystem.IsWindows() && newMaiaIntegration;
                 if (maiaEnabled)
                 {
+                    // v4.2.0: singleton CdpClient (see TerminalPaneExtension.cs
+                    // for the full rationale). Closure captures the same
+                    // instance for both transports.
+                    var sharedCdp = new Terminal.Maia.CdpClient(log);
                     var transports = new Terminal.Maia.IMaiaTransport[]
                     {
-                        new Terminal.Maia.CdpInjectedTransport(() => new Terminal.Maia.CdpClient()),
-                        new Terminal.Maia.CdpChatTransport(() => new Terminal.Maia.CdpClient()),
+                        new Terminal.Maia.CdpInjectedTransport(() => sharedCdp),
+                        new Terminal.Maia.CdpChatTransport(() => sharedCdp),
                     };
                     var router = new Terminal.Maia.MaiaRouter(transports);
                     _ = router.ProbeAllAsync(CancellationToken.None);  // fire-and-forget; safe
@@ -317,6 +328,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 McpServerEnabled = newMcpServerEnabled,
                 StudioProActionsEnabled = newStudioProActions,
                 MaiaIntegrationEnabled = newMaiaIntegration,
+                MaiaDiagnosticLogging = newMaiaDiagLogging,
                 RefreshFromDiskHotkey = newRefreshHotkey,
                 RestoreTabsOnReopen = newRestoreTabs,
                 SkillsEnabled = newSkillsEnabled,
@@ -532,6 +544,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             McpServerEnabled: s.McpServerEnabled,
             StudioProActionsEnabled: s.StudioProActionsEnabled,
             MaiaIntegrationEnabled: s.MaiaIntegrationEnabled,
+            MaiaDiagnosticLogging: s.MaiaDiagnosticLogging,
             Platform: OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsMacOS() ? "darwin" : "linux",
             RefreshFromDiskHotkey: s.RefreshFromDiskHotkey,
             RestoreTabsOnReopen: s.RestoreTabsOnReopen,

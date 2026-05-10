@@ -137,8 +137,10 @@ public sealed class ClaudeMdManager
 
     /// <summary>
     /// Build the import block from current rules-folder state. Returns an
-    /// empty string when there is nothing to import (no canonical file AND
-    /// no project/ files).
+    /// empty string when there is nothing to import (no canonical file, no
+    /// sibling concord-*.md files, and no project/ files). Order: canonical
+    /// file first, then sibling concord-prefixed files (sorted), then
+    /// project-folder files (sorted).
     /// </summary>
     private string BuildBlock()
     {
@@ -147,11 +149,29 @@ public sealed class ClaudeMdManager
 
         var imports = new List<string>();
 
-        // Canonical Concord-managed file first.
+        // Concord-managed files first. The canonical file (concord-build-rules.md)
+        // leads if present; sibling concord-*.md files (v4.2.0+: split into
+        // concord-pages-and-themes.md + concord-model-discipline.md to stay under
+        // Claude Code's 40k-char per-file performance threshold) follow in
+        // sorted order. All concord-prefixed top-level .md files are auto-imported.
         var canonicalAbs = Path.Combine(rulesAbsolute, RulesInstaller.CanonicalFileName);
         if (File.Exists(canonicalAbs))
         {
             imports.Add($"@{rulesRelative}/{RulesInstaller.CanonicalFileName}");
+        }
+        if (Directory.Exists(rulesAbsolute))
+        {
+            var siblingConcordFiles = Directory.EnumerateFiles(
+                    rulesAbsolute, $"{RulesInstaller.ConcordManagedPrefix}*.md", SearchOption.TopDirectoryOnly)
+                .Where(p => !string.Equals(
+                    Path.GetFileName(p), RulesInstaller.CanonicalFileName,
+                    StringComparison.OrdinalIgnoreCase))
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase);
+            foreach (var p in siblingConcordFiles)
+            {
+                var name = Path.GetFileName(p);
+                imports.Add($"@{rulesRelative}/{name}");
+            }
         }
 
         // Project-specific imports follow, sorted (deterministic regen).

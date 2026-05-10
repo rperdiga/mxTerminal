@@ -243,6 +243,12 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         var settings = TerminalSettings.Load(dir);
         if (!settings.McpServerEnabled) return;
 
+        // v4.2.0: hydrate the diagnostic-logging flag on the live logger
+        // before any CDP traffic. The CdpClient constructed below captures
+        // the same `log` reference, so this controls whether its DEBUG
+        // lines actually persist.
+        log.DiagnosticEnabled = settings.MaiaDiagnosticLogging;
+
         try
         {
             var ui = new StudioProUiAutomation(
@@ -289,10 +295,18 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
             bool maiaEnabled = OperatingSystem.IsWindows() && settings.MaiaIntegrationEnabled;
             if (maiaEnabled)
             {
+                // v4.2.0: singleton CdpClient — port discovery and the
+                // WebSocket are reused across all Maia tool calls. The v4.1.x
+                // pattern (`() => new CdpClient()` per call) spawned a fresh
+                // PowerShell process and a fresh WebSocket on EVERY maia__*
+                // call, which DoS'd Studio Pro's CDP under the cocktail-test
+                // workload (45+ status/wait calls in 30 min). See
+                // docs/superpowers/specs/2026-05-09-bridge-hardening-implementation.md.
+                var sharedCdp = new Terminal.Maia.CdpClient(log);
                 var transports = new Terminal.Maia.IMaiaTransport[]
                 {
-                    new Terminal.Maia.CdpInjectedTransport(() => new Terminal.Maia.CdpClient()),
-                    new Terminal.Maia.CdpChatTransport(() => new Terminal.Maia.CdpClient()),
+                    new Terminal.Maia.CdpInjectedTransport(() => sharedCdp),
+                    new Terminal.Maia.CdpChatTransport(() => sharedCdp),
                 };
                 var router = new Terminal.Maia.MaiaRouter(transports);
                 _ = router.ProbeAllAsync(CancellationToken.None);  // fire-and-forget; safe

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Concord 4.1.4 — Release Notes (paste this)</title>
+<title>Concord 4.2.0 — Release Notes (paste this)</title>
 <style>
   body {
     font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
@@ -34,24 +34,72 @@
 <body>
 
 <div class="copy-instruction">
-  <strong>How to use this file:</strong> open in a browser → select all (Ctrl+A) → copy (Ctrl+C) → paste into the Marketplace <strong>Release Notes</strong> rich-text field for the v4.1.4 release. The headings, lists, and badges will survive the paste. Then delete this yellow box and the title above (which are not part of the actual content).
+  <strong>How to use this file:</strong> open in a browser → select all (Ctrl+A) → copy (Ctrl+C) → paste into the Marketplace <strong>Release Notes</strong> rich-text field for the v4.2.0 release. The headings, lists, and badges will survive the paste. Then delete this yellow box and the title above (which are not part of the actual content).
 </div>
 
-<h1>Concord 4.1.4 — Release Notes (paste this)</h1>
+<h1>Concord 4.2.0 — Release Notes (paste this)</h1>
 
 <hr>
 
-<h1>Concord 4.1.4</h1>
+<h1>Concord 4.2.0</h1>
 
-<p>The headline of this release is <strong>always-loaded build rules for Claude Code</strong>. Concord now ships a project-level rules document that auto-loads into every Claude Code session running inside your Mendix project, alongside a user-owned folder for your own project-specific additions. The rules govern <em>how</em> the agent works (tool hierarchy, page-via-Maia doctrine, layout-first for branded apps, theme-module pattern, the named failure modes to guard against) — designed to make Claude Code materially better at building Mendix apps end-to-end without bailing on the hard parts.</p>
+<p>The headline of this release is <strong>Maia bridge hardening</strong>. The Maia integration introduced in earlier releases is now reliable for long Claude Code sessions inside Studio Pro. A persistent CDP connection eliminates the per-call PowerShell + WebSocket churn that surfaced under load, a 10-second heartbeat defeats Chromium's WebView2 background-tab throttling, an auto-re-injection path recovers cleanly when the Maia panel reloads, and the response parser now surfaces the actual shape it received instead of swallowing the error. Plus a new optional <strong>Diagnostic logging</strong> toggle in Settings → Concord MCP for ground-truth debugging, and a focused rules-content iteration that closes six gaps surfaced by real-world build forensics.</p>
 
-<p>This release also rolls forward everything since 1.1.1 — macOS support, the Maia bridge, bundled Mendix skill packs, default-on first-run wiring, an upgrade-apply path that takes care of itself, a port-leak fix, and the Mac-specific page-gen skill from 4.1.3.</p>
+<p>If you ran into <code>IOException: forcibly closed</code>, <code>Unknown handle</code>, or <code>poll() returned unexpected shape</code> errors while driving Maia from Claude Code in a long session, this release is for you.</p>
 
 <h2>What you'll experience</h2>
 
-<p>If you upgrade an existing install: <strong>open the Concord pane once after upgrading, and Concord wires itself up.</strong> The Concord MCP server starts, the bundled Mendix skill packs refresh, the new always-loaded rules install at <code>&lt;project&gt;/.claude/rules/concord-build-rules.md</code>, the user-owned <code>.claude/rules/project/</code> folder is pre-created with a README, and a managed <code>@</code>-import block is added to <code>&lt;project&gt;/CLAUDE.md</code> so Claude Code loads the rules on every session. You'll see a short banner at the top of the pane explaining what just happened. Your existing terminal preferences (shell, theme, scrollback, etc.) are preserved verbatim.</p>
+<p>If you upgrade an existing 4.1.x install: <strong>open the Concord pane once after upgrading.</strong> Concord's MCP server starts as before, the bundled Mendix skill packs and rules refresh, and the Maia bridge is now substantially more reliable on its own — there's nothing new for you to configure. The always-loaded build rules at <code>&lt;project&gt;/.claude/rules/</code> are now split into three files (<code>concord-build-rules.md</code> for core operational discipline, <code>concord-pages-and-themes.md</code> for UI construction, <code>concord-model-discipline.md</code> for model rules) — the split is purely structural so the per-file size stays under Claude Code's performance threshold, content is byte-identical to what was in the single 4.1.4 file plus six new rules from the v4.1.5 iteration. Your project's <code>CLAUDE.md</code> managed block is regenerated to <code>@</code>-import all three.</p>
+
+<p>If you want to see CDP traffic for a Maia issue: <strong>Settings → Concord MCP → Diagnostic logging</strong>. Off by default; flip it on, reproduce the issue, then read <code>resources/terminal.log</code> for <code>[cdp] &gt;&gt; id=N</code> / <code>[cdp] &lt;&lt; id=N</code> traces. Off again when you're done.</p>
 
 <p>If you're installing fresh: same flow, just without the "previous version" comparison. Drop Concord in, restart Studio Pro, open the pane — the wiring is automatic.</p>
+
+<h2>What's new in 4.2.0</h2>
+
+<table>
+  <thead>
+    <tr><th>Area</th><th>Change</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge badge-fix">Reliability</span> Persistent CDP connection</td>
+      <td>The Maia bridge now reuses a single CDP WebSocket and a single port-discovery result across every <code>maia__*</code> tool call for the lifetime of your Studio Pro session. Previously each call opened a fresh WebSocket and spawned a fresh PowerShell process to look up Studio Pro's debug port; under sustained load (a long-running Claude Code build firing dozens of <code>maia__wait</code> calls) this saturated the local CDP server and produced <code>IOException: forcibly closed by remote host</code>. The persistent connection eliminates that failure mode.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-fix">Reliability</span> Auto-reconnect on WebSocket drop</td>
+      <td>If the persistent connection does drop mid-call (e.g. Studio Pro restart), the bridge transparently reconnects once and retries the call before raising an error. Discovery cache invalidates on connect failure, so a Studio Pro restart self-heals after one failed call.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-fix">Reliability</span> Auto-re-injection on WebView reload</td>
+      <td>When the Maia panel reloads (panel close/reopen, "New chat" click, V8 GC), the JS-side bridge agent is gone. The transport now detects this case via a structured <code>{__reinject:true}</code> signal, reinstalls the agent, and retries the call once. The previous behavior surfaced confusing <code>Unknown handle: &lt;name&gt;</code> errors mid-session; those are now self-recovering.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-fix">Reliability</span> Defensive <code>poll()</code> parser</td>
+      <td>When Maia returns an unexpected response shape (rare but observed during layout-edit operations), the bridge now logs the actual shape it received instead of throwing the cryptic <code>poll() returned unexpected shape:</code> empty-string error. Genuine non-object responses surface a structured message naming the shape.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-new">New</span> Lost-handle discriminator</td>
+      <td>If a WebView reload nukes the JS-side ticket but Concord still has the handle bound, <code>maia__status</code> and <code>maia__wait</code> now return a <code>lost: true</code> discriminator instead of looping. Callers can re-ask cleanly. Genuinely unknown handles (typo, never sent) still surface as a structured <code>Unknown handle</code> error.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-fix">Reliability</span> CDP keep-alive heartbeat</td>
+      <td>Every 10 seconds, the bridge fires a no-op CDP <code>1+1</code> evaluate over the persistent socket. This defeats Chromium's WebView2 background-tab throttling that otherwise drifts Maia's internal scan timer from 500ms to seconds when Maia is hidden behind another pane in Studio Pro. Heartbeat is gate-aware: if a long <code>maia__wait</code> is mid-flight, the heartbeat skips that beat instead of failing.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-new">New</span> Diagnostic logging toggle</td>
+      <td><strong>Settings → Concord MCP → Diagnostic logging.</strong> Default off. When on, every CDP request and response is traced to <code>resources/terminal.log</code> in the form <code>[cdp] &gt;&gt; id=N bytes=…</code> and <code>[cdp] &lt;&lt; id=N bytes=…</code>. Use to ground a bridge-failure diagnosis; turn off again to keep the log lean. Windows-only (same gate as Maia integration itself).</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-new">New</span> Build-rules iteration (v4.1.5)</td>
+      <td>Six surgical edits to the always-loaded build rules, all from real-world build forensics: broader Maia recovery trigger covering all bridge error variants (not just "panel not visible"), hard cap on consecutive bridge failures (3 → STOP + escalate), layout-edit manual fallback as the default, mark-as-UI-resources soft-stop now fires before the first SCSS write (was deferred), <code>save_all</code> + <code>refresh_project</code> cadence rule documented, and a read-loop anti-pattern guard.</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-new">New</span> Build-rules split into 3 files</td>
+      <td>The rules content (15 sections, content unchanged from 4.1.4 + the six v4.1.5 additions) is now distributed across three files at <code>&lt;project&gt;/.claude/rules/</code>: <code>concord-build-rules.md</code> (core operational discipline), <code>concord-pages-and-themes.md</code> (UI construction), <code>concord-model-discipline.md</code> (model rules). Each file stays under Claude Code's per-file performance threshold. Section numbering remains globally unique (§1–§15) so cross-references resolve regardless of which file they're cited from. The CLAUDE.md managed block now <code>@</code>-imports all three.</td>
+    </tr>
+  </tbody>
+</table>
 
 <h2>Headlines since 1.1.1</h2>
 
@@ -67,7 +115,9 @@
     <tr><td><strong>Upgrade auto-apply</strong> — first open after a Concord upgrade re-applies the wiring keys to current defaults so new functionality lands on disk automatically. Cross-machine safe (never downgrades wiring on a colleague who pulls a project last edited from a newer Concord)</td><td>4.1.1</td></tr>
     <tr><td><strong>Port-leak fix + atomic file writes + corrupt-file backup</strong> — a phantom port could permanently inject itself into <code>terminal-settings.json</code> via the modal round-trip; that's structurally impossible now. File writes use NTFS journaled rename. Corrupt settings get backed up before defaults take over</td><td>4.1.2</td></tr>
     <tr><td><strong>Mac variant of <code>mendix-page-gen</code></strong> — the Windows version delegates page writes to Maia via <code>maia__ask</code>; on Mac (where Maia integration isn't available) the variant prints a copy-paste prompt for you to hand to Maia in Studio Pro and waits for confirmation, then verifies with <code>ped_check_errors</code> directly</td><td>4.1.3</td></tr>
-    <tr><td><strong>Always-loaded build rules for Claude Code</strong> — a project-level <code>concord-build-rules.md</code> (~360 lines, 15 sections) that governs <em>how</em> the agent works (tool hierarchy, page-via-Maia doctrine, layout-first for branded apps, sibling-theme-module pattern, three-part verification gate, the named failure modes to guard against). Plus a user-owned <code>.claude/rules/project/</code> folder for project-specific additions that survives Concord upgrades. Plus auto-management of a fenced <code>&lt;!-- BEGIN CONCORD MANAGED --&gt;</code> block in <code>&lt;project&gt;/CLAUDE.md</code> so Claude Code <code>@</code>-imports the rules on every session. Future Concord releases ship rule updates automatically — refreshed on every Save</td><td>4.1.4</td></tr>
+    <tr><td><strong>Always-loaded build rules for Claude Code</strong> — a project-level <code>concord-build-rules.md</code> (~360 lines, 15 sections) that governs <em>how</em> the agent works. Plus a user-owned <code>.claude/rules/project/</code> folder for project-specific additions that survives Concord upgrades. Plus auto-management of a fenced <code>&lt;!-- BEGIN CONCORD MANAGED --&gt;</code> block in <code>&lt;project&gt;/CLAUDE.md</code> so Claude Code <code>@</code>-imports the rules on every session</td><td>4.1.4</td></tr>
+    <tr><td><strong>Build-rules iteration</strong> — six surgical edits from real-world build forensics: broader Maia recovery trigger, 3-failure hard cap, layout-edit manual fallback as default, mark-as-UI-resources soft-stop reordered, <code>save_all</code> cadence, read-loop anti-pattern</td><td>4.1.5 (rides 4.2.0)</td></tr>
+    <tr><td><strong>Maia bridge hardening</strong> — persistent CDP connection (no more per-call PowerShell + WebSocket churn), auto-reconnect on drop, auto-re-injection on WebView reload, defensive response parser, <code>lost</code> discriminator for the WebView-reload case, 10s keep-alive heartbeat against background-tab throttling, and an opt-in Diagnostic logging toggle for ground-truth debugging</td><td>4.2.0</td></tr>
   </tbody>
 </table>
 
@@ -76,7 +126,7 @@
 <p>Concord ships on Windows and macOS. Most features are platform-identical; two differences worth calling out:</p>
 
 <ul>
-  <li><strong>Maia integration</strong> is Windows-only — driving Maia from outside Studio Pro requires inspecting its WebView, which works on Windows (WebView2 + CDP) but isn't available on macOS (WKWebView requires host opt-in by Mendix). Concord ships a Mac-specific variant of the page-gen skill that hands the work to Maia through you instead of programmatically.</li>
+  <li><strong>Maia integration</strong> (and the Diagnostic logging toggle that supports it) is Windows-only — driving Maia from outside Studio Pro requires inspecting its WebView, which works on Windows (WebView2 + CDP) but isn't available on macOS (WKWebView requires host opt-in by Mendix). Concord ships a Mac-specific variant of the page-gen skill that hands the work to Maia through you instead of programmatically.</li>
   <li><strong>Hotkey-driven Studio Pro tools on Mac</strong> need Accessibility permission the first time — macOS prompts for it; you grant Studio Pro one-time access in System Settings → Privacy &amp; Security → Accessibility.</li>
 </ul>
 
@@ -90,7 +140,7 @@
 
 <h2>Privacy</h2>
 
-<p>Concord is loopback-only — the Concord MCP server binds to <code>127.0.0.1</code>; Maia integration uses Studio Pro's local WebView2 debug port. Nothing leaves your machine through Concord itself. The bundled skill packs are static Markdown files copied into your project. The CLI agents you run inside Concord follow their own privacy contracts.</p>
+<p>Concord is loopback-only — the Concord MCP server binds to <code>127.0.0.1</code>; Maia integration uses Studio Pro's local WebView2 debug port. Nothing leaves your machine through Concord itself. The bundled skill packs and rules are static Markdown files copied into your project. The CLI agents you run inside Concord follow their own privacy contracts. The new Diagnostic logging toggle only writes to <code>resources/terminal.log</code> on your local disk — nothing is transmitted.</p>
 
 <h2>Built by</h2>
 

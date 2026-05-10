@@ -35,6 +35,7 @@ public sealed record SettingsPayload(
     bool McpServerEnabled,
     bool StudioProActionsEnabled,
     bool MaiaIntegrationEnabled,
+    bool MaiaDiagnosticLogging,
     string Platform,
     string RefreshFromDiskHotkey,
     bool RestoreTabsOnReopen,
