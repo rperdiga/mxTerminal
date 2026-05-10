@@ -75,9 +75,19 @@ Symptoms that look like dead ends are usually payload shape issues. Try in order
 - **Page writes via Maia (§2):** 2 retries with refined JSON, then escalate.
 - **Error fixes via `ped_update_document` after `ped_check_errors`:** **1 retry only — single-shot fix rule** (§5). If errors remain, STOP and report; do not retry.
 - **General PED writes (entities, microflows, etc.):** the recovery ladder above (steps 1–6); no fixed call count, but each step must produce *new* evidence (a new schema, a new error, a new payload variant). After three different payload shapes return the same error, jump to step 4 (KB search) before a fourth retry.
-- **Maia bridge calls — hard cap.** If `maia__status` / `maia__wait` returns a non-success response **3 consecutive times**, STOP firing further `maia__ask` / `maia__send` / `maia__status` / `maia__wait` / `maia__reset` calls and surface the verbatim errors to the user. Walking off the §2 bridge ladder in a loop (re-warming, re-probing, re-resetting on every cycle) is a worse failure mode than escalation — it burns calls, fills the transcript, and never converges. The cap counts the bridge as a whole, not each tool individually: `status` failing then `send` failing then `reset` failing is three consecutive failures, full stop. Empirically grounded — non-converging bridge loops have run >40 calls in a single window without ever escalating.
+- **Maia bridge calls — task-scoped loop cap.** Count consecutive failures on **the same logical operation** — same handle being polled, same prompt being re-tried after refinement, same `maia__reset` + re-probe cycle running without forward progress between resets. If that operation fails **3 consecutive times**, STOP firing further `maia__*` calls against it and surface the verbatim errors to the user. Different operations each failing once across a build is normal transient bridge noise: v4.2.0's auto-reconnect absorbs it cleanly — **continue past each one**. The signal you're in a stuck loop is REPETITION on a single target, not raw error count across the whole build. Empirically: a build that hits one Unknown handle on page A, one IOException on page B's submit, and one Unexpected shape on layout C is doing fine — three transient errors across three independent tasks, three independent recoveries. A build that calls `maia__reset` three times in a row without making forward progress between resets, or polls the same handle three times and gets the same error each time, is stuck — STOP that one and escalate. The cap is per-target, not global.
 
 **Tiebreaker — Maia page write surfaces errors.** When `ped_check_errors` reports problems on a page that Maia just wrote, you may **either** re-prompt Maia with refined JSON (per §2's 2-retry cap) **or** PED-patch a specific attribute (per §5's 1-retry cap). Pick one path and respect that path's cap; don't combine them for an effective 3-retry budget on the same page.
+
+**Maia-as-page-fixer tiebreaker — Page errors get a second opinion before user escalation.** After `ped_check_errors` reports errors on a page document, AND your one allowed `ped_update_document` fix per §5 didn't resolve them, **AND IF the failing doc is one Maia can edit (i.e. `Pages$Page`)**, hand it back to Maia BEFORE escalating to the user. Use this prompt template:
+
+```
+Page <Module>.<Page> has these errors after my fix attempt:
+<verbatim ped_check_errors output>
+Use pg_write_page to fix the page. Report back when done.
+```
+
+After Maia's attempt, re-run `ped_check_errors`. If errors still remain, THEN escalate to user. This mirrors §2's "Maia owns pages" doctrine — page errors deserve a Maia second-opinion before homework lands on the user. **Note:** this tiebreaker is for Page docs only — non-page docs (microflows, entities, view entities) stay on the §5 single-shot rule (Maia can't edit those reliably).
 
 The user asked for a thing. Deliver it, or come back with concrete evidence about why a specific MCP boundary stopped you. See §7 #4 — letter-not-spirit compliance is the failure mode this rule prevents.
 
@@ -103,6 +113,12 @@ Before claiming any feature done:
 1. **`mcp__mendix-studio-pro__ped_check_errors`** returns no errors on every document touched.
 2. **The runtime reflects the change.** `mcp__concord-mcp__save_all` → `refresh_project` → `stop_app` → `run_app` → poll `get_app_status` until `running`. Skipping the cycle means verifying the previous version.
 3. **The user-visible behavior works end-to-end** — walk the full journey arc *Browse → Detail → Action → Side-effect → User-facing list*. Click chains on a single page miss orphan-page and shell-microflow failures. Every step in the arc must produce its expected outcome.
+
+### Errors-before-`run_app` hard gate
+
+**`run_app` is GATED by zero errors.** Before calling `mcp__concord-mcp__run_app`, run `ped_check_errors` on every document touched in this build. If ANY document has errors, do NOT call `run_app`. Resolve errors first via the §3+§5 fix ladder + the Maia tiebreaker (below). The runtime won't surface fixable model errors usefully — they'll appear as runtime crashes, console spew, or pages that 500 in the browser. Fix at the model layer where errors are actionable.
+
+**Empirical (CocktailDemo33, 2026-05-10):** an agent called `run_app` 19 times trying to start an app that had two unresolved errors in the Studio Pro Error tab. Each call failed identically. The gate would have caught this on call 1 and routed the agent to fix the errors instead of looping on the runtime. Don't repeat it.
 
 Self-reports of "verified," "working," "live," "done" are claims, not evidence. Evidence is screenshots from a click chain landing on the expected destination, DOM assertions against `.mx-name-*` selectors, and the verbatim `ped_check_errors` output.
 
