@@ -582,6 +582,16 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         if (OperatingSystem.IsWindows() && s.MaiaIntegrationEnabled)
             notices.Add("Keep the Maia panel open while Maia tools are in use.");
 
+        // v4.2.1: Codex now defaults-on. Surface the user-global config
+        // write so the user is informed, not surprised. The notice fires on
+        // first-run AND on upgrade-apply when Codex first lights up; once
+        // the user has acknowledged it (or unticked Codex in Settings),
+        // subsequent stamps don't re-show.
+        var codexEnabled = (s.McpClients?.Any(c => string.Equals(c, "codex", StringComparison.OrdinalIgnoreCase)) ?? false)
+                        || (s.SkillClients?.Any(c => string.Equals(c, "codex", StringComparison.OrdinalIgnoreCase)) ?? false);
+        if (codexEnabled)
+            notices.Add("Codex MCP wires ~/.codex/config.toml (user-global, outside the project tree). Untick Codex in Settings if you'd rather not.");
+
         return notices.ToArray();
     }
 

@@ -48,18 +48,26 @@ public sealed record TerminalSettings(
         RingBufferKB: 4096,
         XtermScrollbackLines: 10000,
         Theme: "auto",
-        // v4.1.0: all-on except Codex. Codex writes to user-global
-        // ~/.codex/config.toml — keeping it opt-in avoids touching state
-        // outside the project tree without explicit consent.
+        // v4.2.1: all-on across the three CLI surfaces. Codex was opt-in
+        // through v4.2.0 because it writes to user-global
+        // ~/.codex/config.toml. v4.2.1 flips the default with a first-run
+        // banner explaining the user-global write — informed default-on
+        // beats one-extra-click for the common case. The banner points to
+        // Settings if the user wants to revert. v4.2.1 also lights up the
+        // Codex + Copilot rules paths (AGENTS.md / .github/copilot-instructions.md
+        // managed blocks); same default-on rationale.
         McpEnabled: true,
-        McpClients: new[] { "claude", "copilot" },
+        McpClients: new[] { "claude", "copilot", "codex" },
         McpServerEnabled: true,
         StudioProActionsEnabled: true,
         MaiaIntegrationEnabled: true,
         RefreshFromDiskHotkey: "F4",
         RestoreTabsOnReopen: true,
         SkillsEnabled: true,
-        SkillClients: new[] { "claude", "copilot" },
+        SkillClients: new[] { "claude", "copilot", "codex" },
+        // MaiaDiagnosticLogging stays false — diagnostic CDP traces are
+        // for repro of bridge issues, not steady-state usage. Users opt
+        // in via Settings when needed.
         MaiaDiagnosticLogging: false,
         // Defaults() is the in-memory "no file" representation; the
         // version stamp is written to disk by the apply paths
