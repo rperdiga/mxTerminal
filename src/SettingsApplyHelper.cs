@@ -204,19 +204,22 @@ public static class SettingsApplyHelper
     }
 
     /// <summary>
-    /// Diff for rules: install bundled <c>concord-build-rules.md</c> and
-    /// manage the <c>CLAUDE.md</c> fenced block for newly-selected CLIs;
-    /// remove on newly-deselected CLIs. Tracks the same enable+per-CLI
-    /// toggle as skills (<see cref="TerminalSettings.SkillsEnabled"/> +
+    /// Diff for rules: install bundled Concord rules and manage the
+    /// per-CLI fenced block for newly-selected CLIs; remove on newly-
+    /// deselected CLIs. Tracks the same enable+per-CLI toggle as skills
+    /// (<see cref="TerminalSettings.SkillsEnabled"/> +
     /// <see cref="TerminalSettings.SkillClients"/>) since rules are
     /// conceptually part of the skill-pack contract.
     /// <para>
-    /// Phase 1: Claude only. Codex (<c>AGENTS.md</c>) and Copilot CLI
-    /// (<c>.github/copilot-instructions.md</c>) follow the same fenced-block
-    /// pattern in their respective files; they are wired here as no-ops with
-    /// TODO markers and will light up in a follow-up phase once Concord has
-    /// validated the Claude path on real builds.
+    /// v4.2.1 lights up Codex + Copilot CLI alongside Claude. All three
+    /// CLIs use the same fenced-block pattern with identical content — only
+    /// the destination markdown file and the rules subdirectory differ:
     /// </para>
+    /// <list type="bullet">
+    /// <item><c>claude</c>  → <c>.claude/rules/</c> + <c>CLAUDE.md</c></item>
+    /// <item><c>codex</c>   → <c>.codex/rules/</c>  + <c>AGENTS.md</c></item>
+    /// <item><c>copilot</c> → <c>.github/rules/</c> + <c>.github/copilot-instructions.md</c></item>
+    /// </list>
     /// </summary>
     private static string[] ApplyRulesConfig(
         string projectDir,
@@ -235,17 +238,24 @@ public static class SettingsApplyHelper
         var touched = new List<string>();
         log.Info($"[rules] diff prev={{{string.Join(",", prevClients)}}} next={{{string.Join(",", nextClients)}}} bundled-root={bundledRulesRoot}");
 
-        // Claude — install rules + manage CLAUDE.md fenced block.
+        var perCli = new (string Key, string Label, string RulesSubdir, Func<string, string, Logger, ClaudeMdManager> ManagerFactory)[]
         {
-            var key = "claude";
-            var label = "Claude Code rules";
-            var rulesSubdir = Path.Combine(".claude", "rules");
+            ("claude",  "Claude Code rules", Path.Combine(".claude", "rules"),
+                (proj, sub, l) => new ClaudeMdManager(proj, sub, l)),
+            ("codex",   "Codex rules",       Path.Combine(".codex",  "rules"),
+                (proj, sub, l) => new AgentsMdManager(proj, sub, l)),
+            ("copilot", "Copilot CLI rules", Path.Combine(".github", "rules"),
+                (proj, sub, l) => new CopilotInstructionsManager(proj, sub, l)),
+        };
+
+        foreach (var (key, label, rulesSubdir, factory) in perCli)
+        {
             var was = prevClients.Contains(key);
             var now = nextClients.Contains(key);
             try
             {
                 var installer = new RulesInstaller(projectDir, bundledRulesRoot, log);
-                var manager = new ClaudeMdManager(projectDir, rulesSubdir, log);
+                var manager = factory(projectDir, rulesSubdir, log);
                 if (now && !was)      { installer.InstallAll(rulesSubdir); manager.Apply(); touched.Add(label); }
                 else if (now && was)  { installer.InstallAll(rulesSubdir); manager.Apply(); /* refresh on every save */ }
                 else if (!now && was) { installer.RemoveAll(rulesSubdir);  manager.Remove();  touched.Add(label + " (removed)"); }
@@ -255,12 +265,6 @@ public static class SettingsApplyHelper
                 log.Error($"[rules] {label} apply failed", ex);
             }
         }
-
-        // TODO Phase 2: Codex (AGENTS.md + .codex/rules/), Copilot CLI
-        // (.github/copilot-instructions.md + .github/skills/<x>/rules.md or
-        // a parallel folder). Same fenced-block pattern; same lifecycle. The
-        // RulesInstaller class works against any rules-subdir target — only
-        // the per-CLI manager (file path + import-directive syntax) varies.
 
         return touched.ToArray();
     }
