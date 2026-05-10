@@ -72,19 +72,19 @@
     </tr>
     <tr>
       <td><strong>Maia integration</strong> <em>(Windows)</em></td>
-      <td>6 MCP tools — <code>maia__send</code>, <code>maia__status</code>, <code>maia__wait</code>, <code>maia__ask</code>, <code>maia__reset</code>, <code>maia__force_tier</code> — programmatic access to Studio Pro's in-IDE AI assistant</td>
+      <td>10 MCP tools — <code>maia__send</code>, <code>maia__status</code>, <code>maia__wait</code>, <code>maia__ask</code>, <code>maia__reset</code>, <code>maia__force_tier</code>, plus the v4.2.1 introspection toolkit (<code>maia__busy</code>, <code>maia__ping</code>, <code>maia__health</code>, <code>maia__new_chat</code>) — programmatic access to Studio Pro's in-IDE AI assistant, including read-only "is Maia generating?" probes and bridge-state diagnostics without burning a real call</td>
     </tr>
     <tr>
       <td><strong>7 bundled Mendix skill packs</strong></td>
-      <td>Installed into your project's <code>.claude/skills/</code> and <code>.github/skills/</code> (and <code>.codex/skills/</code> if you opt in) — prescriptive playbooks that teach the CLIs how to drive Mendix correctly</td>
+      <td>Installed into your project's <code>.claude/skills/</code>, <code>.github/skills/</code>, and <code>.codex/skills/</code> (each ticked CLI) — prescriptive playbooks that teach the CLIs how to drive Mendix correctly</td>
     </tr>
     <tr>
-      <td><strong>Always-loaded build rules</strong> <em>(Claude Code, new in 4.1.4)</em></td>
-      <td>A project-level <code>concord-build-rules.md</code> that auto-loads into every Claude Code session in the project (via a managed block in your <code>CLAUDE.md</code>). Governs <em>how</em> the agent works — tool hierarchy, page-via-Maia doctrine, layout-first for branded apps, sibling-theme-module pattern, the named failure modes to guard against, three-part verification gate. Plus a <code>.claude/rules/project/</code> folder for your own project-specific additions that survives Concord upgrades</td>
+      <td><strong>Always-loaded build rules</strong> <em>(all three CLIs as of v4.2.1)</em></td>
+      <td>A project-level <code>concord-*.md</code> set that auto-loads into every Claude Code, Codex, and Copilot CLI session via a managed block in <code>CLAUDE.md</code>, <code>AGENTS.md</code>, and <code>.github/copilot-instructions.md</code> respectively. Governs <em>how</em> the agent works — tool hierarchy, page-via-Maia doctrine, task-scoped failure cap, errors-before-<code>run_app</code> gate, Maia-as-page-fixer tiebreaker, layout-first for branded apps, sibling-theme-module pattern, seed-data self-service-button pattern, three-part verification gate. Plus a <code>rules/project/</code> folder per CLI for your own project-specific additions that survives Concord upgrades</td>
     </tr>
     <tr>
       <td><strong>Auto-wired CLI configs</strong></td>
-      <td><code>.mcp.json</code> (Claude Code + Copilot CLI) and <code>~/.codex/config.toml</code> (Codex, opt-in) point at both MCP servers</td>
+      <td><code>.mcp.json</code> (Claude Code + Copilot CLI) and <code>~/.codex/config.toml</code> (Codex) point at both MCP servers — all three CLIs default-on as of v4.2.1, with a first-run banner explaining the user-global Codex config write</td>
     </tr>
   </tbody>
 </table>
