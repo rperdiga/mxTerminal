@@ -2,7 +2,7 @@
 
 > *"The terminal Studio Pro was missing."*
 
-**Current version: 4.2.0** ([CHANGELOG](./CHANGELOG.md)) — **Maia bridge hardening + rules iteration.** The Maia integration is now reliable for long sessions: a persistent CDP connection eliminates the per-call PowerShell + WebSocket storm that surfaced as `IOException: forcibly closed` under load; a 10s heartbeat defeats Chromium's WebView2 background-tab throttling; auto-re-injection on `StatusAsync` recovers from WebView reloads; the `poll()` parser now surfaces the actual non-object shape it saw instead of throwing the cryptic empty-string error; a new `lost` discriminator lets callers re-ask after a WebView reload instead of looping forever. New optional Diagnostic-logging toggle in Settings → Concord MCP writes CDP request/response traces to `terminal.log` for ground-truth debugging. The always-loaded `concord-build-rules.md` (shipped in v4.1.4) gains six surgical edits from the v4.1.5 rules iteration: broader Maia recovery trigger, hard cap on consecutive bridge failures, layout-edit manual fallback as the default, mark-as-UI-resources soft-stop fires before the first SCSS write, save_all + refresh_project cadence rule, read-loop anti-pattern guard. Bundled Mendix skill packs ship preinstalled into the open project (Claude Code + Copilot CLI by default; Codex opt-in). Combined with the Concord MCP server (Studio Pro UI actions + Maia integration housed under one HTTP endpoint), the CLI agent in your terminal is ready to drive Studio Pro from day one.
+**Current version: 4.2.1** ([CHANGELOG](./CHANGELOG.md)) — **Bridge introspection toolkit + rules iteration from production validation.** Builds on v4.2.0's bridge hardening with four new Maia introspection MCP tools — `maia__busy` (read-only "is Maia generating?"), `maia__ping` (cheap liveness probe), `maia__health` (bridge state without traffic), and `maia__new_chat` (programmatic context wipe) — plus rules edits driven by the 2026-05-10 CocktailDemo33 production run: a task-scoped failure cap that doesn't fire on three unrelated transient errors, an errors-before-`run_app` hard gate that stops the agent looping the runtime against unfixed model errors, a Maia-as-page-fixer tiebreaker that gives Maia one more page-attempt before user homework, and the production-validated seed-data self-service-button pattern codified as a §8 rule. Codex + Copilot rules paths now light up alongside Claude — same `concord-*` files, mirrored into `.codex/rules/ + AGENTS.md` and `.github/rules/ + .github/copilot-instructions.md`. Codex defaults-on with a first-run banner explaining the user-global `~/.codex/config.toml` write. The v4.2.0-deferred carry-overs (singleton `CdpClient` dispose on toggle, WebSocket test-seam + reconnect tests, JS-side scan-throttle fix) all ship in this release. Combined with the Concord MCP server (Studio Pro UI actions + Maia integration housed under one HTTP endpoint), the CLI agent in your terminal is ready to drive Studio Pro from day one — and to introspect its own bridge before doing anything expensive.
 
 Concord is a Mendix Studio Pro 11.10+ extension (Windows and macOS) that embeds a tabbed terminal as a dockable pane. The pane is the workspace where you run **Claude Code**, **Codex**, or **GitHub Copilot CLI** — and they talk directly to:
 
@@ -81,6 +81,10 @@ The first 4 use Win32 `PostMessage` to Studio Pro's main window. The last 2 read
 | `maia__wait` | Block until Maia finishes responding |
 | `maia__ask` | Send + wait + return the response in one call |
 | `maia__reset` | Clear Maia's conversation |
+| `maia__busy` | *(v4.2.1)* Read-only DOM probe — "is Maia generating?". Returns `{busy, reason, idle_for_ms}`. No traffic to Maia. |
+| `maia__ping` | *(v4.2.1)* Cheap liveness probe — sends "ping", waits up to `timeout_sec` (default 5s), returns `{alive, latency_ms, response, timed_out}`. |
+| `maia__health` | *(v4.2.1)* Bridge state without traffic. Per-transport availability + last latency, in-flight handle bindings, embedded busy snapshot. |
+| `maia__new_chat` | *(v4.2.1)* Programmatic click of Maia's "New chat" button — wipes Maia's panel context. Always preceded by `maia__busy`. |
 | `maia__force_tier` | Override the transport tier (debug aid) |
 
 Two-tier transport: injected JS agent (Tier 1, fast) with DOM-scrape fallback (Tier 2). Both use Studio Pro's `--remote-debugging-port`; the Maia panel must be visible while these tools are in use.
@@ -130,7 +134,7 @@ Alongside the skill packs, Concord installs a project-level rules document for C
 
 The rules refresh on every Save (so a Concord upgrade ships rule changes automatically). Top-level rule files prefixed `concord-` are Concord-managed; user-authored siblings without that prefix are left untouched.
 
-Phase 1 covers Claude Code only. Codex (`AGENTS.md`) and Copilot CLI (`.github/copilot-instructions.md`) follow the same fenced-block pattern in their respective files; they're wired as no-ops in v4.1.4 and light up in a follow-up phase.
+**v4.2.1:** all three CLIs are lit up. Each ticked CLI gets the same `concord-*.md` rules content + a managed-block import file: Claude → `.claude/rules/` + `CLAUDE.md`, Codex → `.codex/rules/` + `AGENTS.md`, Copilot CLI → `.github/rules/` + `.github/copilot-instructions.md`. Same fenced-block markers, same orphan-cleanup, same atomic write semantics. The base manager class handles all three; per-CLI subclasses set only the destination file.
 
 ### macOS skill variant — `mendix-page-gen`
 

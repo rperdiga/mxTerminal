@@ -114,6 +114,11 @@ Concord makes the agent-augmented Mendix workflow first-class.
   - **Maia integration** (Windows only) — `maia__send`, `maia__status`,
     `maia__wait`, `maia__ask`, `maia__reset`, `maia__force_tier`.
     Programmatic access to Studio Pro's in-IDE AI assistant.
+  - **Maia introspection** (Windows only, new in 4.2.1) — `maia__busy`,
+    `maia__ping`, `maia__health`, `maia__new_chat`. Read-only DOM
+    probes, cheap liveness pings, bridge-state diagnostics, and a
+    programmatic context wipe — for the agent to introspect bridge
+    health before spending real call budgets.
 - Master + per-family toggles in **Settings → Concord MCP**.
 
 ### Bundled Mendix skill packs
@@ -154,10 +159,38 @@ agent on Windows ([claude-code #49337](https://github.com/anthropics/claude-code
 4. **Size-tiered UX** — notice ≥ 4 KB, warn + duration estimate
    ≥ 50 KB, refuse with "save to file" guidance ≥ 1 MB.
 
-## What's new in 4.1.2
+## What's new in 4.2.1
 
 See [CHANGELOG.md](https://github.com/rperdiga/mxTerminal/blob/main/CHANGELOG.md)
 for the complete history.
+
+**4.2.1 — bridge introspection toolkit + production-iteration rules.**
+Four new Maia introspection MCP tools (`maia__busy`, `maia__ping`,
+`maia__health`, `maia__new_chat`) so the CLI can ask the bridge
+"are you alive? is Maia generating? what's your state?" without
+burning a real call. Rules edits driven by the 2026-05-10 production
+validation: §3 task-scoped failure cap (was raw count, fired
+prematurely on three unrelated transient errors), §12
+errors-before-`run_app` hard gate, §3/§5 Maia-as-page-fixer
+tiebreaker, codified seed-data self-service-button pattern as §8.
+Codex + Copilot rules paths lit up alongside Claude — same content
+into `.codex/rules/ + AGENTS.md` and `.github/rules/ +
+.github/copilot-instructions.md`. Codex defaults-on with a
+first-run banner explaining the user-global config write. All
+v4.2.0-deferred carry-overs landed: singleton `CdpClient` dispose
+on toggle, `IWebSocketAdapter` test seam + reconnect tests, JS-side
+scan throttle fix via the heartbeat.
+
+**4.2.0 — Maia bridge hardening + rules iteration.** Persistent
+CDP connection eliminates the per-call PowerShell + WebSocket
+storm. Auto-reconnect on drop, auto-re-injection on WebView reload,
+defensive response parser, `lost` discriminator for the WebView-
+reload case. 10s keep-alive heartbeat. Opt-in Diagnostic logging
+toggle. Six surgical rule edits from real-world build forensics
+(broader Maia recovery trigger, 3-failure cap, layout-edit manual
+fallback default, mark-as-UI-resources soft-stop reordered,
+save_all cadence, read-loop anti-pattern). Rules content split
+into 3 files to stay under per-file performance threshold.
 
 **4.1.2 — port-leak fix + atomic writes + cleaner copy.** The settings
 modal used to round-trip the live Concord MCP port back into the saved

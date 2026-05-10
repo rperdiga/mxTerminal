@@ -42,6 +42,7 @@ A second MCP server hosted in Concord itself, wire identity `concord-mcp`, liste
 
 - **Studio Pro UI actions** — `run_app`, `stop_app`, `refresh_project`, `save_all`, `get_active_run_configuration`, `get_app_status`. Lets the CLI drive the IDE: start the runtime, stop it, refresh the project from disk, save all open documents, ask whether the app is running, what configuration is active. The hotkey-driven tools work on macOS too via Accessibility (one-time permission prompt).
 - **Maia integration** *(Windows)* — `maia__send`, `maia__status`, `maia__wait`, `maia__ask`, `maia__reset`, `maia__force_tier`. Programmatic access to Studio Pro's in-IDE AI assistant. The CLI can ask Maia to do something Maia is uniquely good at (page generation, for instance) and wait for the response, all without you context-switching.
+- **Maia introspection** *(Windows, new in 4.2.1)* — `maia__busy`, `maia__ping`, `maia__health`, `maia__new_chat`. Read-only DOM probes ("is Maia generating?"), cheap liveness pings, bridge-state snapshots without traffic to Maia, and a programmatic context wipe. Lets the CLI introspect bridge health before deciding how to recover from a suspected issue, instead of guessing or burning expensive `maia__ask` calls.
 
 Toggle each family independently in **Settings → Concord MCP**.
 
@@ -61,17 +62,18 @@ Skills are short Markdown files that CLIs auto-discover and follow. Concord ship
 
 Concord installs these per-CLI when you tick **Settings → Skills → Claude Code / Copilot CLI / Codex**. Each save refreshes the bundled content; user-authored skills in the same directory are left intact.
 
-### Always-loaded build rules *(Claude Code, new in 4.1.4)*
+### Always-loaded build rules *(all three CLIs as of v4.2.1)*
 
-Alongside the skill packs, Concord installs a project-level rules document that auto-loads into every Claude Code session running inside the project:
+Alongside the skill packs, Concord installs a project-level rules set that auto-loads into every CLI session running inside the project:
 
-- **`<project>/.claude/rules/concord-build-rules.md`** (~360 lines, 15 sections). Governs *how* Claude Code works inside this Mendix project, not *what* to build. Covers the closed tool hierarchy (Studio Pro MCP / Concord MCP / Maia / web search / docs.mendix.com — and what's forbidden), the page-via-Maia doctrine, persistence + recovery ladders for unexpected MCP errors, the named failure modes to guard against (orphan pages, shell microflows, ActionButton wiring trap, letter-not-spirit compliance, end-of-build "manual steps required" punt-lists), the Studio Pro UI handoff catalog, the new-project-equals-new-module rule, layout-first for branded apps, the sibling-theme-module + Atlas pattern, the three-part verification gate, plan-before-write for non-trivial builds, and persisting learnings during a build.
-- **`<project>/.claude/rules/project/`** — your space for project-specific rules: domain glossary, design-system tokens, integration patterns, anything you want every Claude Code session in this project to load on startup. Pre-created on first install with a README stub; never overwritten thereafter. Survives every Concord upgrade.
-- **`<project>/CLAUDE.md`** — created or refreshed with a fenced `<!-- BEGIN CONCORD MANAGED -->` ... `<!-- END CONCORD MANAGED -->` block that `@`-imports the rules file plus every `.md` in `.claude/rules/project/`. Anything you write outside the fence is preserved verbatim across Saves and Concord upgrades.
+- **`<project>/.claude/rules/`** for Claude Code, **`<project>/.codex/rules/`** for Codex, **`<project>/.github/rules/`** for Copilot CLI — each ticked CLI gets its own rules folder with the same `concord-*.md` content. Three files:
+  - `concord-build-rules.md` — core operational discipline. Closed tool hierarchy, persistence + recovery ladders, **task-scoped Maia bridge failure cap (v4.2.1)**, **errors-before-`run_app` hard gate (v4.2.1)**, **Maia-as-page-fixer tiebreaker (v4.2.1)**, three-part verification gate, plan-before-write for non-trivial builds, persisting learnings during a build.
+  - `concord-pages-and-themes.md` — UI construction. Pages-via-Maia doctrine, soft-stop handoff catalog, **seed-data self-service-button pattern (codified in v4.2.1)**, layout-first for branded apps, sibling-theme-module + Atlas pattern, **§2 recovery ladder with introspection-tool steps (v4.2.1)**.
+  - `concord-model-discipline.md` — `ped_*` rules, update-operation traps, named failure modes (orphan pages, shell microflows, ActionButton wiring trap, letter-not-spirit compliance, end-of-build "manual steps required" punt-lists, read-loop anti-pattern), new-project-equals-new-module discipline.
+- **`<project>/<rules-folder>/project/`** — your space for project-specific rules: domain glossary, design-system tokens, integration patterns, anything you want every CLI session in this project to load on startup. Pre-created on first install with a README stub; never overwritten thereafter. Survives every Concord upgrade.
+- **Managed import block** in `<project>/CLAUDE.md` (Claude), `<project>/AGENTS.md` (Codex), and `<project>/.github/copilot-instructions.md` (Copilot CLI). Each is created or refreshed with a fenced `<!-- BEGIN CONCORD MANAGED -->` ... `<!-- END CONCORD MANAGED -->` block that `@`-imports the `concord-*.md` rules plus every `.md` in the per-CLI `project/` folder. Anything you write outside the fence is preserved verbatim across Saves and Concord upgrades.
 
-The rules file is refreshed on every Save (so future Concord releases ship rule updates automatically). Top-level rule files prefixed `concord-` are Concord-managed; user-authored siblings without that prefix are left untouched.
-
-Phase 1 covers Claude Code only. Codex (`AGENTS.md`) and Copilot CLI (`.github/copilot-instructions.md`) follow the same fenced-block pattern in their respective files; they're wired as no-ops in v4.1.4 and light up in a follow-up phase once the Claude path is proven on more real builds.
+The rules files are refreshed on every Save (so future Concord releases ship rule updates automatically). Top-level rule files prefixed `concord-` are Concord-managed; user-authored siblings without that prefix are left untouched.
 
 ### Auto-wired CLI configs
 
@@ -129,11 +131,13 @@ Project-local writes:
 - `<project>/.claude/skills/<7 folders>` — bundled skills, Claude Code path
 - `<project>/.github/skills/<7 folders>` — bundled skills, Copilot CLI path
 - `<project>/.codex/skills/<7 folders>` — bundled skills, Codex path *(opt-in)*
-- `<project>/.claude/rules/concord-build-rules.md` — always-loaded build rules, core operational discipline (Claude Code; refreshed every Save) *(new in 4.1.4)*
-- `<project>/.claude/rules/concord-pages-and-themes.md` — always-loaded build rules, UI construction (page-via-Maia, layouts, sibling theme module, soft-stop handoffs) *(new in 4.2.0)*
-- `<project>/.claude/rules/concord-model-discipline.md` — always-loaded build rules, model rules (`ped_*` discipline, update-operation traps, named failure modes, project-module discipline) *(new in 4.2.0)*
-- `<project>/.claude/rules/project/README.md` — stub for the user-owned project-rules folder; **pre-created once on first install, never overwritten thereafter** *(new in 4.1.4)*
-- `<project>/CLAUDE.md` — managed `<!-- BEGIN CONCORD MANAGED -->` block at project root that `@`-imports all `concord-*.md` rules files plus user-authored `project/*.md`; content outside the fence preserved verbatim *(new in 4.1.4, sibling-imports added in 4.2.0)*
+- `<project>/.claude/rules/concord-{build-rules,pages-and-themes,model-discipline}.md` — always-loaded build rules for Claude Code (refreshed every Save) *(claude path: 4.1.4; split into 3 files: 4.2.0; v4.2.1 rule updates)*
+- `<project>/.codex/rules/concord-*.md` — same rules for Codex *(new in 4.2.1)*
+- `<project>/.github/rules/concord-*.md` — same rules for Copilot CLI *(new in 4.2.1)*
+- `<project>/<per-cli-rules>/project/README.md` — stub for the user-owned project-rules folder; **pre-created once on first install, never overwritten thereafter** *(claude path: 4.1.4; codex/copilot paths: 4.2.1)*
+- `<project>/CLAUDE.md` — managed `<!-- BEGIN CONCORD MANAGED -->` block at project root that `@`-imports all `concord-*.md` rules files plus user-authored `project/*.md`; content outside the fence preserved verbatim *(new in 4.1.4)*
+- `<project>/AGENTS.md` — same managed block for Codex *(new in 4.2.1)*
+- `<project>/.github/copilot-instructions.md` — same managed block for Copilot CLI *(new in 4.2.1)*
 - `<project>/resources/terminal-settings.json` — Concord's settings + version stamp
 - `<project>/resources/terminal-state.json` — tab-restore state
 - `<project>/resources/terminal.log` — diagnostic log (lifecycle, MCP probes, paste diagnostics — never clipboard contents)

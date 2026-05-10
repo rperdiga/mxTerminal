@@ -1,5 +1,49 @@
 # Changelog
 
+## 4.2.1 — 2026-05-10
+
+### Added
+
+- **Four new Maia introspection MCP tools.** All read- or-DOM-bound through the existing CDP-injected agent; no new transport plumbing.
+  - **`maia__busy`** — read-only DOM probe: "is Maia generating?". Returns `{busy, reason: 'spinner-visible'|'recent-dom-mutation'|'idle', idle_for_ms, spinner}`. No traffic to Maia. The spinner heuristic uses documented selectors (`[role="progressbar"]`, `[aria-busy="true"]`, `.spinner`, etc.) plus a 1000ms recent-mutation threshold tracked via the existing `MutationObserver`.
+  - **`maia__ping`** — cheap liveness probe. Sends `"ping"` with auto-sentinel, waits up to `timeout_sec` (default 5s), returns `{alive, latency_ms, response, timed_out}`. Reuses the existing send/wait/sentinel machinery including v4.2.0's lost-handle discriminator. Use before expensive `maia__ask` calls when bridge health is uncertain.
+  - **`maia__health`** — bridge-state introspection without traffic to Maia. Returns per-transport availability + last latency + reason, last probe time, in-flight handle bindings, forced tier, plus an embedded `busy()` snapshot. One-call diagnostic before recovery decisions.
+  - **`maia__new_chat`** — programmatic click of Maia's "New chat" button. Wipes Maia's panel context. Used in §2 ladder step 3.5 between `maia__reset` and user-handoff. Always preceded by `maia__busy` per the rule.
+- **Codex + Copilot rules paths lit up.** Each CLI now ships Concord rules + a managed-block import file with identical content; only the destination path varies. `claude → .claude/rules/ + CLAUDE.md`, `codex → .codex/rules/ + AGENTS.md`, `copilot → .github/rules/ + .github/copilot-instructions.md`. Implementation: `ClaudeMdManager` unsealed; `AgentsMdManager` and `CopilotInstructionsManager` subclass it with one-line overrides. Block-edit logic, orphan preservation, atomic writes, and `.github/` directory auto-creation are shared via the base.
+- **Codex defaults-on with first-run banner.** `TerminalSettings.Defaults()` flipped: `McpClients = ["claude","copilot","codex"]`, `SkillClients = ["claude","copilot","codex"]`. First-run banner explains the user-global `~/.codex/config.toml` write so the user is informed, not surprised. The banner points to Settings if the user wants to revert.
+- **§3 task-scoped failure cap (rules update).** Replaced the raw-count "3 consecutive `maia__*` failures = STOP" rule with a task-scoped variant: count failures on **the same logical operation** (same handle being polled, same prompt being re-tried after refinement, same `maia__reset` + re-probe cycle). CocktailDemo33 (2026-05-10) hit 3 transient errors across 3 unrelated tasks under v4.1.5 and stopped the build prematurely — v4.2.0's auto-reconnect would have absorbed each one cleanly.
+- **§12 errors-before-`run_app` hard gate (rules update).** `run_app` is gated by zero errors. The same demo build called `run_app` 19× against 2 unresolved Studio Pro errors; the gate would have caught it on call 1 and routed the agent to fix the errors instead of looping on the runtime.
+- **§3/§5 Maia-as-page-fixer tiebreaker (rules update).** Page errors that Maia just wrote get one Maia second-attempt before user homework — mirrors §2's "Maia owns pages" doctrine. Non-page docs (microflows, entities, view entities) stay on the §5 single-shot rule (Maia can't reliably edit those).
+- **§8 seed-data self-service-button pattern (rules update).** Codified the production-validated pattern: `ProjectManage` singleton entity + `NeedProjectSeedData` Boolean + visibility-bound button on the home page + Playwright self-click after `run_app`. Eliminates the After-Startup soft-stop entirely. Cross-references from §10 (layout-first) and §11 (theme module) so the agent finds it during clone-build planning. Pattern landed in production as `SUB_Cocktail_SeedIfEmpty` during the 2026-05-10 CocktailDemo33 build.
+- **§2 recovery ladder step 1.5 + 3.5 (rules update).** Step 1.5 inserts an agent-level `maia__health` liveness check (returns availability without traffic — saves a wait window when the WebSocket is dead). Step 3.5 wipes Maia's panel state via `maia__busy → wait → maia__new_chat` between `maia__reset` and the user-handoff escalation.
+- **Optional task-boundary new-chat guidance (rules update).** Long sessions accumulate context inside Maia's chat panel; `maia__new_chat` (preceded by `maia__busy`) is a safe no-op for keeping Maia sharp between unrelated tasks. Heuristic: if the next prompt would not meaningfully reference the prior conversation, start fresh.
+
+### Changed
+
+- **`StartActionServer` accepts the singleton `CdpClient`.** Manager now owns its lifetime: each toggle replaces + disposes the old client (3s bounded await on `DisposeAsync`) before swapping in the new one. Stops the v4.2.0 per-toggle `ClientWebSocket` + `SemaphoreSlim` GC drift for power users who toggle Maia on/off repeatedly.
+- **`CdpClient` heartbeat now triggers `__maiaBridge.scan()`.** Single-line addition to the existing 10s heartbeat eval. Defeats Chromium's WebView2 background-tab throttling that drifts the JS-side `setInterval(scanForCompletions, 500)` toward seconds when Maia is hidden behind another pane. Persistent CDP socket is unaffected by tab visibility, so detection latency stays bounded at the heartbeat interval regardless of pane state.
+- **`__maiaBridge` JS bridge bumps to v2.** New methods: `busy()`, `newChat()`, `scan()`. New tracked state: `lastChatMutationAt`. v1 bridges are torn down + re-injected on session start so the new methods are present even on long-lived WebViews.
+- **`§1` closed-set tool list (rules update).** Extended with the four new Maia introspection tools. Same gating discipline: forbidden paths and recovery ladders apply equally to the new tools.
+
+### Fixed
+
+- **`get_active_run_configuration` callback wired in VM save path.** `TerminalPaneViewModel.HandleSaveSettings` constructed `StudioProActions(probe, ui)` without the `getActiveRunConfig` + `getProjectInfo` callbacks. After any Settings save, the rebuilt action server returned `Active-run-configuration callback not wired` for both `get_active_run_configuration` AND the embedded config in `get_app_status`. Surfaced 13:12:56 during CocktailDemo33. Fix: pass both callbacks through the VM ctor (optional params, back-compat preserved); `TerminalPaneExtension.Open()` wires them with the same closure shape used in `TryAutoStartActionServer`.
+
+### Tests
+
+- **`CdpClientReconnectTests`** (4 cases) — IsDisconnect → reconnect-with-fresh-adapter → retry-succeeds path under a fake `IWebSocketAdapter`. Backed by a new `IWebSocketAdapter` interface + `ClientWebSocketAdapter` production wrapper; `CdpClient`'s internal test ctor accepts `webSocketFactory` + `discoveryOverride`.
+- **`MaiaActionsTests`** +9 — busy/new_chat/ping/health happy + no-introspection paths against an `IntrospectableStubTransport`.
+- **`AgentsMdManagerTests`** + **`CopilotInstructionsManagerTests`** (4 each) — block creation, user-content preservation, block strip, `.github/` dir auto-create.
+- **`MaiaJsonRpcTests`** updated for the four new tool names in the tools/list set.
+- Total: 232/232 pass (+3 live-Maia skipped when Studio Pro isn't running). v4.2.0 was 228; v4.2.1 adds 19 net new passing tests.
+
+### Notes
+
+- **Empirical baseline.** Every rule + tool addition in v4.2.1 traces back to a specific observation from the 2026-05-10 CocktailDemo33 monitoring run, where v4.2.0's bridge survived 4–5 distinct failure modes that killed v4.1.4 plus an unplanned Studio Pro hard crash. v4.2.0 made the bridge reliable; v4.2.1 makes the agent's verification discipline equally reliable + adds the introspection toolkit production exercise revealed was missing.
+- **MCP tool surface.** Claude Code, Codex, and Copilot CLI all see ten Maia tools when Maia integration is on (Windows): `maia__send`, `maia__status`, `maia__wait`, `maia__ask`, `maia__reset`, `maia__force_tier`, `maia__busy`, `maia__ping`, `maia__health`, `maia__new_chat`. Old clients ignore unknown tools.
+- **Carry-over remediation.** All three v4.2.0 explicitly-deferred risks (singleton dispose on toggle, WebSocket test seam + reconnect tests, JS throttle fix) ship in this release.
+- **Out of scope, deferred to later releases.** Tier 2 ambient ping loop (a background `maia__ping` cadence with degradation-trend logging) is design-noted in the punchlist but not in this release. Marketplace dark-mode rendering bug remains an open separate workstream.
+
 ## 4.2.0 — 2026-05-09
 
 ### Added
