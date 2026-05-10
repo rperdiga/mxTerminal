@@ -56,10 +56,27 @@ The bridge probe and the bridge itself fail in several distinct ways, and the sa
 Recovery, in order:
 
 1. **Warm the panel.** Call `mcp__concord-mcp__maia__send` with `"ping"` (or any one-word string). Wait 2–3 seconds. This forces Maia to render the chat list and re-establishes a fresh handle.
+   - **v4.2.1 alternative:** call `mcp__concord-mcp__maia__ping` instead — it does the same warm-prompt-then-wait but returns `{alive, latency_ms, response}` with a 5s default timeout, so a slow/dead bridge fails fast instead of hanging.
+1.5. **Agent-level liveness check.** `mcp__concord-mcp__maia__health` returns bridge-state introspection without Maia traffic — transport availability, last-probe-at, in-flight handle bindings, embedded busy() snapshot. If `health.transports[*].available == false` across the board, the WebSocket is dead and steps 2/3 will fail too — jump to step 3.
 2. **Re-probe** with `maia__status`. If it returns `idle` / `done` / a transport name, proceed.
 3. **If still failing,** call `mcp__concord-mcp__maia__reset` to reinitialize bridge transports. Re-probe.
+3.5. **If `maia__reset` doesn't restore working state** (re-probe still fails or returns errors), wipe Maia's panel state entirely. Procedure:
+   - **First call `mcp__concord-mcp__maia__busy`**. If `busy=true`, wait — DO NOT interrupt mid-generation. Poll until `busy=false AND idle_for_ms > 5000`.
+   - Then call `mcp__concord-mcp__maia__new_chat`. Wait ~3 seconds for the new chat to render. Re-probe.
+   - Maia loses its prior chat context — but a wedged context wasn't helping. The cost is acceptable for the recovery.
 4. **If still failing,** stop and surface this exact instruction to the user: *"Click into the Maia panel in Studio Pro and type 'hi' (or any message). Reply when done."* Then re-probe on user confirmation.
 5. **Only after step 4 fails** is "Maia unavailable" a real escalation. Surface the verbatim error from each step above and stop.
+
+### Task-boundary new-chat (optional optimization)
+
+Long sessions accumulate context inside Maia's chat panel — every `pg_write_page` prompt + JSON response stays in Maia's window. After 20+ Maia operations, Maia's own context can degrade ("worse responses" / "cross-prompt confusion"). At natural task boundaries you can wipe the chat context to keep Maia sharp:
+
+- **Use `maia__new_chat` between unrelated tasks** — moving from page-build to layout-edit, finishing one feature before starting another.
+- **NOT between closely-related calls** — sequential page writes for the same module benefit from context continuity.
+- **Always `maia__busy` first** with the same idle-threshold as in step 3.5 (busy=false AND idle_for_ms > 5000). Interrupting Maia mid-generation corrupts her state.
+- Heuristic: if your next prompt would NOT meaningfully reference the prior conversation, start fresh.
+
+This is opportunistic, not required — the §2 ladder above handles wedged-context recovery on demand.
 
 Do not skip ahead to "Maia is unavailable, I'll do everything else without it" — see §3 (one-shot bail forbidden) and §7 (no orphan pages). And do not loop on the ladder itself — see §3's hard cap on Maia bridge calls.
 

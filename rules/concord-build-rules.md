@@ -32,7 +32,9 @@ The full set of allowed paths for working on this Mendix project:
    - `glob`, `read_file`, `write_file` — scoped to file domains registered by the server. As of Studio Pro 11.10 the registered roots are `/themes` and `/jsactions`. Always call `glob` first to confirm the current set; future Studio Pro versions may register additional roots.
 3. **Concord MCP server** (`mcp__concord-mcp__*`):
    - UI actions: `run_app`, `stop_app`, `refresh_project`, `save_all`, `get_app_status`, `get_active_run_configuration`.
-   - Maia bridge (Windows only): `maia__ask`, `maia__send`, `maia__status`, `maia__wait`, `maia__reset`. (The Concord MCP also exposes `maia__force_tier` as a debug aid; do not use it unless the user explicitly asks for transport-tier diagnostics.)
+   - Maia bridge (Windows only): `maia__ask`, `maia__send`, `maia__status`, `maia__wait`, `maia__reset`.
+   - Maia introspection (Windows only, v4.2.1+): `maia__busy` (read-only "is Maia generating?"), `maia__ping` (cheap liveness probe with default 5s timeout), `maia__health` (bridge-state without traffic), `maia__new_chat` (wipe Maia's chat context — see §2 ladder step 3.5).
+   - (The Concord MCP also exposes `maia__force_tier` as a debug aid; do not use it unless the user explicitly asks for transport-tier diagnostics.)
 4. **Maia** in Studio Pro — reachable via the Concord bridge (Windows) or via you handing the user a copy-paste prompt for them to drop into Maia themselves (macOS).
 5. **Your reasoning** — analysis, JSON construction, schema diffs, planning.
 6. **Web search and `docs.mendix.com`** — when knowledge is missing.

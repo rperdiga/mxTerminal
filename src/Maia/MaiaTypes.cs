@@ -63,3 +63,46 @@ public sealed class CdpProtocolException : TransportError
         CdpResponse = response;
     }
 }
+
+// v4.2.1 introspection result types.
+
+/// <summary>
+/// "Is Maia generating?" snapshot. Reason discriminates so callers can tune
+/// thresholds independently — e.g. ignore <c>recent-dom-mutation</c> with
+/// idle_for_ms over a softer threshold while still respecting a visible spinner.
+/// </summary>
+public sealed record BusyResult(
+    bool Busy,
+    string Reason,
+    long IdleForMs,
+    string? Spinner = null);
+
+/// <summary>
+/// Result of <c>maia__new_chat</c>. Ok=false when the new-chat button could
+/// not be located (DOM rename — heuristic needs refresh) or the click threw.
+/// </summary>
+public sealed record NewChatResult(
+    bool Ok,
+    DateTimeOffset? StartedAt = null,
+    string? Error = null);
+
+/// <summary>
+/// Per-transport entry in <see cref="RouterHealthSnapshot.Transports"/>.
+/// </summary>
+public sealed record TransportHealth(
+    string Name,
+    int Tier,
+    bool Available,
+    double LastLatencyMs,
+    string? Reason);
+
+/// <summary>
+/// Bridge state without traffic — the answer to "is the bridge alive AND
+/// is Maia alive?" decomposed enough that the caller can decide what to do
+/// next without running another roundtrip.
+/// </summary>
+public sealed record RouterHealthSnapshot(
+    DateTimeOffset? LastProbeAt,
+    IReadOnlyList<TransportHealth> Transports,
+    int ActiveBindings,
+    string? ForcedTier);
