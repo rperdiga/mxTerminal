@@ -26,6 +26,7 @@ public sealed record SaveSettingsPayload(
     bool? McpServerEnabled = null,
     bool? StudioProActionsEnabled = null,
     bool? MaiaIntegrationEnabled = null,
+    bool? MaiaDiagnosticLogging = null,
     string? RefreshFromDiskHotkey = null,
     bool? RestoreTabsOnReopen = null,
     bool? SkillsEnabled = null,

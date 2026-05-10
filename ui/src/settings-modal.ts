@@ -31,6 +31,7 @@ interface SettingsPayload {
   mcpServerEnabled: boolean;
   studioProActionsEnabled: boolean;
   maiaIntegrationEnabled: boolean;
+  maiaDiagnosticLogging: boolean;
   platform: string;
   refreshFromDiskHotkey: string;
   restoreTabsOnReopen: boolean;
@@ -117,6 +118,9 @@ export class SettingsModal {
   private maiaPlatformNote = document.getElementById(
     "maia-platform-note",
   ) as HTMLDivElement;
+  private chkMaiaDiagnostic = document.getElementById(
+    "set-maia-diagnostic",
+  ) as HTMLInputElement;
   private inpRefreshHotkey = document.getElementById(
     "set-refresh-hotkey",
   ) as HTMLInputElement;
@@ -315,6 +319,7 @@ export class SettingsModal {
     this.chkActions.checked = d.mcpServerEnabled;
     this.chkSpActions.checked = d.studioProActionsEnabled;
     this.chkMaia.checked = d.maiaIntegrationEnabled;
+    this.chkMaiaDiagnostic.checked = d.maiaDiagnosticLogging;
     this.renderActionsPortReadout(d.mcpServerEnabled, d.liveActionServerPort);
     this.applyMaiaPlatformGate(d.platform);
     this.inpRefreshHotkey.value = d.refreshFromDiskHotkey;
@@ -363,6 +368,9 @@ export class SettingsModal {
   private applyMaiaPlatformGate(platform: string): void {
     const isWindows = platform === "windows";
     this.chkMaia.disabled = !isWindows;
+    // v4.2.0: diagnostic logging is meaningless without a working bridge,
+    // so it follows the same Windows-only gate as Maia integration itself.
+    this.chkMaiaDiagnostic.disabled = !isWindows;
     if (this.maiaPlatformNote) {
       this.maiaPlatformNote.classList.remove("warn");
       this.maiaPlatformNote.innerHTML = isWindows
@@ -483,6 +491,7 @@ export class SettingsModal {
       mcpServerEnabled: this.chkActions.checked,
       studioProActionsEnabled: this.chkSpActions.checked,
       maiaIntegrationEnabled: this.chkMaia.checked,
+      maiaDiagnosticLogging: this.chkMaiaDiagnostic.checked,
       refreshFromDiskHotkey: this.inpRefreshHotkey.value,
       restoreTabsOnReopen: this.chkRestoreTabs.checked,
       skillsEnabled: this.chkSkillsEnabled.checked,

@@ -69,6 +69,7 @@ public class MessageDtoTests
             McpEnabled: false, McpClients: Array.Empty<string>(),
             McpServerEnabled: true,
             StudioProActionsEnabled: true, MaiaIntegrationEnabled: true,
+            MaiaDiagnosticLogging: false,
             Platform: "windows",
             RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true,
             About: new AboutInfoPayload("1.3.0", null, null),

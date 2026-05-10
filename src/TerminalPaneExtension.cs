@@ -243,6 +243,12 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         var settings = TerminalSettings.Load(dir);
         if (!settings.McpServerEnabled) return;
 
+        // v4.2.0: hydrate the diagnostic-logging flag on the live logger
+        // before any CDP traffic. The CdpClient constructed below captures
+        // the same `log` reference, so this controls whether its DEBUG
+        // lines actually persist.
+        log.DiagnosticEnabled = settings.MaiaDiagnosticLogging;
+
         try
         {
             var ui = new StudioProUiAutomation(

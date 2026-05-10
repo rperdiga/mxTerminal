@@ -18,6 +18,12 @@ public sealed record TerminalSettings(
     bool RestoreTabsOnReopen,
     bool SkillsEnabled,
     string[] SkillClients,
+    // v4.2.0+: when true, Logger.Debug writes CDP request/response traces
+    // to terminal.log. Default false to keep the log lean; user opts in
+    // via Settings → Concord MCP → "Diagnostic logging" when reproducing
+    // a Maia bridge issue. Backwards-compat: defaulted means existing
+    // positional constructors still compile.
+    bool MaiaDiagnosticLogging = false,
     // Stamps the Concord version that last ran the apply-defaults chain
     // against this project. Null on fresh-defaults / files written by
     // pre-4.1.1 Concord. Compared against the current assembly version
@@ -54,6 +60,7 @@ public sealed record TerminalSettings(
         RestoreTabsOnReopen: true,
         SkillsEnabled: true,
         SkillClients: new[] { "claude", "copilot" },
+        MaiaDiagnosticLogging: false,
         // Defaults() is the in-memory "no file" representation; the
         // version stamp is written to disk by the apply paths
         // (TryFirstRunApply / TryUpgradeApply) once they've actually
@@ -135,6 +142,7 @@ public sealed record TerminalSettings(
                 RestoreTabsOnReopen: dto.RestoreTabsOnReopen ?? def.RestoreTabsOnReopen,
                 SkillsEnabled: dto.SkillsEnabled ?? def.SkillsEnabled,
                 SkillClients: dto.SkillClients ?? def.SkillClients,
+                MaiaDiagnosticLogging: dto.MaiaDiagnosticLogging ?? def.MaiaDiagnosticLogging,
                 // Pass through verbatim — null is meaningful (signals
                 // "this settings file pre-dates upgrade-apply tracking"
                 // to TryUpgradeApply, which then runs against it).
@@ -167,6 +175,7 @@ public sealed record TerminalSettings(
             StudioProActionsEnabled, MaiaIntegrationEnabled,
             RefreshFromDiskHotkey, RestoreTabsOnReopen,
             SkillsEnabled, SkillClients,
+            MaiaDiagnosticLogging: MaiaDiagnosticLogging,
             LastAppliedVersion: LastAppliedVersion);
         // Atomic write: stage to .tmp, then File.Replace for journaled
         // rename on NTFS so a crash mid-save can never leave an empty file.
@@ -199,6 +208,7 @@ public sealed record TerminalSettings(
         bool? RestoreTabsOnReopen,
         bool? SkillsEnabled,
         string[]? SkillClients,
+        bool? MaiaDiagnosticLogging = null,
         string? LastAppliedVersion = null,
         // Legacy back-compat reads only — never written:
         bool? ActionsServerEnabled = null);
