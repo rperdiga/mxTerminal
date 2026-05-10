@@ -79,17 +79,25 @@ The `pg_*` tools live inside Maia and are not exposed to your tool surface from 
 4. **Verify directly** — `ped_check_errors` and `ped_read_document` exactly as in steps 3–4 above. Do not trust the user's "done" alone.
 5. **Refresh Studio Pro** as in step 4.
 
-### When `maia__status` returns "Maia panel not visible" — recovery ladder
+### When any Maia bridge call returns a non-success response — recovery ladder
 
-The bridge probe can return *"All Maia transports unavailable. Maia panel not visible."* even when the panel **is** open. The probe checks for a rendered chat-list DOM container; a freshly-opened-but-untouched panel may not have rendered it yet. Recovery, in order:
+The bridge probe and the bridge itself fail in several distinct ways, and the same recovery applies to all of them. **Trigger this ladder on any non-success response from `maia__status`, `maia__wait`, `maia__send`, `maia__ask`, or `maia__reset`** — including but not limited to:
 
-1. **Warm the panel.** Call `mcp__concord-mcp__maia__send` with `"ping"` (or any one-word string). Wait 2–3 seconds. This forces Maia to render the chat list.
+- *"All Maia transports unavailable. Maia panel not visible."* (the classic — DOM container not yet rendered, even when the panel **is** open)
+- *"Unknown handle: <name>"* (handle map dropped — the bridge lost the named handle you asked it to wait on)
+- *"poll() returned unexpected shape: ..."* (response parser failure — common during layout-edit operations, see §10)
+- *"IOException: Unable to write data ..."* (CDP connection drop — bridge lost its socket to the Studio Pro CEF instance)
+- Any other transport / connection / shape error returned by the bridge
+
+Recovery, in order:
+
+1. **Warm the panel.** Call `mcp__concord-mcp__maia__send` with `"ping"` (or any one-word string). Wait 2–3 seconds. This forces Maia to render the chat list and re-establishes a fresh handle.
 2. **Re-probe** with `maia__status`. If it returns `idle` / `done` / a transport name, proceed.
 3. **If still failing,** call `mcp__concord-mcp__maia__reset` to reinitialize bridge transports. Re-probe.
 4. **If still failing,** stop and surface this exact instruction to the user: *"Click into the Maia panel in Studio Pro and type 'hi' (or any message). Reply when done."* Then re-probe on user confirmation.
 5. **Only after step 4 fails** is "Maia unavailable" a real escalation. Surface the verbatim error from each step above and stop.
 
-Do not skip ahead to "Maia is unavailable, I'll do everything else without it" — see §3 (one-shot bail forbidden) and §7 (no orphan pages).
+Do not skip ahead to "Maia is unavailable, I'll do everything else without it" — see §3 (one-shot bail forbidden) and §7 (no orphan pages). And do not loop on the ladder itself — see §3's hard cap on Maia bridge calls.
 
 ### CustomWidget exception
 
@@ -123,6 +131,7 @@ Symptoms that look like dead ends are usually payload shape issues. Try in order
 - **Page writes via Maia (§2):** 2 retries with refined JSON, then escalate.
 - **Error fixes via `ped_update_document` after `ped_check_errors`:** **1 retry only — single-shot fix rule** (§5). If errors remain, STOP and report; do not retry.
 - **General PED writes (entities, microflows, etc.):** the recovery ladder above (steps 1–6); no fixed call count, but each step must produce *new* evidence (a new schema, a new error, a new payload variant). After three different payload shapes return the same error, jump to step 4 (KB search) before a fourth retry.
+- **Maia bridge calls — hard cap.** If `maia__status` / `maia__wait` returns a non-success response **3 consecutive times**, STOP firing further `maia__ask` / `maia__send` / `maia__status` / `maia__wait` / `maia__reset` calls and surface the verbatim errors to the user. Walking off the §2 bridge ladder in a loop (re-warming, re-probing, re-resetting on every cycle) is a worse failure mode than escalation — it burns calls, fills the transcript, and never converges. The cap counts the bridge as a whole, not each tool individually: `status` failing then `send` failing then `reset` failing is three consecutive failures, full stop. Empirically grounded — non-converging bridge loops have run >40 calls in a single window without ever escalating.
 
 **Tiebreaker — Maia page write surfaces errors.** When `ped_check_errors` reports problems on a page that Maia just wrote, you may **either** re-prompt Maia with refined JSON (per §2's 2-retry cap) **or** PED-patch a specific attribute (per §5's 1-retry cap). Pick one path and respect that path's cap; don't combine them for an effective 3-retry budget on the same page.
 
@@ -181,7 +190,7 @@ Even if the user explicitly asks for a reserved word, substitute. Standard patte
 
 ## 7. Don't ship orphans, shells, or hollow microflows
 
-Five named failure modes from forensic builds. Guard against each by name, every time.
+Six named failure modes from forensic builds. Guard against each by name, every time.
 
 **1. Orphan pages.** Every non-home page must have at least one navigation entry-point: a button click, a menu item, a list-item action, or another microflow's `ShowPageAction`. Wire navigation in the same iteration as page creation; don't defer "for later." **A page document with no widget tree (or only the default Atlas content placeholder) is also an orphan** — its existence in the model means nothing if it's not built out.
 
@@ -194,6 +203,16 @@ Five named failure modes from forensic builds. Guard against each by name, every
 **4. Letter-not-spirit compliance.** A request for "5 pages and 3 microflows" is satisfied when the user can walk the journey end-to-end in a browser, not when the count of objects matches. If the user can't browse → click → see-something-happen → see-it-persist → find-it-on-another-page, the build isn't done. Counts are not deliverables; behaviors are.
 
 **5. End-of-build "manual steps required" sections.** Forbidden as a substitute for finishing the work. The Maia bridge and Studio Pro UI handoff pattern (§8) exist specifically to avoid leaving the user with homework. Genuinely-required UI handoffs (Mark-as-UI-resources, App Settings → Runtime → After-Startup, Navigation defaults) belong **inline in the build flow as soft-stops** — surface, wait for confirmation, resume — not stacked at the end as a punt-list. **Self-check before any end-of-build summary:** scan your draft for the words *"manual"*, *"requires"*, *"in Studio Pro"*, *"after this"*, *"~5 minutes"*. Each match is a soft-stop you skipped. Go back and resolve them inline.
+
+**6. Read-loop anti-pattern.** If you find yourself calling `ped_read_document` on the same document **3+ times without a write in between**, STOP. You are likely fighting a state-divergence problem — Studio Pro's in-memory model differs from the disk `.mpr`, or you're confused about what actually landed. Reading more won't resolve it; each read returns the same view from the same source.
+
+The fix:
+
+1. Call `mcp__concord-mcp__save_all` to flush Studio Pro's in-memory state to disk.
+2. Call `mcp__concord-mcp__refresh_project` to ensure subsequent reads see the reconciled state.
+3. **Then** re-read.
+
+If the read still doesn't match expectations after save → refresh → re-read, surface to the user with the verbatim read output and what you expected to see. Do not continue spinning on the same document; that's the loop §3 forbids in a different shape.
 
 When the user describes an app to clone or build, derive the **journey arc** they're really asking for — *Browse → Detail → Action → Side-effect → User-facing list/evidence* — and deliver every step. Specify the arc explicitly in your plan (§13) so the user can check it. Renames mid-build cause downstream churn (and module name is immutable per §9), so commit to entity / page / microflow names in the plan, not in the writes.
 
@@ -273,6 +292,8 @@ A `Pages$Layout` document holds the persistent chrome (top nav, sidebar, footer)
 1. **Maia (preferred).** Use `maia__ask` to create the layout based on `Atlas_Core.Atlas_TopBar` and describe the chrome you want in natural language (logo placement, nav menu, footer shape). Maia drives layout creation inside Studio Pro.
 2. **Manual fallback.** App Explorer → right-click module → Add layout → base on Atlas_TopBar → customize the chrome in the page editor. Use the soft-stop pattern (§8) — instruct, wait, resume.
 
+**Empirical note (2026-05-09 cocktail test): layout-edit operations specifically appear to destabilize the Maia bridge.** Both observed `poll() returned unexpected shape` errors fired during layout-duplication / layout-edit attempts — page widget edits via Maia in the same session remained reliable. If the bridge errors during layout work, **do not retry through the §2 ladder** — surface to the user with manual Studio Pro instructions (App Explorer → right-click module → Add layout → base on `Atlas_Core.Atlas_TopBar` → customize chrome in the page editor), wait for confirmation, then resume. Treat layout-edit-via-Maia as opportunistic rather than the default; the manual path is the safe default for layout authoring until the bridge stabilizes here.
+
 After creation, PED can verify existence via `ped_find_document` and pages can reference the layout by qualified name.
 
 ### When to skip layout-first
@@ -285,23 +306,27 @@ Default Atlas layouts are fine for **CRUD admin tools, internal dashboards, prot
 
 When the user asks for custom styling, branding, or anything beyond default Atlas — **never edit `themesource/atlas_core/`** (Atlas updates from Marketplace overwrite your edits). Create a sibling theme module instead.
 
-**Recipe:**
+**Recipe (order matters — do not skip ahead):**
 
 1. **Create a new module** (e.g. `<ProjectName>_Theme`). Use `ped_create_module`.
-2. **Mark as UI resources module** in Studio Pro. Soft-stop: instruct the user to right-click the module → *Mark as UI resources module*, wait for confirmation. Without the flag, your module loads before Atlas Core and your overrides won't take effect — this is a hard one-click step, not an escalation point. Resume immediately on confirmation.
-3. **Create the file layout** under `themesource/<modulename>/web/` mirroring the Atlas Web pattern:
+2. **Mark as UI resources module** in Studio Pro — **before any SCSS is written.** Soft-stop: instruct the user to right-click the module → *Mark as UI resources module*, wait for explicit confirmation. Without the flag, your module loads before Atlas Core and your overrides won't take effect. This is a hard one-click step, not an escalation point. Resume immediately on confirmation.
+
+   > **Guard: do not write any SCSS file (step 4 onwards) until the user has confirmed the module is marked as UI resources.** The flag determines load order; SCSS written into an unmarked module compiles in the wrong cascade and your overrides won't apply. Writing the partials first and asking the user to mark the module after is a known failure mode (2026-05-09 cocktail test) — by the time the soft-stop fires, you've already shipped a misconfigured cascade.
+
+3. **Verify the flag landed** before proceeding. The module's icon turns green in App Explorer; if you can drive a Studio Pro screenshot or have the user confirm visually, do it. If the user reports difficulty marking the module, stay parked here — do not start writing files.
+4. **Create the file layout** under `themesource/<modulename>/web/` mirroring the Atlas Web pattern:
    - `main.scss` — module entry point.
    - `custom-variables.scss` — brand variables (you create).
    - `design-properties.json` — optional widget design properties.
    
    Use `mcp__mendix-studio-pro__write_file` (the `/themes` domain is registered).
-4. **Wire the import.** In `theme/web/custom-variables.scss` add only:
+5. **Wire the import.** In `theme/web/custom-variables.scss` add only:
    ```scss
    @import "../../themesource/<modulename>/web/custom-variables.scss";
    ```
-5. **Move (don't copy)** any pre-existing variables from `theme/web/custom-variables.scss` to your sibling module. The app-level file should now contain only the import line. Variables left at the app level override the sibling module's — this is the documented escape hatch for one-off overrides.
-6. **Set load order.** App Settings → Theme tab → drag your sibling module **below** `Atlas_Core` (lower in list = higher precedence). Order is the override mechanism.
-7. **Token-style. Don't hard-code.** Brand colors, fonts, radii, and spacing live as SCSS variables (`$brand-primary`, `$brand-accent`, `$font-family-base`, `$border-radius`, etc.) in your sibling module's `custom-variables.scss`. Don't drop hex codes or pixel values onto widgets via `class` properties.
+6. **Move (don't copy)** any pre-existing variables from `theme/web/custom-variables.scss` to your sibling module. The app-level file should now contain only the import line. Variables left at the app level override the sibling module's — this is the documented escape hatch for one-off overrides.
+7. **Set load order.** App Settings → Theme tab → drag your sibling module **below** `Atlas_Core` (lower in list = higher precedence). Order is the override mechanism.
+8. **Token-style. Don't hard-code.** Brand colors, fonts, radii, and spacing live as SCSS variables (`$brand-primary`, `$brand-accent`, `$font-family-base`, `$border-radius`, etc.) in your sibling module's `custom-variables.scss`. Don't drop hex codes or pixel values onto widgets via `class` properties.
 
 **Studio Pro 11.10 defaults to Atlas 3 SASS.** Atlas 4 (CSS variables) is opt-in via `$use-css-variables: true;` at the top of `theme/web/custom-variables.scss` plus `:root { }` wrappers. Mixed Atlas-3-and-4 modules fall back to Atlas defaults — only opt in if all dependent modules support CSS variables.
 
@@ -320,6 +345,16 @@ Before claiming any feature done:
 Self-reports of "verified," "working," "live," "done" are claims, not evidence. Evidence is screenshots from a click chain landing on the expected destination, DOM assertions against `.mx-name-*` selectors, and the verbatim `ped_check_errors` output.
 
 If a Playwright MCP is attached in this environment (look for `mcp__playwright__*` tools in your tool surface), use it for the end-to-end walk and capture screenshots at each step. Without Playwright, the verification reduces to "fewer-than-end-to-end" — note that explicitly when reporting.
+
+### Cadence — `save_all` + `refresh_project` after every batch
+
+Verification at the end of a build is necessary but not sufficient. Studio Pro keeps every PED write in an in-memory model until something flushes it to the `.mpr` file on disk — auto-save, the user hitting Ctrl+S, or `mcp__concord-mcp__save_all`. Without that flush, your work exists only in Studio Pro's RAM.
+
+- **After each batch, call `mcp__concord-mcp__save_all` followed by `mcp__concord-mcp__refresh_project`.** A batch is one or more `ped_create_module`, `ped_create_document`, or `ped_update_document` calls that finish a logical unit — a module created and named, a page authored end-to-end, a microflow body wired up, a domain change with all its associations.
+- **Why the flush.** Without `save_all`, your writes don't land on `.mpr`. `ped_read_document` and `ped_check_errors` hit the in-memory model, so they appear correct — but a Studio Pro crash, restart, or another agent reading the disk file sees nothing. Empirically (2026-05-09 cocktail test): a build session ended with 100+ orphan `.mxunit` files in `mprcontents/` representing pages and a layout that existed in Studio Pro's in-memory model but never landed on disk because no batch ever called `save_all`.
+- **Why the refresh.** Without `refresh_project`, subsequent reads may return stale state — the on-disk `.mpr` and Studio Pro's in-memory model can diverge after a save, and `refresh_project` reconciles them.
+- **Cadence is "after each batch" — not "after each individual write" (would thrash) and not "at end of build" (loses work on crash).** Pick natural seams: module created → save+refresh; page authored → save+refresh; microflow wired → save+refresh; domain change committed → save+refresh.
+- **Read-back (§4) and error-checks happen *after* the save+refresh of the same batch**, not before — so the read hits a consistent on-disk + in-memory state.
 
 ---
 
