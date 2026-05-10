@@ -12,6 +12,7 @@ public sealed class TerminalSessionManager : IDisposable
     private readonly object ordinalGate = new();
     private bool disposed;
     private StudioProActionServer? actionServer;
+    private Maia.CdpClient? activeCdpClient;
     private readonly object actionServerGate = new();
 
     public event Action<string, byte[]>? Output;
@@ -165,27 +166,54 @@ public sealed class TerminalSessionManager : IDisposable
         Logger? log = null,
         Terminal.Maia.MaiaActions? maia = null,
         bool studioProActionsEnabled = true,
-        bool maiaIntegrationEnabled = false)
+        bool maiaIntegrationEnabled = false,
+        // v4.2.1: caller hands ownership of the singleton CdpClient (when
+        // Maia is enabled) to the manager. The previous client is explicitly
+        // disposed before the swap so a settings toggle off→on doesn't leak
+        // a ClientWebSocket + SemaphoreSlim per cycle. v4.2.0 left the old
+        // client to GC, which worked but accumulated for power users
+        // toggling Maia on/off repeatedly.
+        Terminal.Maia.CdpClient? cdpClient = null)
     {
         if (disposed) throw new ObjectDisposedException(nameof(TerminalSessionManager));
+        Terminal.Maia.CdpClient? oldCdp;
         lock (actionServerGate)
         {
             // Always rebuild — the caller may have constructed a fresh `actions` with
             // updated hotkey config that we can't detect from here. The cost is one
             // TCP listener bind cycle, which is cheap.
             actionServer?.Dispose();
+            oldCdp = activeCdpClient;
+            activeCdpClient = cdpClient;
             var s = new StudioProActionServer(actions, port, log, maia, studioProActionsEnabled, maiaIntegrationEnabled);
             s.Start();
             actionServer = s;
+        }
+        // Dispose the old CdpClient OUTSIDE the gate — DisposeAsync awaits
+        // the heartbeat drain which can take up to 2s and we don't want to
+        // block other Start/Stop calls behind it. Bounded wait protects
+        // against a wedged shutdown.
+        if (oldCdp is not null)
+        {
+            try { oldCdp.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(3)); }
+            catch (Exception ex) { log?.Warn($"[concord-mcp] previous CdpClient dispose failed: {ex.Message}"); }
         }
     }
 
     public void StopActionServer()
     {
+        Terminal.Maia.CdpClient? oldCdp;
         lock (actionServerGate)
         {
             actionServer?.Dispose();
             actionServer = null;
+            oldCdp = activeCdpClient;
+            activeCdpClient = null;
+        }
+        if (oldCdp is not null)
+        {
+            try { oldCdp.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(3)); }
+            catch { /* best-effort */ }
         }
     }
 

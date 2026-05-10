@@ -19,7 +19,7 @@ Doctrine from the Maia system prompt — don't re-derive these:
 - **Never include `$ID` when creating.** Internal references use `$id(/path)` with 0-based indices.
 - **DomainModel is special** — nameless, exactly one per module, never created. *Update* it with the module name as `documentName`.
 - **`ped_check_errors`** runs after ALL mutations for the current task complete, not between intermediate steps.
-- **Single-shot fix rule** (Maia doctrine, hard limit). After `ped_check_errors` reports errors you get *exactly one* `ped_update_document` to fix them. Re-run `ped_check_errors`. If errors remain → **STOP and REPORT.** Do not retry. Surface the verbatim errors and the fix attempt; the user decides next steps.
+- **Single-shot fix rule** (Maia doctrine, hard limit). After `ped_check_errors` reports errors you get *exactly one* `ped_update_document` to fix them. Re-run `ped_check_errors`. If errors remain on a NON-Page doc (microflow, entity, view entity) → **STOP and REPORT.** Do not retry. Surface the verbatim errors and the fix attempt; the user decides next steps. **For Pages**, before escalating, route through §3's Maia-as-page-fixer tiebreaker — Maia gets one more attempt on the page before user homework. Maia CANNOT edit non-page docs reliably, so the tiebreaker does not apply to them.
 
 ### Reserved words
 

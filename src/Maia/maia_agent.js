@@ -21,8 +21,17 @@
 // JS string literals containing '\n' don't get silently converted to literal
 // newlines by Python's string handling — a real bug we hit in v0.0.x.)
 
-if (window.__maiaBridge && window.__maiaBridge.version === 1) {
+// Bump version to 2 in v4.2.1 (introspection methods: busy(), newChat(),
+// scan(), plus lastChatMutationAt timestamp). v1-installed bridges are
+// re-injected so the new methods are present even on a long-lived WebView.
+if (window.__maiaBridge && window.__maiaBridge.version === 2) {
     return 'already-installed';
+}
+// If a v1 bridge is present, tear it down before re-installing — v1's
+// observer is hooked to a chatRoot reference that may have re-rendered;
+// safer to start fresh.
+if (window.__maiaBridge && window.__maiaBridge.teardown) {
+    try { window.__maiaBridge.teardown(); } catch (e) { /* best-effort */ }
 }
 
 // Find the message-list container by walking up from the input.
@@ -160,7 +169,15 @@ function scanForCompletions() {
     }
 }
 
-const observer = new MutationObserver(scanForCompletions);
+// v4.2.1: track the last DOM mutation timestamp so the maia__busy tool
+// can answer "is Maia generating?" via a recent-mutation heuristic.
+// Updated by the same MutationObserver that scans for completions.
+let lastChatMutationAt = Date.now();
+
+const observer = new MutationObserver(() => {
+    lastChatMutationAt = Date.now();
+    scanForCompletions();
+});
 observer.observe(chatRoot, { childList: true, subtree: true, characterData: true });
 
 // Run scanForCompletions on a timer too — MutationObserver doesn't fire
@@ -170,8 +187,48 @@ observer.observe(chatRoot, { childList: true, subtree: true, characterData: true
 // which is plenty even for a session at the cap (100 entries → ~0.1ms work).
 const timer = setInterval(() => { scanForCompletions(); pruneTickets(); }, 500);
 
+// v4.2.1: Maia-spinner heuristic. Probed selectors observed in Studio Pro
+// 11.10's Maia panel; falls back to ARIA conventions and "loading"-style
+// class names if the styled-components hash changes between releases.
+// The tool surface returns a structured reason so callers can see WHY
+// they got busy=true; opaque true/false would be hard to debug.
+function detectSpinner() {
+    // styled-components hash-class probes most-likely first; adjust if
+    // future Maia DOM changes break the heuristic.
+    const candidates = [
+        '[role="progressbar"]',
+        '[aria-busy="true"]',
+        '[data-loading="true"]',
+        '.spinner', '.loading', '.is-loading',
+        // Additional defensive selectors for SVG-based spinners with
+        // common animation patterns observed in modern web UIs.
+        'svg.animate-spin',
+        'circle.spinner-circle',
+    ];
+    for (const sel of candidates) {
+        try {
+            const el = document.querySelector(sel);
+            if (el && el.offsetParent !== null) return sel;
+        } catch (e) { /* selector parse error — skip */ }
+    }
+    return null;
+}
+
+// v4.2.1: locate Maia's "New chat" button by accessible name. Studio Pro
+// renders the button as a real <button> with the label "New chat" (case-
+// insensitive, may include surrounding whitespace). Returning the element
+// rather than clicking lets newChat() decide whether to dispatch a click.
+function findNewChatButton() {
+    const buttons = [...document.querySelectorAll('button, [role="button"]')];
+    for (const b of buttons) {
+        const text = (b.innerText || b.getAttribute('aria-label') || '').trim();
+        if (/^new\s*chat$/i.test(text)) return b;
+    }
+    return null;
+}
+
 window.__maiaBridge = {
-    version: 1,
+    version: 2,
     chatRoot,
     tickets,
     submit(prompt, sentinel) {
@@ -206,6 +263,53 @@ window.__maiaBridge = {
     },
     list() {
         return [...tickets.entries()].map(([s, t]) => ({ sentinel: s, status: t.status, elapsed_ms: Date.now() - t.sent_at }));
+    },
+    // v4.2.1: read-only "is Maia generating?" probe. Returns a structured
+    // result so callers can inspect WHY busy=true. The 1000ms recent-
+    // mutation threshold is the heuristic boundary between "Maia is
+    // streaming" (continuous DOM updates) and "Maia just finished" (last
+    // mutation a beat ago); tune if the spinner heuristic proves unreliable.
+    busy() {
+        const now = Date.now();
+        const idleForMs = now - lastChatMutationAt;
+        const spinnerSel = detectSpinner();
+        if (spinnerSel) {
+            return { busy: true, reason: 'spinner-visible', spinner: spinnerSel, idle_for_ms: idleForMs };
+        }
+        if (idleForMs < 1000) {
+            return { busy: true, reason: 'recent-dom-mutation', idle_for_ms: idleForMs };
+        }
+        return { busy: false, reason: 'idle', idle_for_ms: idleForMs };
+    },
+    // v4.2.1: programmatic click of Maia's "New chat" button. Wipes Maia's
+    // chat context (its system prompt + thread history). Returns a
+    // discriminated result so the caller knows whether the click landed —
+    // a missing button (DOM rename) is non-fatal but observable.
+    newChat() {
+        const btn = findNewChatButton();
+        if (!btn) {
+            return { ok: false, error: 'new-chat-button-not-found' };
+        }
+        try {
+            btn.click();
+            // Reset our own state too — the chat is fresh, so any in-flight
+            // sentinel-based ticket is now stale.
+            tickets.clear();
+            lastChatMutationAt = Date.now();
+            return { ok: true, started_at: lastChatMutationAt };
+        } catch (e) {
+            return { ok: false, error: 'click-throw', message: String(e && e.message || e) };
+        }
+    },
+    // v4.2.1: callable scan trigger. The C# heartbeat fires this once per
+    // beat to defeat Chromium's WebView2 background-tab throttling — when
+    // Maia is hidden behind another pane, the JS-side setInterval drifts
+    // from 500ms toward seconds. Driving the scan from C#'s heartbeat
+    // (which uses the persistent WebSocket, untouched by tab visibility)
+    // keeps detection latency bounded.
+    scan() {
+        scanForCompletions();
+        return { ok: true, last_mutation_at: lastChatMutationAt };
     },
     teardown() {
         observer.disconnect();

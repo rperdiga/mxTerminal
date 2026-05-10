@@ -56,10 +56,27 @@ The bridge probe and the bridge itself fail in several distinct ways, and the sa
 Recovery, in order:
 
 1. **Warm the panel.** Call `mcp__concord-mcp__maia__send` with `"ping"` (or any one-word string). Wait 2–3 seconds. This forces Maia to render the chat list and re-establishes a fresh handle.
+   - **v4.2.1 alternative:** call `mcp__concord-mcp__maia__ping` instead — it does the same warm-prompt-then-wait but returns `{alive, latency_ms, response}` with a 5s default timeout, so a slow/dead bridge fails fast instead of hanging.
+1.5. **Agent-level liveness check.** `mcp__concord-mcp__maia__health` returns bridge-state introspection without Maia traffic — transport availability, last-probe-at, in-flight handle bindings, embedded busy() snapshot. If `health.transports[*].available == false` across the board, the WebSocket is dead and steps 2/3 will fail too — jump to step 3.
 2. **Re-probe** with `maia__status`. If it returns `idle` / `done` / a transport name, proceed.
 3. **If still failing,** call `mcp__concord-mcp__maia__reset` to reinitialize bridge transports. Re-probe.
+3.5. **If `maia__reset` doesn't restore working state** (re-probe still fails or returns errors), wipe Maia's panel state entirely. Procedure:
+   - **First call `mcp__concord-mcp__maia__busy`**. If `busy=true`, wait — DO NOT interrupt mid-generation. Poll until `busy=false AND idle_for_ms > 5000`.
+   - Then call `mcp__concord-mcp__maia__new_chat`. Wait ~3 seconds for the new chat to render. Re-probe.
+   - Maia loses its prior chat context — but a wedged context wasn't helping. The cost is acceptable for the recovery.
 4. **If still failing,** stop and surface this exact instruction to the user: *"Click into the Maia panel in Studio Pro and type 'hi' (or any message). Reply when done."* Then re-probe on user confirmation.
 5. **Only after step 4 fails** is "Maia unavailable" a real escalation. Surface the verbatim error from each step above and stop.
+
+### Task-boundary new-chat (optional optimization)
+
+Long sessions accumulate context inside Maia's chat panel — every `pg_write_page` prompt + JSON response stays in Maia's window. After 20+ Maia operations, Maia's own context can degrade ("worse responses" / "cross-prompt confusion"). At natural task boundaries you can wipe the chat context to keep Maia sharp:
+
+- **Use `maia__new_chat` between unrelated tasks** — moving from page-build to layout-edit, finishing one feature before starting another.
+- **NOT between closely-related calls** — sequential page writes for the same module benefit from context continuity.
+- **Always `maia__busy` first** with the same idle-threshold as in step 3.5 (busy=false AND idle_for_ms > 5000). Interrupting Maia mid-generation corrupts her state.
+- Heuristic: if your next prompt would NOT meaningfully reference the prior conversation, start fresh.
+
+This is opportunistic, not required — the §2 ladder above handles wedged-context recovery on demand.
 
 Do not skip ahead to "Maia is unavailable, I'll do everything else without it" — see §3 (one-shot bail forbidden) and §7 (no orphan pages). And do not loop on the ladder itself — see §3's hard cap on Maia bridge calls.
 
@@ -97,6 +114,21 @@ A class of Mendix doc types and configuration is **PED-unreachable** — you can
 ### Reference-by-name still works
 
 PED-unreachable types **can be referenced by qualified name** from PED-reachable docs once the user (or Maia) has created them. Examples that work: `Pages$Page.layoutCall.layout` accepts `"<Module>.<LayoutName>"`; `Microflows$ImportXmlAction.resultHandling.importMappingCall.mapping` accepts `"<Module>.MyImportMapping"`. Confirm the qualified name via `ped_find_document` before referencing — wrong-name references fail with `"Reference with qualified name X of type Y not found."`
+
+### Soft-stops you can engineer around — seed data via self-service button
+
+Some "manual UI step" handoffs can be eliminated by designing the app to do the work itself, instead of asking the user to click into Studio Pro. **The canonical example is seed data.** When a gallery page needs sample records to be navigable, the obvious-but-bad path is *App ▸ Settings ▸ Runtime ▸ After-Startup → `<Module>.SUB_SeedIfEmpty`* — a soft-stop the user has to click through. The right path: build the seed flow as a self-service button visible inside the running app. The agent (via Playwright in §12) clicks it autonomously after `run_app`; the button hides itself once seed-data has landed; the demo state stays clean.
+
+**Pattern (validated in production, CocktailDemo33 2026-05-10):**
+
+1. **Add a singleton flag entity.** Create `ProjectManage` (or `<App>Manage`) with one Boolean attribute `NeedProjectSeedData` (default `true`). Singleton-style: a microflow `IVU_ProjectManage_GetOrCreate` returns the one record, creating it on first call.
+2. **Build the seed microflow normally.** `SUB_<Entity>_SeedIfEmpty` — guard at top: *if entity count > 0 then return*; otherwise create N records. **Last activity sets `ProjectManage.NeedProjectSeedData = false`** on the singleton record (and commits). Naming follows §9 (SUB- prefix for sub-microflows).
+3. **Wire the button on the home page.** Add a "Seed sample data" `Pages$ActionButton` whose `visible` expression is bound to `ProjectManage.NeedProjectSeedData`. `onClick` calls the seed microflow. After the run, the flag flips false → the button vanishes.
+4. **Click it via Playwright in the verification gate (§12).** After `run_app` reports `running`, drive a Playwright click against the button by `.mx-name-actionButton<N>` selector or accessible-name "Seed sample data". Then proceed with the full journey-arc walk — the gallery now has data.
+
+**Why this beats After-Startup wiring:** the After-Startup runtime setting is in `App ▸ Settings ▸ Runtime`, which is **PED-unreachable** and Maia-handle-only — every clone build that needs seed data hits this soft-stop. The self-service button avoids the soft-stop entirely AND demonstrates the seed flow more visibly to whoever's watching the demo. Saves ~1 click per build × every build.
+
+**When to skip this pattern:** seed data that MUST run on app startup (auth bootstrap, license activation, schema migrations) belongs in After-Startup. The self-service-button pattern is for sample-data-for-demos, not for production prerequisites.
 
 ---
 
@@ -140,6 +172,8 @@ After creation, PED can verify existence via `ped_find_document` and pages can r
 
 Default Atlas layouts are fine for **CRUD admin tools, internal dashboards, prototype apps** where Atlas's stock chrome is good enough. The trigger for layout-first is "the app has a brand identity that Atlas-default-blue will undermine."
 
+**Plan the seed-data flow during the layout pass.** Branded clone builds almost always need a populated gallery for the journey-arc walk to feel real. Use §8's self-service-button pattern (`ProjectManage.NeedProjectSeedData` singleton + visibility-bound button on the home page) so the seed step lives inside the app rather than as an After-Startup soft-stop. Cheaper, faster, and visible in the demo.
+
 ---
 
 ## 11. Custom theme = sibling theme module + Atlas pattern
@@ -171,3 +205,5 @@ When the user asks for custom styling, branding, or anything beyond default Atla
 **Studio Pro 11.10 defaults to Atlas 3 SASS.** Atlas 4 (CSS variables) is opt-in via `$use-css-variables: true;` at the top of `theme/web/custom-variables.scss` plus `:root { }` wrappers. Mixed Atlas-3-and-4 modules fall back to Atlas defaults — only opt in if all dependent modules support CSS variables.
 
 **Pipeline + export.** Studio Pro watches `theme/` and `themesource/` and recompiles in-process — no `npm` or `mxbuild`; `mcp__concord-mcp__refresh_project` forces a rebuild. Note for module export: Mendix `.mpk` packaging excludes `theme/`, `themesource/<module>/`, `jsactions/`, and `javasource/` — they have to travel separately if re-imported elsewhere.
+
+**See also:** §8 *"Soft-stops you can engineer around — seed data via self-service button."* When the theme'd home page needs populated content for a journey-arc walk, add the seed button there during the page-build pass. The button rides on the layout you just authored; the visibility binding hides it after first run.

@@ -116,6 +116,8 @@ public class MaiaJsonRpcTests : IAsyncLifetime
         names.Should().BeEquivalentTo(new[] {
             "maia__send", "maia__status", "maia__wait",
             "maia__ask",  "maia__reset",  "maia__force_tier",
+            // v4.2.1 introspection tools.
+            "maia__busy", "maia__ping", "maia__health", "maia__new_chat",
         });
         // Belt-and-braces: confirm none of the studio-pro tools leaked in.
         names.Should().NotContain("run_app");

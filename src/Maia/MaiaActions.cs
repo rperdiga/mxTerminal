@@ -131,6 +131,144 @@ public sealed class MaiaActions
         catch (TransportError ex)     { return Task.FromResult(ActionResult.Fail(ex.Message)); }
     }
 
+    // ---- v4.2.1 introspection tools --------------------------------------
+
+    /// <summary>
+    /// "Is Maia generating?" — read-only DOM probe via the introspection-
+    /// capable transport (currently <see cref="CdpInjectedTransport"/>).
+    /// No traffic to Maia. See <see cref="BusyResult"/> for the discriminator.
+    /// </summary>
+    public async Task<ActionResult> BusyAsync(CancellationToken ct)
+    {
+        var introspection = router.GetIntrospection();
+        if (introspection is null)
+            return ActionResult.Fail("No introspection-capable transport available.");
+        try
+        {
+            var r = await introspection.BusyAsync(ct);
+            return ActionResult.OkWith(r.Busy ? "busy" : "idle", new
+            {
+                busy = r.Busy,
+                reason = r.Reason,
+                idle_for_ms = r.IdleForMs,
+                spinner = r.Spinner,
+            });
+        }
+        catch (TransportError ex) { return ActionResult.Fail(ex.Message); }
+    }
+
+    /// <summary>
+    /// Programmatic click of Maia's "New chat" button — wipes Maia's
+    /// in-panel context. Used in the §2 recovery ladder when
+    /// <c>maia__reset</c> + re-probe didn't restore working state.
+    /// </summary>
+    public async Task<ActionResult> NewChatAsync(CancellationToken ct)
+    {
+        var introspection = router.GetIntrospection();
+        if (introspection is null)
+            return ActionResult.Fail("No introspection-capable transport available.");
+        try
+        {
+            var r = await introspection.NewChatAsync(ct);
+            if (!r.Ok)
+                return ActionResult.Fail($"new_chat failed: {r.Error ?? "unknown"}");
+            // Clearing Maia also invalidates any router-side handle bindings —
+            // the v1/v2 reset path covers this server-side too. Calling reset
+            // here keeps the router in sync without any extra round-trip.
+            await router.ResetAsync(ct);
+            return ActionResult.OkWith("new_chat_started", new
+            {
+                started_at = r.StartedAt?.ToString("o"),
+            });
+        }
+        catch (TransportError ex) { return ActionResult.Fail(ex.Message); }
+    }
+
+    /// <summary>
+    /// Cheap liveness probe — sends "ping" to Maia, waits up to <paramref name="timeoutSec"/>
+    /// for any response, returns latency. Use BEFORE expensive ask calls when
+    /// bridge health is uncertain; if the ping fails fast, run the §2 ladder
+    /// instead of burning a 60s timeout on a real ask.
+    /// </summary>
+    public async Task<ActionResult> PingAsync(double timeoutSec, CancellationToken ct)
+    {
+        var deadline = Stopwatch.StartNew();
+        var budget = timeoutSec <= 0 ? 5.0 : timeoutSec;
+        try
+        {
+            var sentinel = AutoSentinel();
+            await router.SendAsync("ping", sentinel, ct);
+            // Reuse the existing wait machinery — it already understands the
+            // lost-handle discriminator and timeouts.
+            var inner = await WaitAsync(sentinel, budget, ct);
+            // Inner OkWith carries done/response/elapsed; flatten to a ping-
+            // shaped payload.
+            var alive = inner.Status == "done";
+            return ActionResult.OkWith(alive ? "alive" : "no_response", new
+            {
+                alive,
+                latency_ms = (long)deadline.Elapsed.TotalMilliseconds,
+                response = inner.Status == "done" ? ExtractResponse(inner) : null,
+                timed_out = inner.Status == "timed_out",
+            });
+        }
+        catch (TransportError ex) { return ActionResult.Fail(ex.Message); }
+    }
+
+    /// <summary>
+    /// Bridge-state introspection without traffic to Maia. Returns
+    /// router availability, in-flight handle bindings, last probe time,
+    /// + an embedded busy() snapshot when the introspection transport is
+    /// reachable. Use as a one-call diagnostic before deciding how to
+    /// recover from a suspected bridge issue.
+    /// </summary>
+    public async Task<ActionResult> HealthAsync(CancellationToken ct)
+    {
+        var snap = router.GetHealthSnapshot();
+        BusyResult? busy = null;
+        string? busyError = null;
+        var introspection = router.GetIntrospection();
+        if (introspection is not null)
+        {
+            try { busy = await introspection.BusyAsync(ct); }
+            catch (TransportError ex) { busyError = ex.Message; }
+        }
+
+        return ActionResult.OkWith("health", new
+        {
+            last_probe_at = snap.LastProbeAt?.ToString("o"),
+            forced_tier = snap.ForcedTier,
+            active_bindings = snap.ActiveBindings,
+            transports = snap.Transports.Select(t => new
+            {
+                name = t.Name,
+                tier = t.Tier,
+                available = t.Available,
+                last_latency_ms = t.LastLatencyMs,
+                reason = t.Reason,
+            }).ToArray(),
+            maia_busy = busy is null ? null : new
+            {
+                busy = busy.Busy,
+                reason = busy.Reason,
+                idle_for_ms = busy.IdleForMs,
+            },
+            maia_busy_error = busyError,
+        });
+    }
+
+    private static string? ExtractResponse(ActionResult r)
+    {
+        if (r.Data is null) return null;
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(r.Data);
+            var node = System.Text.Json.Nodes.JsonNode.Parse(json) as System.Text.Json.Nodes.JsonObject;
+            return node?["response"]?.GetValue<string>();
+        }
+        catch { return null; }
+    }
+
     /// <summary>
     /// Format: &lt;MX-XXXXXX&gt; where X is base32-friendly ([2-7A-Z]). 6 chars from 32^6 ≈ 1B
     /// gives ample collision margin for a session at the bridge's 100-ticket cap.

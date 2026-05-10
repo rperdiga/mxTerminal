@@ -378,6 +378,15 @@ public sealed class StudioProActionServer : IDisposable
                 required: new[] { "prompt" }));
             arr.Add(ToolDef("maia__reset",
                 "Clear the in-WebView injected agent and bridge-side ticket state. Use after Maia panel reloads or chat clears."));
+            arr.Add(ToolDef("maia__busy",
+                "Read-only DOM probe: 'is Maia generating?'. Returns {busy, reason: 'spinner-visible'|'recent-dom-mutation'|'idle', idle_for_ms}. No traffic to Maia. Call before maia__new_chat to avoid interrupting mid-stream."));
+            arr.Add(ToolDef("maia__ping",
+                "Cheap liveness probe — sends 'ping' to Maia, waits up to timeout_sec for any response, returns {alive, latency_ms, response, timed_out}. Default timeout 5s. Use before expensive maia__ask calls when bridge health is uncertain.",
+                new JsonObject { ["timeout_sec"] = SchemaNumber() }));
+            arr.Add(ToolDef("maia__health",
+                "Bridge-state introspection without Maia traffic. Returns transport availability, last probe time, in-flight handle bindings, plus an embedded maia__busy snapshot. One-call diagnostic before recovery decisions."));
+            arr.Add(ToolDef("maia__new_chat",
+                "Click Maia's 'New chat' button — wipes Maia's chat context. Use AFTER maia__busy reports idle for >5s; interrupting mid-generation can corrupt Maia's state. Step 3.5 in the §2 recovery ladder, between maia__reset and user-handoff."));
             arr.Add(ToolDef("maia__force_tier",
                 "Manual override: force a specific transport (e.g. 'cdp_chat'). For testing tier-N behavior. Mutates active state until next reprobe.",
                 new JsonObject { ["name"] = SchemaString() },
@@ -446,6 +455,12 @@ public sealed class StudioProActionServer : IDisposable
                                             args["timeout_sec"]?.GetValue<double>() ?? 60.0,
                                             CancellationToken.None),
                 "maia__reset"         => await maia.ResetAsync(CancellationToken.None),
+                "maia__busy"          => await maia.BusyAsync(CancellationToken.None),
+                "maia__ping"          => await maia.PingAsync(
+                                            args["timeout_sec"]?.GetValue<double>() ?? 5.0,
+                                            CancellationToken.None),
+                "maia__health"        => await maia.HealthAsync(CancellationToken.None),
+                "maia__new_chat"      => await maia.NewChatAsync(CancellationToken.None),
                 "maia__force_tier"    => await maia.ForceTierAsync(
                                             args["name"]?.GetValue<string>() ?? "",
                                             CancellationToken.None),

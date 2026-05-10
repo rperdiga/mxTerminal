@@ -47,15 +47,28 @@ namespace Terminal;
 /// Windows / macOS / Linux. Claude Code accepts both separators on Windows.
 /// </para>
 /// </summary>
-public sealed class ClaudeMdManager
+public class ClaudeMdManager
 {
     public const string BeginMarker = "<!-- BEGIN CONCORD MANAGED -->";
     public const string EndMarker = "<!-- END CONCORD MANAGED -->";
     public const string ClaudeMdFileName = "CLAUDE.md";
 
-    private readonly string projectDir;
-    private readonly string rulesSubdir;
-    private readonly Logger log;
+    /// <summary>
+    /// Project-relative path of the managed-block file. Defaults to
+    /// <c>CLAUDE.md</c>. Subclasses override for sibling CLIs:
+    /// <see cref="AgentsMdManager"/> → <c>AGENTS.md</c>,
+    /// <see cref="CopilotInstructionsManager"/> → <c>.github/copilot-instructions.md</c>.
+    /// All three managers share this base's block-edit logic; only the
+    /// destination file and the rules subdir vary.
+    /// </summary>
+    protected virtual string ManagedFilePath => ClaudeMdFileName;
+
+    /// <summary>Logger label prefix for diagnostics — overridden per-CLI subclass.</summary>
+    protected virtual string LogPrefix => "claude-md";
+
+    protected readonly string projectDir;
+    protected readonly string rulesSubdir;
+    protected readonly Logger log;
 
     /// <summary>
     /// Construct a manager scoped to one project's <c>CLAUDE.md</c>.
@@ -79,7 +92,7 @@ public sealed class ClaudeMdManager
     /// </summary>
     public void Apply()
     {
-        var claudeMdPath = Path.Combine(projectDir, ClaudeMdFileName);
+        var claudeMdPath = Path.Combine(projectDir, ManagedFilePath);
         var block = BuildBlock();
 
         // Nothing to import → nothing to manage. If a previous block exists,
@@ -93,7 +106,7 @@ public sealed class ClaudeMdManager
                 if (!ReferenceEquals(stripped, existingBody))
                 {
                     AtomicWrite(claudeMdPath, stripped);
-                    log.Info($"[claude-md] no rules to manage; stripped existing block in {claudeMdPath}");
+                    log.Info($"[{LogPrefix}] no rules to manage; stripped existing block in {claudeMdPath}");
                 }
             }
             return;
@@ -101,8 +114,13 @@ public sealed class ClaudeMdManager
 
         if (!File.Exists(claudeMdPath))
         {
+            // Ensure parent directory exists — copilot-instructions.md lives
+            // under .github/, which the user's project may not have yet.
+            var parent = Path.GetDirectoryName(claudeMdPath);
+            if (!string.IsNullOrEmpty(parent) && !Directory.Exists(parent))
+                Directory.CreateDirectory(parent);
             AtomicWrite(claudeMdPath, block + "\n");
-            log.Info($"[claude-md] created {claudeMdPath} with managed block");
+            log.Info($"[{LogPrefix}] created {claudeMdPath} with managed block");
             return;
         }
 
@@ -111,7 +129,7 @@ public sealed class ClaudeMdManager
         if (newBody != body)
         {
             AtomicWrite(claudeMdPath, newBody);
-            log.Info($"[claude-md] refreshed managed block in {claudeMdPath}");
+            log.Info($"[{LogPrefix}] refreshed managed block in {claudeMdPath}");
         }
     }
 
@@ -123,7 +141,7 @@ public sealed class ClaudeMdManager
     /// </summary>
     public void Remove()
     {
-        var claudeMdPath = Path.Combine(projectDir, ClaudeMdFileName);
+        var claudeMdPath = Path.Combine(projectDir, ManagedFilePath);
         if (!File.Exists(claudeMdPath)) return;
 
         var body = File.ReadAllText(claudeMdPath);
@@ -131,7 +149,7 @@ public sealed class ClaudeMdManager
         if (!ReferenceEquals(stripped, body))
         {
             AtomicWrite(claudeMdPath, stripped);
-            log.Info($"[claude-md] removed managed block from {claudeMdPath}");
+            log.Info($"[{LogPrefix}] removed managed block from {claudeMdPath}");
         }
     }
 

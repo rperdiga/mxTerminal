@@ -28,15 +28,18 @@ public class TerminalSettingsTests : IDisposable
         settings.RingBufferKB.Should().Be(4096);
         settings.XtermScrollbackLines.Should().Be(10000);
         settings.Theme.Should().Be("auto");
-        // Defaults flipped in v4.1.0: all on except Codex (which writes to
-        // user-global ~/.codex/config.toml — opt-in only).
+        // Defaults flipped in v4.2.1: all three CLIs default-on. Codex was
+        // opt-in through v4.2.0 (writes to user-global ~/.codex/config.toml);
+        // v4.2.1 adds it to defaults with a first-run banner explaining the
+        // user-global write. The banner points to Settings if the user wants
+        // to revert.
         settings.McpEnabled.Should().BeTrue();
-        settings.McpClients.Should().BeEquivalentTo(new[] { "claude", "copilot" });
+        settings.McpClients.Should().BeEquivalentTo(new[] { "claude", "copilot", "codex" });
         settings.McpServerEnabled.Should().BeTrue();
         settings.StudioProActionsEnabled.Should().BeTrue();
         settings.MaiaIntegrationEnabled.Should().BeTrue();
         settings.SkillsEnabled.Should().BeTrue();
-        settings.SkillClients.Should().BeEquivalentTo(new[] { "claude", "copilot" });
+        settings.SkillClients.Should().BeEquivalentTo(new[] { "claude", "copilot", "codex" });
     }
 
     [Fact]
@@ -222,21 +225,24 @@ public class TerminalSettingsTests : IDisposable
     }
 
     [Fact]
-    public void Load_NoFile_AllOnExceptCodex()
+    public void Load_NoFile_AllThreeCliDefaultOn()
     {
+        // v4.2.1: Codex now defaults-on alongside claude + copilot. First-run
+        // banner explains the user-global config write.
         var settings = TerminalSettings.Load(tmpDir);
         settings.SkillsEnabled.Should().BeTrue();
-        settings.SkillClients.Should().BeEquivalentTo(new[] { "claude", "copilot" });
-        settings.SkillClients.Should().NotContain("codex");
+        settings.SkillClients.Should().BeEquivalentTo(new[] { "claude", "copilot", "codex" });
     }
 
     [Fact]
     public void Load_VeryOldFileMissingSkillKeys_DefaultsToOnViaMigration()
     {
         // A 1.3.x settings file without skillsEnabled/skillClients keys.
-        // Null-coalescing in Load() picks up the new v4.1.0 defaults for those
-        // keys (this is acceptable per the spec — the in-memory representation
-        // says "skills on" but disk is unchanged until next Save).
+        // Null-coalescing in Load() picks up the current Defaults() values for
+        // those keys (acceptable per the spec — the in-memory representation
+        // says "skills on" but disk is unchanged until next Save). v4.2.1
+        // updated the Defaults() to include codex, so a missing-keys migration
+        // surfaces all three CLIs.
         var resourcesDir = Path.Combine(tmpDir, "resources");
         Directory.CreateDirectory(resourcesDir);
         File.WriteAllText(Path.Combine(resourcesDir, "terminal-settings.json"), """
@@ -260,7 +266,7 @@ public class TerminalSettingsTests : IDisposable
         var settings = TerminalSettings.Load(tmpDir);
         settings.McpEnabled.Should().BeTrue();
         settings.SkillsEnabled.Should().BeTrue();
-        settings.SkillClients.Should().BeEquivalentTo(new[] { "claude", "copilot" });
+        settings.SkillClients.Should().BeEquivalentTo(new[] { "claude", "copilot", "codex" });
     }
 
     [Fact]
@@ -314,11 +320,13 @@ public class TerminalSettingsTests : IDisposable
     }
 
     [Fact]
-    public void Defaults_DoesNotIncludeCodex()
+    public void Defaults_IncludesAllThreeCli()
     {
+        // v4.2.1: Codex flipped from opt-in to default-on. Surfaced via
+        // first-run banner in TerminalPaneExtension.BuildAdvisoryNotices.
         var d = TerminalSettings.Defaults();
-        d.McpClients.Should().NotContain("codex");
-        d.SkillClients.Should().NotContain("codex");
+        d.McpClients.Should().BeEquivalentTo(new[] { "claude", "copilot", "codex" });
+        d.SkillClients.Should().BeEquivalentTo(new[] { "claude", "copilot", "codex" });
     }
 
     [Fact]

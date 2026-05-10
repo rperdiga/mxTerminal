@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 
 namespace Terminal.Maia;
 
-public sealed class CdpInjectedTransport : IMaiaTransport
+public sealed class CdpInjectedTransport : IMaiaTransport, IMaiaIntrospection
 {
     public string Name => "cdp_injected";
     public int Tier => 1;
@@ -163,6 +163,66 @@ public sealed class CdpInjectedTransport : IMaiaTransport
                 ct: ct);
         }
         catch (TransportUnavailable) { /* nothing to clear */ }
+    }
+
+    // ---- IMaiaIntrospection -----------------------------------------------
+    //
+    // v4.2.1 read-only DOM probes + one mutation command, all routed through
+    // window.__maiaBridge methods added in maia_agent.js v2. Each method
+    // EnsureAgentAsync's first so a re-injection scenario lights the bridge
+    // back up before the actual call.
+
+    public async Task<BusyResult> BusyAsync(CancellationToken ct)
+    {
+        var cdp = clientFactory();
+        await cdp.ConnectMaiaAsync(ct);
+        await EnsureAgentAsync(cdp, ct);
+        var node = await cdp.EvaluateAsync(
+            "if (!window.__maiaBridge || !window.__maiaBridge.busy) return { __nobridge: true }; return window.__maiaBridge.busy();",
+            ct: ct);
+        if (node is not JsonObject obj)
+            throw new TransportUnavailable($"busy() returned non-object: {node?.GetType().Name ?? "<null>"}");
+        if (obj["__nobridge"]?.GetValue<bool>() == true)
+            throw new TransportUnavailable("__maiaBridge.busy not present after EnsureAgent — agent install or re-injection failed.");
+        var busy = obj["busy"]?.GetValue<bool>() ?? false;
+        var reason = obj["reason"]?.GetValue<string>() ?? "unknown";
+        var idle = obj["idle_for_ms"]?.GetValue<long>() ?? 0;
+        var spinner = obj["spinner"]?.GetValue<string>();
+        return new BusyResult(busy, reason, idle, spinner);
+    }
+
+    public async Task<NewChatResult> NewChatAsync(CancellationToken ct)
+    {
+        var cdp = clientFactory();
+        await cdp.ConnectMaiaAsync(ct);
+        await EnsureAgentAsync(cdp, ct);
+        var node = await cdp.EvaluateAsync(
+            "if (!window.__maiaBridge || !window.__maiaBridge.newChat) return { ok: false, error: 'no-bridge' }; return window.__maiaBridge.newChat();",
+            ct: ct);
+        if (node is not JsonObject obj)
+            return new NewChatResult(false, Error: "non-object-result");
+        var ok = obj["ok"]?.GetValue<bool>() ?? false;
+        if (!ok)
+        {
+            var error = obj["error"]?.GetValue<string>() ?? "unknown";
+            return new NewChatResult(false, Error: error);
+        }
+        var startedAtMs = obj["started_at"]?.GetValue<long>() ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        return new NewChatResult(true, StartedAt: DateTimeOffset.FromUnixTimeMilliseconds(startedAtMs));
+    }
+
+    public async Task ScanAsync(CancellationToken ct)
+    {
+        var cdp = clientFactory();
+        // No EnsureAgent here — Scan is called from the heartbeat which runs
+        // continuously; if the bridge isn't installed yet (cold start before
+        // the first user-driven call), a quick no-op JS check is fine. We
+        // explicitly do NOT throw on missing bridge, since heartbeat-driven
+        // scans firing before the bridge is up is a normal startup case.
+        await cdp.ConnectMaiaAsync(ct);
+        await cdp.EvaluateAsync(
+            "if (window.__maiaBridge && window.__maiaBridge.scan) { window.__maiaBridge.scan(); } return true;",
+            ct: ct);
     }
 
     private static async Task EnsureAgentAsync(ICdpClient cdp, CancellationToken ct)

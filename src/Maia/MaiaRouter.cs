@@ -18,6 +18,48 @@ public sealed class MaiaRouter
 
     public IReadOnlyList<IMaiaTransport> Transports => transports;
 
+    /// <summary>
+    /// First active introspection-capable transport, or <c>null</c> if none
+    /// of the currently-available transports implement <see cref="IMaiaIntrospection"/>.
+    /// Used by <see cref="MaiaActions.BusyAsync"/> / <see cref="MaiaActions.NewChatAsync"/>.
+    /// </summary>
+    public IMaiaIntrospection? GetIntrospection()
+    {
+        // Prefer the first ACTIVE introspection-capable transport — same
+        // tier-priority order ActiveSnapshot uses for routed sends. Falls
+        // through to the lowest-tier introspection transport even when the
+        // probe hasn't run yet (early-call edge case during action-server
+        // startup); calling code can still get a TransportUnavailable on
+        // the actual JS eval if discovery fails.
+        var active = ActiveSnapshot();
+        var introspection = active.OfType<IMaiaIntrospection>().FirstOrDefault();
+        if (introspection is not null) return introspection;
+        return transports.OfType<IMaiaIntrospection>().FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Bridge-state snapshot for the <c>maia__health</c> tool — no traffic
+    /// to Maia, just a read of the router's bookkeeping. The caller can
+    /// compose this with <see cref="MaiaActions.BusyAsync"/> /
+    /// <see cref="MaiaActions.PingAsync"/> to build a full health response.
+    /// </summary>
+    public RouterHealthSnapshot GetHealthSnapshot()
+    {
+        lock (gate)
+        {
+            var rows = transports.Select(t =>
+            {
+                if (availability.TryGetValue(t.Name, out var h))
+                    return new TransportHealth(t.Name, t.Tier, h.Available, h.LatencyMs, h.Reason);
+                return new TransportHealth(t.Name, t.Tier, false, 0.0, "unprobed");
+            }).ToArray();
+            DateTimeOffset? probeAt = lastProbeAt == DateTime.MinValue
+                ? null
+                : new DateTimeOffset(lastProbeAt, TimeSpan.Zero);
+            return new RouterHealthSnapshot(probeAt, rows, handleToTransport.Count, forced);
+        }
+    }
+
     public async Task ProbeAllAsync(CancellationToken ct)
     {
         var probes = await Task.WhenAll(transports.Select(t => t.HealthCheckAsync(ct)));
