@@ -59,6 +59,34 @@ public class ClaudeMdManagerTests : IDisposable
         body.Should().Contain($"@.claude/rules/{RulesInstaller.CanonicalFileName}");
     }
 
+    // v4.2.0: rules file was split into canonical + 2 sibling concord-*.md
+    // files to stay under Claude Code's 40k-char per-file performance threshold.
+    // The CLAUDE.md managed block must @-import all of them, canonical first
+    // followed by siblings in sorted order, then project/ files.
+    [Fact]
+    public void Apply_CanonicalPlusSiblingConcordFiles_ImportsAllInOrder()
+    {
+        SeedCanonicalRule();
+        Directory.CreateDirectory(rulesDir);
+        File.WriteAllText(Path.Combine(rulesDir, "concord-pages-and-themes.md"), "# pages\n");
+        File.WriteAllText(Path.Combine(rulesDir, "concord-model-discipline.md"), "# model\n");
+        // User-authored sibling that does NOT start with concord- — must NOT
+        // be auto-imported (only the project/ folder is for user content).
+        File.WriteAllText(Path.Combine(rulesDir, "my-custom.md"), "# custom\n");
+
+        NewManager().Apply();
+
+        var body = File.ReadAllText(ClaudeMdPath());
+        var canonicalIdx = body.IndexOf($"@.claude/rules/{RulesInstaller.CanonicalFileName}");
+        var modelIdx = body.IndexOf("@.claude/rules/concord-model-discipline.md");
+        var pagesIdx = body.IndexOf("@.claude/rules/concord-pages-and-themes.md");
+        canonicalIdx.Should().BeGreaterOrEqualTo(0, "canonical present");
+        modelIdx.Should().BeGreaterThan(canonicalIdx, "siblings follow canonical");
+        pagesIdx.Should().BeGreaterThan(modelIdx, "siblings sorted by name");
+        body.Should().NotContain("@.claude/rules/my-custom.md",
+            "non-concord-prefixed top-level files are NOT auto-imported (user content lives in project/)");
+    }
+
     [Fact]
     public void Apply_CanonicalPlusProjectFiles_ImportsBothInOrder()
     {
