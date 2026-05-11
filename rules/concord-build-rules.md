@@ -136,6 +136,16 @@ Verification at the end of a build is necessary but not sufficient. Studio Pro k
 - **Cadence is "after each batch" — not "after each individual write" (would thrash) and not "at end of build" (loses work on crash).** Pick natural seams: module created → save+refresh; page authored → save+refresh; microflow wired → save+refresh; domain change committed → save+refresh.
 - **Read-back (§4) and error-checks happen *after* the save+refresh of the same batch**, not before — so the read hits a consistent on-disk + in-memory state.
 
+#### Time-based save fallback for visual-polish phases
+
+Batch-based cadence works well during build phases (each new module / page / microflow creation is a natural batch boundary). **It DOES NOT work during pure-polish phases** — re-running `pg_write_page` against existing pages, tweaking theme variables, iterating on visual fidelity through Maia. Those phases iterate page → check → iterate without ever crossing a batch boundary, so `save_all` is never triggered.
+
+**Hard rule: call `mcp__concord-mcp__save_all` + `refresh_project` at least every 15 minutes of continuous work, OR every 10 consecutive `pg_*` / `ped_update_document` calls without an intervening save — whichever comes first.** The dual trigger gives you both a wall-clock fallback and a deterministic count-based fallback that doesn't require time-tracking between tool calls. Flush on the next clean turn boundary once either threshold is reached. Cheap operation (one Ctrl+S to Studio Pro); the cost of skipping it is hard-crash-loses-an-hour-of-work.
+
+**Empirical (CocktailDemo34, 2026-05-10):** Codex iterated on visual-polish for ~54 minutes without calling `save_all`, then the user's machine crashed 3 minutes after a belatedly-fired save. The crash happened to fall AFTER the save, so the build survived. Had the crash fired 4 minutes earlier, 54 minutes of polish work would have been lost. v4.2.0/v4.2.1's hard-crash resilience covers extension + bridge state; it does NOT cover unflushed model state. The 15-minute fallback closes the gap.
+
+**Sane heuristic:** if your current iteration loop is going to make ≥3 more `pg_write_page` calls without hitting a batch boundary, save NOW. The next save will land on a natural batch boundary anyway.
+
 ---
 
 ## 13. Plan-before-write for non-trivial builds
