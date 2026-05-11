@@ -159,10 +159,30 @@ agent on Windows ([claude-code #49337](https://github.com/anthropics/claude-code
 4. **Size-tiered UX** — notice ≥ 4 KB, warn + duration estimate
    ≥ 50 KB, refuse with "save to file" guidance ≥ 1 MB.
 
-## What's new in 4.2.1
+## What's new in 4.2.2
 
 See [CHANGELOG.md](https://github.com/rperdiga/mxTerminal/blob/main/CHANGELOG.md)
 for the complete history.
+
+**4.2.2 — TOML hygiene + crash-safety cadence.** Two real-world fixes and
+two rule sharpenings, all driven by the first production Codex build on
+v4.2.1's three-CLI rules paths. (1) Codex 0.128+ refused to start with
+`Error loading config.toml: invalid transport` for anyone who had upgraded
+Concord across the v1.3.0 server-rename with Codex enabled — orphan
+`[mcp_servers.<old>.tools.<X>]` sub-sections survived parent removal in
+prior versions of `McpTomlConfigurator.RemoveNamed`. v4.2.2 strips parent +
+all children in one pass. Concord Save on first open after upgrade
+resolves it automatically; no manual config-file surgery needed. (2) Codex's
+"External agent config detected" prompt now suppressed for Concord-managed
+projects via a per-project stamp in `~/.codex/config.toml`. Surgical:
+home-level and unrelated projects untouched. (3) §2 Maia recovery ladder
+sharpened: `maia__reset` is for recovering FROM observed failure, not for
+prophylactic bridge hygiene. Empirically: Codex called reset 51 times in
+two sessions despite zero bridge disconnects. (4) §12 verification gate
+adds a time-based `save_all` fallback (15 minutes) for visual-polish
+phases that don't cross natural batch boundaries — closes the crash-safety
+gap that a 2026-05-10 machine crash narrowly avoided losing 54 minutes of
+work on.
 
 **4.2.1 — bridge introspection toolkit + production-iteration rules.**
 Four new Maia introspection MCP tools (`maia__busy`, `maia__ping`,

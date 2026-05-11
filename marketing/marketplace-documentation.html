@@ -107,8 +107,8 @@
 <ul>
   <li><strong>Per-CLI rules folders</strong> — <code>&lt;project&gt;/.claude/rules/</code> for Claude Code, <code>&lt;project&gt;/.codex/rules/</code> for Codex, <code>&lt;project&gt;/.github/rules/</code> for Copilot CLI. Each ticked CLI gets its own folder with the same <code>concord-*.md</code> content. Three files per folder:
     <ul>
-      <li><code>concord-build-rules.md</code> — core operational discipline. Closed tool hierarchy, persistence + recovery ladders, <strong>task-scoped Maia bridge failure cap (v4.2.1)</strong>, <strong>errors-before-<code>run_app</code> hard gate (v4.2.1)</strong>, <strong>Maia-as-page-fixer tiebreaker (v4.2.1)</strong>, three-part verification gate, plan-before-write for non-trivial builds, persisting learnings during a build.</li>
-      <li><code>concord-pages-and-themes.md</code> — UI construction. Pages-via-Maia doctrine, soft-stop handoff catalog, <strong>seed-data self-service-button pattern (codified in v4.2.1)</strong>, layout-first for branded apps, sibling-theme-module + Atlas pattern, <strong>§2 recovery ladder with introspection-tool steps (v4.2.1)</strong>.</li>
+      <li><code>concord-build-rules.md</code> — core operational discipline. Closed tool hierarchy, persistence + recovery ladders, <strong>task-scoped Maia bridge failure cap (v4.2.1)</strong>, <strong>errors-before-<code>run_app</code> hard gate (v4.2.1)</strong>, <strong>Maia-as-page-fixer tiebreaker (v4.2.1)</strong>, three-part verification gate with <strong>time-based <code>save_all</code> cadence — 15 min OR every 10 consecutive <code>pg_*</code> calls (v4.2.2)</strong>, plan-before-write for non-trivial builds, persisting learnings during a build.</li>
+      <li><code>concord-pages-and-themes.md</code> — UI construction. Pages-via-Maia doctrine, soft-stop handoff catalog, <strong>seed-data self-service-button pattern (codified in v4.2.1)</strong>, layout-first for branded apps, sibling-theme-module + Atlas pattern, <strong>§2 recovery ladder with introspection-tool steps (v4.2.1)</strong> + <strong>sharpened "what is NOT a failure" trigger language (v4.2.2)</strong> so the agent doesn't fire <code>maia__reset</code> on benign diagnostic responses.</li>
       <li><code>concord-model-discipline.md</code> — <code>ped_*</code> rules, update-operation traps, named failure modes (orphan pages, shell microflows, ActionButton wiring trap, letter-not-spirit compliance, end-of-build "manual steps required" punt-lists, read-loop anti-pattern), new-project-equals-new-module discipline.</li>
     </ul>
   </li>
@@ -191,6 +191,7 @@
   <li><code>&lt;project&gt;/CLAUDE.md</code> — managed <code>&lt;!-- BEGIN CONCORD MANAGED --&gt;</code> block at project root that <code>@</code>-imports all <code>concord-*.md</code> rules files plus user-authored <code>project/*.md</code>; content outside the fence preserved verbatim <em>(new in 4.1.4)</em></li>
   <li><code>&lt;project&gt;/AGENTS.md</code> — same managed block for Codex <em>(new in 4.2.1)</em></li>
   <li><code>&lt;project&gt;/.github/copilot-instructions.md</code> — same managed block for Copilot CLI <em>(new in 4.2.1)</em></li>
+  <li><code>~/.codex/config.toml</code> <em>(user-global, only when Codex is ticked)</em> — Codex MCP server registrations + per-project migration-prompt suppression <em>(suppression added in 4.2.2, parent + child sub-section cleanup hardened in 4.2.2)</em></li>
   <li><code>&lt;project&gt;/resources/terminal-settings.json</code> — Concord's settings + version stamp</li>
   <li><code>&lt;project&gt;/resources/terminal-state.json</code> — tab-restore state</li>
   <li><code>&lt;project&gt;/resources/terminal.log</code> — diagnostic log (lifecycle, MCP probes, paste diagnostics — never clipboard contents)</li>

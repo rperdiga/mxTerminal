@@ -84,7 +84,7 @@
     </tr>
     <tr>
       <td><strong>Auto-wired CLI configs</strong></td>
-      <td><code>.mcp.json</code> (Claude Code + Copilot CLI) and <code>~/.codex/config.toml</code> (Codex) point at both MCP servers — all three CLIs default-on as of v4.2.1, with a first-run banner explaining the user-global Codex config write</td>
+      <td><code>.mcp.json</code> (Claude Code + Copilot CLI) and <code>~/.codex/config.toml</code> (Codex) point at both MCP servers — all three CLIs default-on as of v4.2.1, with a first-run banner explaining the user-global Codex config write. <strong>v4.2.2:</strong> Codex <code>config.toml</code> hygiene is automatic — orphan <code>tools.*</code> sub-sections from pre-v1.3.0 migrations are cleaned up on Save, and Codex's <em>"External agent config detected"</em> prompt is suppressed for Concord-managed projects</td>
     </tr>
   </tbody>
 </table>

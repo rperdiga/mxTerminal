@@ -1,5 +1,31 @@
 # Changelog
 
+## 4.2.2 — 2026-05-10
+
+### Fixed
+
+- **HARD-BLOCK: Codex 0.128+ refused to start after Concord v1.3.0 migration.** `McpTomlConfigurator.RemoveNamed` only stripped the parent `[mcp_servers.<name>]` section, leaving orphan `[mcp_servers.<name>.tools.<X>]` child sub-sections behind. Older Codex tolerated these orphans; Codex 0.128+ validates the structure and refuses to start with `Error loading config.toml: invalid transport in mcp_servers.<name>`. Surfaced 2026-05-10 on the first production Codex run using v4.2.1's defaults-on Codex feature — a pre-v1.3.0 Concord install + Codex enabled = guaranteed hard-block. v4.2.2's `RemoveNamed` now strips the parent AND all child sub-sections in a single pass, including orphans where the parent was already removed by an earlier failed migration. Same fix applies to `RemoveActions`'s `LegacyActionsServerName` cleanup. Affected users: anyone who upgraded Concord across the v1.3.0 rename AND had Codex ticked when the rename ran. **One-click recovery via Concord Save now resolves it automatically; no manual `~/.codex/config.toml` surgery needed.**
+
+### Added
+
+- **Codex migration-prompt suppression for Concord-managed projects.** Codex 0.128+ shows an *"External agent config detected"* prompt on first entry to any project — offering to migrate Claude Code MCP servers, subagents, plugins, and recent sessions across. For users who installed Concord, the prompt is noise — Codex is already configured. v4.2.2 writes a per-project stamp under `[notice.external_config_migration_prompts.project_last_prompted_at]` with a far-future unix epoch (4070908800, year 2099) when Concord wires Codex for a project. Surgical: only stamps the project Concord is currently applying to; does not touch the home-level prompt; does not flip the `[features] external_migration` master toggle. Idempotent: re-application no-ops when the stamp is already future-dated.
+
+### Changed (rules)
+
+- **§2 Maia recovery ladder — sharpened "what is NOT a failure".** Codex's first production run called `maia__reset` 51 times across two sessions despite zero actual bridge disconnects — defensive-pessimism after benign `maia__health` / `maia__busy` responses. v4.2.2's rule explicitly lists which diagnostic shapes are SUCCESS, not failure: `maia__health` returning `available: true` for any transport, `maia__busy` reporting `{busy: true}`, `maia__ping` with non-zero `latency_ms`, `maia__status` with `streaming: true` or `lost: true`. **`maia__reset` is for recovering FROM observed failure, not for prophylactic bridge hygiene.**
+- **§12 Verification — time-based `save_all` fallback (15 minutes).** v4.2.1's "save_all + refresh_project after each batch" cadence works during build phases but fails during pure visual-polish phases (re-running `pg_write_page` against existing pages, tweaking theme variables) — no batch boundaries means `save_all` is never triggered. CocktailDemo34 (2026-05-10) drifted 54 minutes without a save before a machine crash; the build survived only because Codex happened to save 3 minutes before the crash. v4.2.2's rule adds an explicit time-based trigger: **call `save_all` + `refresh_project` at least every 15 minutes of continuous work, even when no logical batch has completed.** Closes the crash-safety gap on long polish loops.
+
+### Tests
+
+- `McpTomlConfiguratorTests` +9: orphan-child-strip on legacy server with no parent (Neo's exact repro); parent+children stripped together for both legacy and current sections; primary-server child strip; **name-disambiguation regression** (removing "mendix-studio-pro" must NOT strip "mendix-studio-pro-actions" children); migration-prompt creation, existing-table append, existing-entry update, already-future no-op, null-empty no-op.
+- Full suite: 241/241 pass (+3 live-Maia skips when Studio Pro isn't running). v4.2.1 was 232; v4.2.2 adds 9 net new passing tests.
+
+### Notes
+
+- **Empirical baseline.** Every change in v4.2.2 traces to a specific observation from the 2026-05-10 CocktailDemo34 Codex production run — the first end-to-end build using v4.2.1's three-CLI rules paths. The Codex run validated v4.2.1's headline claim (Codex consumes `.codex/rules/concord-*.md` via `AGENTS.md` `@`-imports exactly as Claude Code consumes its parallel set) AND surfaced four follow-up gaps captured into v4.2.2.
+- **`McpTomlConfigurator` is now safer.** Two regression hazards explicitly tested: removing a server with similar-named neighbors (`mendix-studio-pro` vs. `mendix-studio-pro-actions`) does not cross-strip; orphan child sub-sections without a parent are still cleaned up.
+- **Deferred to v4.2.3 / later:** `.codex/skills` vs. `.agents/skills` path investigation (Codex's migrator wants the latter; needs empirical verification before changing Concord's install path); Playwright MCP design decision (3 options on the table, no consensus yet); optional Codex autonomous-mode Settings checkbox (`approval_policy = "never"` + `sandbox_mode = "workspace-write"` — requires UI work).
+
 ## 4.2.1 — 2026-05-10
 
 ### Added

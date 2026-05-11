@@ -45,13 +45,24 @@ The `pg_*` tools live inside Maia and are not exposed to your tool surface from 
 
 ### When any Maia bridge call returns a non-success response — recovery ladder
 
-The bridge probe and the bridge itself fail in several distinct ways, and the same recovery applies to all of them. **Trigger this ladder on any non-success response from `maia__status`, `maia__wait`, `maia__send`, `maia__ask`, or `maia__reset`** — including but not limited to:
+The bridge probe and the bridge itself fail in several distinct ways, and the same recovery applies to all of them. **Trigger this ladder ONLY on an actual error response from `maia__status`, `maia__wait`, `maia__send`, `maia__ask`, or `maia__reset`** — including but not limited to:
 
 - *"All Maia transports unavailable. Maia panel not visible."* (the classic — DOM container not yet rendered, even when the panel **is** open)
 - *"Unknown handle: <name>"* (handle map dropped — the bridge lost the named handle you asked it to wait on)
 - *"poll() returned unexpected shape: ..."* (response parser failure — common during layout-edit operations, see §10)
 - *"IOException: Unable to write data ..."* (CDP connection drop — bridge lost its socket to the Studio Pro CEF instance)
 - Any other transport / connection / shape error returned by the bridge
+
+**What is NOT a failure — do NOT trigger this ladder on these.** v4.2.1's introspection tools (`maia__health`, `maia__busy`, `maia__ping`) return DIAGNOSTIC data, not failure signals. Do not pattern-match on field contents and run `maia__reset` defensively. Specifically:
+
+- **`maia__health` returning a snapshot with `available: true` for at least one transport is SUCCESS.** Latency variance (e.g. `last_latency_ms: 320` instead of `120`), `reason` string content, and `active_bindings > 0` are diagnostic information, not symptoms.
+- **`maia__busy` returning `{busy: true, reason: 'spinner-visible'}` is SUCCESS.** It correctly tells you Maia is generating; the right next move is to wait (per §2's task-boundary new-chat rule), NOT to reset the bridge.
+- **`maia__ping` returning `{alive: true, latency_ms: ...}` is SUCCESS** regardless of latency.
+- **`maia__ping` returning `{alive: false, timed_out: true}` IS a failure** — Maia didn't respond within the timeout. Run the ladder.
+- **`maia__status` returning `{streaming: true}` is SUCCESS** — Maia is mid-response.
+- **`maia__status` returning `{lost: true}`** (v4.2.0 lost-handle discriminator) is NOT a bridge failure — it's a structured signal to re-ask. Re-ask the original prompt; don't run the recovery ladder.
+
+**Empirical baseline (CocktailDemo34, 2026-05-10):** Codex called `maia__reset` 51 times across two sessions despite ZERO actual bridge disconnects. That's defensive-pessimism after ambiguous-but-actually-fine `maia__health` / `maia__busy` responses. `maia__reset` clears bridge transports and forces a fresh probe + re-injection; calling it prophylactically against a healthy bridge wastes time and may interrupt in-flight work. **`maia__reset` is for recovering FROM observed failure, not for prophylactic bridge hygiene.**
 
 Recovery, in order:
 
