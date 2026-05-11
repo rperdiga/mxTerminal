@@ -67,8 +67,8 @@ Concord installs these per-CLI when you tick **Settings → Skills → Claude Co
 Alongside the skill packs, Concord installs a project-level rules set that auto-loads into every CLI session running inside the project:
 
 - **`<project>/.claude/rules/`** for Claude Code, **`<project>/.codex/rules/`** for Codex, **`<project>/.github/rules/`** for Copilot CLI — each ticked CLI gets its own rules folder with the same `concord-*.md` content. Three files:
-  - `concord-build-rules.md` — core operational discipline. Closed tool hierarchy, persistence + recovery ladders, **task-scoped Maia bridge failure cap (v4.2.1)**, **errors-before-`run_app` hard gate (v4.2.1)**, **Maia-as-page-fixer tiebreaker (v4.2.1)**, three-part verification gate, plan-before-write for non-trivial builds, persisting learnings during a build.
-  - `concord-pages-and-themes.md` — UI construction. Pages-via-Maia doctrine, soft-stop handoff catalog, **seed-data self-service-button pattern (codified in v4.2.1)**, layout-first for branded apps, sibling-theme-module + Atlas pattern, **§2 recovery ladder with introspection-tool steps (v4.2.1)**.
+  - `concord-build-rules.md` — core operational discipline. Closed tool hierarchy, persistence + recovery ladders, **task-scoped Maia bridge failure cap (v4.2.1)**, **errors-before-`run_app` hard gate (v4.2.1)**, **Maia-as-page-fixer tiebreaker (v4.2.1)**, three-part verification gate with **time-based `save_all` cadence — 15 min OR every 10 consecutive `pg_*` calls (v4.2.2)**, plan-before-write for non-trivial builds, persisting learnings during a build.
+  - `concord-pages-and-themes.md` — UI construction. Pages-via-Maia doctrine, soft-stop handoff catalog, **seed-data self-service-button pattern (codified in v4.2.1)**, layout-first for branded apps, sibling-theme-module + Atlas pattern, **§2 recovery ladder with introspection-tool steps (v4.2.1)** + **sharpened "what is NOT a failure" trigger language (v4.2.2)** so the agent doesn't fire `maia__reset` on benign diagnostic responses.
   - `concord-model-discipline.md` — `ped_*` rules, update-operation traps, named failure modes (orphan pages, shell microflows, ActionButton wiring trap, letter-not-spirit compliance, end-of-build "manual steps required" punt-lists, read-loop anti-pattern), new-project-equals-new-module discipline.
 - **`<project>/<rules-folder>/project/`** — your space for project-specific rules: domain glossary, design-system tokens, integration patterns, anything you want every CLI session in this project to load on startup. Pre-created on first install with a README stub; never overwritten thereafter. Survives every Concord upgrade.
 - **Managed import block** in `<project>/CLAUDE.md` (Claude), `<project>/AGENTS.md` (Codex), and `<project>/.github/copilot-instructions.md` (Copilot CLI). Each is created or refreshed with a fenced `<!-- BEGIN CONCORD MANAGED -->` ... `<!-- END CONCORD MANAGED -->` block that `@`-imports the `concord-*.md` rules plus every `.md` in the per-CLI `project/` folder. Anything you write outside the fence is preserved verbatim across Saves and Concord upgrades.
@@ -138,6 +138,10 @@ Project-local writes:
 - `<project>/CLAUDE.md` — managed `<!-- BEGIN CONCORD MANAGED -->` block at project root that `@`-imports all `concord-*.md` rules files plus user-authored `project/*.md`; content outside the fence preserved verbatim *(new in 4.1.4)*
 - `<project>/AGENTS.md` — same managed block for Codex *(new in 4.2.1)*
 - `<project>/.github/copilot-instructions.md` — same managed block for Copilot CLI *(new in 4.2.1)*
+
+User-global writes (only when you opt in via Codex):
+
+- `~/.codex/config.toml` — Codex MCP server registrations + per-project migration-prompt suppression *(suppression added in 4.2.2, parent + child sub-section cleanup hardened in 4.2.2)*
 - `<project>/resources/terminal-settings.json` — Concord's settings + version stamp
 - `<project>/resources/terminal-state.json` — tab-restore state
 - `<project>/resources/terminal.log` — diagnostic log (lifecycle, MCP probes, paste diagnostics — never clipboard contents)

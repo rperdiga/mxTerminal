@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Concord 4.2.1 — Release Notes (paste this)</title>
+<title>Concord 4.2.2 — Release Notes (paste this)</title>
 <style>
   body {
     font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
@@ -28,35 +28,35 @@
   .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
   .badge-new { background: #E8F4EA; color: #2E7D32; }
   .badge-fix { background: #FFF3E0; color: #E65100; }
-  .badge-mac { background: #E3F2FD; color: #1565C0; }
   .badge-rules { background: #EDE7F6; color: #4527A0; }
+  .badge-block { background: #FFEBEE; color: #B71C1C; }
 </style>
 </head>
 <body>
 
 <div class="copy-instruction">
-  <strong>How to use this file:</strong> open in a browser → select all (Ctrl+A) → copy (Ctrl+C) → paste into the Marketplace <strong>Release Notes</strong> rich-text field for the v4.2.1 release. The headings, lists, and badges will survive the paste. Then delete this yellow box and the title above (which are not part of the actual content).
+  <strong>How to use this file:</strong> open in a browser → select all (Ctrl+A) → copy (Ctrl+C) → paste into the Marketplace <strong>Release Notes</strong> rich-text field for the v4.2.2 release. The headings, lists, and badges will survive the paste. Then delete this yellow box and the title above (which are not part of the actual content).
 </div>
 
-<h1>Concord 4.2.1 — Release Notes (paste this)</h1>
+<h1>Concord 4.2.2 — Release Notes (paste this)</h1>
 
 <hr>
 
-<h1>Concord 4.2.1</h1>
+<h1>Concord 4.2.2</h1>
 
-<p>The headline of this release is <strong>bridge introspection + rules iteration from production validation</strong>. v4.2.0 made the Maia bridge reliable; v4.2.1 makes the agent's discipline equally reliable and gives the CLI a small toolkit for asking the bridge "are you alive? is Maia generating? what's your state?" without burning a real call. Plus rules edits driven by the 2026-05-10 production-validation run that exposed gaps in the v4.1.5 ruleset.</p>
+<p>The headline of this release is <strong>TOML hygiene + crash-safety cadence</strong>. Two real-world bugs and two rule sharpenings — every change driven by the first production Codex build using v4.2.1's three-CLI rules paths. v4.2.2 closes the gaps that build surfaced.</p>
 
-<p>Four new MCP tools — <code>maia__busy</code>, <code>maia__ping</code>, <code>maia__health</code>, <code>maia__new_chat</code>. A task-scoped Maia-bridge failure cap (was raw count, fired prematurely on three unrelated transient errors). An errors-before-<code>run_app</code> hard gate. A Maia-as-page-fixer tiebreaker before user homework. The seed-data self-service-button pattern codified after landing in production. Codex + Copilot rules paths lit up alongside Claude. Codex defaults-on with a first-run banner. All three v4.2.0-deferred carry-overs (singleton dispose on toggle, WebSocket test-seam, JS-side scan throttle) ship in this release.</p>
+<p>If you upgraded Concord from before v1.3.0 with Codex enabled, this release fixes the <code>Error loading config.toml: invalid transport</code> hard-block that prevented Codex from starting. If Codex's <em>"External agent config detected"</em> prompt has been pestering you on every project, that's gone too for Concord-managed projects. Plus two surgical rule edits: <code>maia__reset</code> is now correctly scoped to actual failures (not benign diagnostic responses), and <code>save_all</code> has an explicit 15-minute fallback for visual-polish phases where natural batch boundaries don't exist.</p>
 
 <h2>What you'll experience</h2>
 
-<p>If you upgrade an existing 4.2.0 install: <strong>open the Concord pane once after upgrading.</strong> Concord's MCP server starts as before; the bundled skill packs and rules refresh automatically. You'll see a one-line notice if Codex was previously unticked and v4.2.1's default-on behavior re-enables it: <em>"Codex MCP wires <code>~/.codex/config.toml</code> (user-global, outside the project tree). Untick Codex in Settings if you'd rather not."</em> Untick if you prefer; otherwise it's done. Your project's <code>CLAUDE.md</code> managed block is regenerated; if you ticked Codex or Copilot, new managed blocks land in <code>AGENTS.md</code> and <code>.github/copilot-instructions.md</code> respectively.</p>
+<p>If you upgrade an existing 4.2.1 install: <strong>open the Concord pane once after upgrading.</strong> The orphan-tools cleanup runs as part of Concord's normal Save cycle on the upgrade-apply path — no manual config-file surgery needed even if you previously had to edit <code>~/.codex/config.toml</code> by hand. Same goes for the migration-prompt suppression: Concord stamps the per-project entry on first Save after upgrading.</p>
 
-<p>If you're a CLI agent author or you write rules: the always-loaded build rules at <code>&lt;project&gt;/.claude/rules/</code> have four targeted edits this release — see the table below. The rules are now also installed in parallel <code>.codex/rules/</code> and <code>.github/rules/</code> folders when those CLIs are ticked.</p>
+<p>If you're a CLI agent using v4.2.1's rules: the two rule clarifications (§2 maia__reset trigger sharpened, §12 time-based save_all) land automatically when Concord refreshes the always-loaded rules on first Save after upgrade.</p>
 
-<p>If you're using Maia from a long Claude Code session: the four new <code>maia__*</code> introspection tools are available immediately. <code>maia__health</code> is the recommended first call when something feels off — it reports bridge state without sending traffic to Maia.</p>
+<p>If you're installing fresh on v4.2.2: same flow as any prior release. Drop the .mxmodule into your Mendix project, restart Studio Pro, open the Concord pane. All the wiring lands automatically.</p>
 
-<h2>What's new in 4.2.1</h2>
+<h2>What's new in 4.2.2</h2>
 
 <table>
   <thead>
@@ -64,67 +64,27 @@
   </thead>
   <tbody>
     <tr>
-      <td><span class="badge badge-new">New</span> <code>maia__busy</code></td>
-      <td>Read-only DOM probe — "is Maia generating?". Returns <code>{busy, reason: 'spinner-visible' | 'recent-dom-mutation' | 'idle', idle_for_ms, spinner}</code>. No traffic to Maia. Use before <code>maia__new_chat</code> to avoid interrupting mid-stream.</td>
+      <td><span class="badge badge-block">Hard-block fix</span> Codex 0.128+ wouldn't start after v1.3.0 migration</td>
+      <td>Pre-v1.3.0 Concord wrote per-tool sub-sections under <code>[mcp_servers.mendix-studio-pro-actions]</code> to <code>~/.codex/config.toml</code>. v1.3.0+ renamed the section to <code>concord-mcp</code> but left the orphan <code>[mcp_servers.&lt;old&gt;.tools.&lt;X&gt;]</code> sub-sections behind. Older Codex tolerated this; Codex 0.128+ refuses to start with <em>"invalid transport in mcp_servers.mendix-studio-pro-actions"</em>. v4.2.2's <code>RemoveNamed</code> now strips parent + all child sub-sections in one pass, including orphans where the parent was removed by an earlier failed migration. Affected users: anyone who upgraded across the v1.3.0 rename with Codex enabled. Concord Save on first open after upgrade resolves it automatically.</td>
     </tr>
     <tr>
-      <td><span class="badge badge-new">New</span> <code>maia__ping</code></td>
-      <td>Cheap liveness probe. Sends <em>"ping"</em> with auto-sentinel, waits up to <code>timeout_sec</code> (default 5s), returns <code>{alive, latency_ms, response, timed_out}</code>. Reuses existing send/wait infrastructure including the v4.2.0 lost-handle discriminator. Use before expensive <code>maia__ask</code> calls when bridge health is uncertain — fail fast instead of burning a 60-second timeout.</td>
+      <td><span class="badge badge-new">New</span> Codex migration-prompt suppression for Concord-managed projects</td>
+      <td>Codex 0.128+ shows an <em>"External agent config detected"</em> prompt on first entry to any project — offering to migrate Claude Code MCP servers / subagents / plugins / sessions. For Concord users that prompt is noise: Codex is already configured by Concord. v4.2.2 stamps the project under <code>[notice.external_config_migration_prompts.project_last_prompted_at]</code> with a far-future unix epoch (year 2099) when Concord wires Codex. Surgical: only the project being applied to is stamped; home-level prompt and other projects are untouched. Idempotent: re-apply is a no-op when the stamp is already future-dated.</td>
     </tr>
     <tr>
-      <td><span class="badge badge-new">New</span> <code>maia__health</code></td>
-      <td>Bridge-state introspection without traffic to Maia. Returns per-transport availability + last latency + reason, last probe time, in-flight handle bindings, forced tier, plus an embedded <code>busy()</code> snapshot. One-call diagnostic before any recovery decision — answers "is it me, the bridge, or Maia?" without round-tripping anything.</td>
+      <td><span class="badge badge-rules">Rules</span> §2 Maia recovery ladder sharpened — <code>maia__reset</code> for actual failure only</td>
+      <td>v4.2.1's introspection toolkit (<code>maia__health</code>, <code>maia__busy</code>, <code>maia__ping</code>) returns diagnostic information that the agent was pattern-matching as failure. Codex's first production run called <code>maia__reset</code> 51 times across two sessions despite zero actual bridge disconnects. v4.2.2 rule explicitly lists which response shapes are SUCCESS (not failure): <code>maia__health</code> with <code>available: true</code> for any transport, <code>maia__busy</code> reporting <code>{busy: true}</code>, <code>maia__ping</code> with non-zero <code>latency_ms</code>, <code>maia__status</code> with <code>streaming: true</code> or <code>lost: true</code>. <strong><code>maia__reset</code> is for recovering FROM observed failure, not for prophylactic bridge hygiene.</strong></td>
     </tr>
     <tr>
-      <td><span class="badge badge-new">New</span> <code>maia__new_chat</code></td>
-      <td>Programmatic click of Maia's "New chat" button — wipes Maia's panel context. Used in the recovery ladder between <code>maia__reset</code> and user-handoff. Always preceded by <code>maia__busy</code> per the rule (interrupting mid-generation can corrupt Maia's state). Optional task-boundary use too: when the next prompt would not meaningfully reference the prior conversation, a fresh chat keeps Maia sharp.</td>
-    </tr>
-    <tr>
-      <td><span class="badge badge-rules">Rules</span> §3 task-scoped failure cap</td>
-      <td>Replaces v4.1.5's raw-count cap ("3 consecutive <code>maia__*</code> failures = STOP") with a task-scoped variant: count failures on the SAME logical operation. Three transient errors across three unrelated tasks is normal noise — v4.2.0's auto-reconnect handles each cleanly. Three failures on the same handle, prompt retry, or reset cycle without forward progress is genuinely stuck and should escalate. Production validation: the raw-count cap fired prematurely on the 2026-05-10 demo build and stopped an otherwise healthy run.</td>
-    </tr>
-    <tr>
-      <td><span class="badge badge-rules">Rules</span> §12 errors-before-<code>run_app</code> hard gate</td>
-      <td><code>run_app</code> is now gated by zero errors. Run <code>ped_check_errors</code> on every touched doc; if any has errors, do NOT call <code>run_app</code>. Fix at the model layer where errors are actionable; the runtime won't surface them usefully (they appear as runtime crashes, console spew, or pages that 500). Production validation: an agent looped <code>run_app</code> 19× against 2 unresolved errors before this rule existed.</td>
-    </tr>
-    <tr>
-      <td><span class="badge badge-rules">Rules</span> §3/§5 Maia-as-page-fixer tiebreaker</td>
-      <td>After a single <code>ped_update_document</code> page-fix doesn't resolve the errors, the rules now route the page through Maia for one more attempt before user homework. Mirrors the §2 "Maia owns pages" doctrine. Non-page docs (microflows, entities, view entities) stay on the §5 single-shot rule — Maia can't reliably edit those.</td>
-    </tr>
-    <tr>
-      <td><span class="badge badge-rules">Rules</span> §8 seed-data self-service button</td>
-      <td>Codifies the production-validated pattern: <code>ProjectManage</code> singleton entity + <code>NeedProjectSeedData</code> Boolean + a visibility-bound button on the home page + a Playwright self-click after <code>run_app</code>. Eliminates the <em>App ▸ Settings ▸ Runtime ▸ After Startup</em> soft-stop entirely — every clone build that needs seed data now has a self-contained autonomous path. Cross-references from §10 (layout-first) and §11 (theme module) so the agent finds it during clone-build planning.</td>
-    </tr>
-    <tr>
-      <td><span class="badge badge-rules">Rules</span> §2 recovery ladder updates</td>
-      <td>New step 1.5: agent-level <code>maia__health</code> liveness check — saves a wait window when the WebSocket is dead. New step 3.5: between <code>maia__reset</code> and the user-handoff escalation, wipe Maia's panel state via <code>maia__busy → wait-for-idle → maia__new_chat</code>. Optional task-boundary new-chat guidance for keeping Maia sharp in long sessions.</td>
-    </tr>
-    <tr>
-      <td><span class="badge badge-new">New</span> Codex + Copilot rules paths</td>
-      <td>Each ticked CLI now ships Concord rules + a managed-block import file with identical content. <code>claude → .claude/rules/ + CLAUDE.md</code>; <code>codex → .codex/rules/ + AGENTS.md</code>; <code>copilot → .github/rules/ + .github/copilot-instructions.md</code>. Same fenced-block markers, same orphan-cleanup, same atomic write. The deferred Phase 2 from v4.1.4 lights up now that the Claude path is production-proven.</td>
-    </tr>
-    <tr>
-      <td><span class="badge badge-new">New</span> Codex defaults-on + first-run banner</td>
-      <td>Codex was opt-in through v4.2.0 because it writes to user-global <code>~/.codex/config.toml</code>. v4.2.1 flips it to default-on with a first-run banner explaining the user-global write. Banner content: <em>"Codex MCP wires <code>~/.codex/config.toml</code> (user-global, outside the project tree). Untick Codex in Settings if you'd rather not."</em> Informed default-on beats one-extra-click in the common case.</td>
-    </tr>
-    <tr>
-      <td><span class="badge badge-fix">Fixed</span> <code>get_active_run_configuration</code> after Settings save</td>
-      <td>The action server rebuilt by saving Settings was missing two callbacks (run-config + project-info). After any Settings save, <code>get_active_run_configuration</code> returned <em>"Active-run-configuration callback not wired"</em>. The auto-start path was already correct; v4.2.1 wires the same callbacks through the save path so the tool keeps working after a re-save.</td>
-    </tr>
-    <tr>
-      <td><span class="badge badge-fix">Reliability</span> Singleton CdpClient explicit dispose on toggle</td>
-      <td>v4.2.0 left the previous CdpClient to GC when a Settings save replaced it. v4.2.1 disposes it explicitly (3-second bounded await on <code>DisposeAsync</code>) before swapping in the new one. Fixes the slow leak for users who toggle Maia on/off repeatedly.</td>
-    </tr>
-    <tr>
-      <td><span class="badge badge-fix">Reliability</span> JS-side scan throttle fix</td>
-      <td>The 10-second CDP heartbeat now also triggers <code>__maiaBridge.scan()</code>. Defeats Chromium's WebView2 background-tab throttling that drifts Maia's internal scan timer toward seconds when Maia is hidden behind another pane. Persistent CDP socket is unaffected by tab visibility, so detection latency stays bounded at the heartbeat interval regardless of pane state.</td>
-    </tr>
-    <tr>
-      <td><span class="badge badge-new">New</span> WebSocket test seam + reconnect tests</td>
-      <td>v4.2.0's reconnect path was covered by manual smoke testing only. v4.2.1 adds an <code>IWebSocketAdapter</code> interface and a discovery-override seam so unit tests can simulate drop-on-Nth-call and verify reconnect-with-fresh-adapter without standing up a real Studio Pro CDP endpoint. Four new tests cover the failure paths that v4.2.0's production run hit.</td>
+      <td><span class="badge badge-rules">Rules</span> §12 Verification — time-based <code>save_all</code> fallback</td>
+      <td>v4.2.1's "save_all + refresh_project after each batch" works during build phases but fails during pure visual-polish (re-running <code>pg_write_page</code> against existing pages, tweaking theme variables) — no batch boundaries means <code>save_all</code> is never triggered. CocktailDemo34 (2026-05-10) drifted 54 minutes without a save before a machine crash; the build survived only because Codex happened to save 3 minutes before the crash. v4.2.2 adds a hard rule: <strong>call <code>save_all</code> + <code>refresh_project</code> at least every 15 minutes of continuous work, even when no logical batch has completed.</strong> Closes the crash-safety gap on long polish loops.</td>
     </tr>
   </tbody>
 </table>
+
+<h2>Empirical baseline</h2>
+
+<p>Every change in v4.2.2 traces to a specific observation from the 2026-05-10 CocktailDemo34 Codex production run — the first end-to-end build using v4.2.1's three-CLI rules paths. The Codex run validated v4.2.1's headline claim (Codex consumes <code>.codex/rules/concord-*.md</code> via <code>AGENTS.md</code> <code>@</code>-imports exactly as Claude Code consumes its parallel set) AND surfaced the four follow-up gaps shipped in v4.2.2. Empirical, not theoretical.</p>
 
 <h2>Headlines since 1.1.1</h2>
 
@@ -134,27 +94,23 @@
   </thead>
   <tbody>
     <tr><td><strong>macOS support</strong> — Concord runs on Studio Pro 11.10+ Mac (POSIX PTY, WKWebView bridge, theme probe of Mac <code>Settings.sqlite</code>, Homebrew-aware shell PATH)</td><td>1.2.x</td></tr>
-    <tr><td><strong>Maia integration</strong> — six MCP tools that give the CLI programmatic access to Studio Pro's in-IDE AI assistant. The Concord MCP server hosts both the Studio Pro UI actions and Maia under one HTTP endpoint named <code>concord-mcp</code></td><td>1.3.0</td></tr>
-    <tr><td><strong>Bundled Mendix skill packs</strong> — seven prescriptive playbooks (microflow editing, page generation, view-entity patterns, workflow patterns) install per-CLI when you enable Skills</td><td>4.0.0</td></tr>
-    <tr><td><strong>Default-on first-run + auto-apply</strong> — first open against a fresh project writes <code>.mcp.json</code>, installs skill packs, starts Concord MCP, persists settings — all without modal clicks</td><td>4.1.0</td></tr>
-    <tr><td><strong>Upgrade auto-apply</strong> — first open after a Concord upgrade re-applies wiring keys to current defaults so new functionality lands automatically. Cross-machine safe</td><td>4.1.1</td></tr>
-    <tr><td><strong>Port-leak fix + atomic file writes + corrupt-file backup</strong> — phantom-port persistence eliminated, NTFS journaled rename, settings recovery</td><td>4.1.2</td></tr>
-    <tr><td><strong>Mac variant of <code>mendix-page-gen</code></strong> — the Windows version delegates to Maia via <code>maia__ask</code>; on Mac the variant prints a copy-paste prompt for you to hand to Maia</td><td>4.1.3</td></tr>
-    <tr><td><strong>Always-loaded build rules for Claude Code</strong> — <code>concord-build-rules.md</code> + a user-owned <code>.claude/rules/project/</code> folder + auto-management of a fenced block in <code>&lt;project&gt;/CLAUDE.md</code></td><td>4.1.4</td></tr>
-    <tr><td><strong>Build-rules iteration</strong> — six surgical edits from real-world build forensics (rides 4.2.0)</td><td>4.1.5</td></tr>
-    <tr><td><strong>Maia bridge hardening</strong> — persistent CDP connection, auto-reconnect on drop, auto-re-injection on WebView reload, defensive response parser, lost-handle discriminator, 10s keep-alive heartbeat, opt-in Diagnostic logging toggle. Plus rules-file split into 3 files to stay under the per-file performance threshold</td><td>4.2.0</td></tr>
-    <tr><td><strong>Bridge introspection toolkit + rules production-iteration</strong> — four new <code>maia__*</code> introspection tools (<code>busy</code>, <code>ping</code>, <code>health</code>, <code>new_chat</code>), task-scoped failure cap, errors-before-<code>run_app</code> gate, Maia-as-page-fixer tiebreaker, codified seed-data self-service pattern, Codex + Copilot rules paths lit up, Codex defaults-on with first-run banner, all v4.2.0-deferred carry-overs landed</td><td>4.2.1</td></tr>
+    <tr><td><strong>Maia integration</strong> — six MCP tools that give the CLI programmatic access to Studio Pro's in-IDE AI assistant</td><td>1.3.0</td></tr>
+    <tr><td><strong>Bundled Mendix skill packs</strong> — seven prescriptive playbooks</td><td>4.0.0</td></tr>
+    <tr><td><strong>Default-on first-run + auto-apply</strong></td><td>4.1.0</td></tr>
+    <tr><td><strong>Upgrade auto-apply</strong></td><td>4.1.1</td></tr>
+    <tr><td><strong>Port-leak fix + atomic file writes + corrupt-file backup</strong></td><td>4.1.2</td></tr>
+    <tr><td><strong>Mac variant of <code>mendix-page-gen</code></strong></td><td>4.1.3</td></tr>
+    <tr><td><strong>Always-loaded build rules for Claude Code</strong></td><td>4.1.4</td></tr>
+    <tr><td><strong>Build-rules iteration</strong> from real-world build forensics</td><td>4.1.5 (rides 4.2.0)</td></tr>
+    <tr><td><strong>Maia bridge hardening</strong> — persistent CDP, auto-reconnect, heartbeat, diagnostic logging. Rules-file split into 3 files</td><td>4.2.0</td></tr>
+    <tr><td><strong>Bridge introspection toolkit + three-CLI rules parity</strong> — <code>maia__busy</code> / <code>ping</code> / <code>health</code> / <code>new_chat</code>; Codex + Copilot rules paths lit up; Codex defaults-on</td><td>4.2.1</td></tr>
+    <tr><td><strong>TOML hygiene + crash-safety cadence</strong> — Codex 0.128+ unblocked after v1.3.0 migration; migration-prompt suppression for Concord-managed projects; <code>maia__reset</code> scope sharpened; <code>save_all</code> 15-minute fallback</td><td>4.2.2</td></tr>
   </tbody>
 </table>
 
 <h2>Cross-platform note</h2>
 
-<p>Concord ships on Windows and macOS. Most features are platform-identical; two differences worth calling out:</p>
-
-<ul>
-  <li><strong>Maia integration</strong> (and the four new introspection tools that build on it) is Windows-only — driving Maia from outside Studio Pro requires inspecting its WebView, which works on Windows (WebView2 + CDP) but isn't available on macOS (WKWebView requires host opt-in by Mendix). Concord ships a Mac-specific variant of the page-gen skill that hands the work to Maia through you instead of programmatically.</li>
-  <li><strong>Hotkey-driven Studio Pro tools on Mac</strong> need Accessibility permission the first time — macOS prompts for it; you grant Studio Pro one-time access in System Settings → Privacy &amp; Security → Accessibility.</li>
-</ul>
+<p>Concord ships on Windows and macOS. Most features are platform-identical; the v4.2.2 TOML cleanup applies on both platforms (Codex 0.128+ runs on both). Maia integration is Windows-only — driving Maia from outside Studio Pro requires inspecting its WebView, which works on Windows but not on macOS (WKWebView requires host opt-in by Mendix). Concord ships a Mac-specific variant of the page-gen skill for that case.</p>
 
 <h2>Compatibility</h2>
 
@@ -166,7 +122,7 @@
 
 <h2>Privacy</h2>
 
-<p>Concord is loopback-only — the Concord MCP server binds to <code>127.0.0.1</code>; Maia integration uses Studio Pro's local WebView2 debug port. Nothing leaves your machine through Concord itself. The bundled skill packs and rules are static Markdown files copied into your project. The CLI agents you run inside Concord follow their own privacy contracts. The Diagnostic logging toggle (introduced in v4.2.0) and the four new introspection tools in v4.2.1 only operate against your local Studio Pro session — nothing is transmitted.</p>
+<p>Concord is loopback-only. The Concord MCP server binds to <code>127.0.0.1</code>; Maia integration uses Studio Pro's local WebView2 debug port. Nothing leaves your machine through Concord itself.</p>
 
 <h2>Built by</h2>
 
