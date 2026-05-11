@@ -88,6 +88,25 @@ public static class SettingsApplyHelper
         }
         catch (Exception ex) { log.Error("[mcp-config-toml] primary write failed", ex); }
 
+        // v4.2.2: when Codex is wired for this project, stamp it as
+        // suppress-migration-prompt. Idempotent — no-ops when the stamp is
+        // already future-dated. See McpTomlConfigurator.SuppressMigrationPromptForProject.
+        //
+        // Intentionally fires once per apply (here, in ApplyMcpConfig) — NOT
+        // also from ApplyActionsMcpConfig. Suppression is per-project
+        // (not per-server), so the same TOML entry would be written twice
+        // for no observable effect. Single-fire keeps the log line count
+        // sensible and avoids double-applying the idempotency check.
+        if (tomlNeeded)
+        {
+            try
+            {
+                toml.SuppressMigrationPromptForProject(projectDir);
+                log.Info($"[mcp-config-toml] stamped migration-prompt suppression for project {projectDir}");
+            }
+            catch (Exception ex) { log.Error("[mcp-config-toml] migration-prompt suppression failed", ex); }
+        }
+
         return touched.ToArray();
     }
 

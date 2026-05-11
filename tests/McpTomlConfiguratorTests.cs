@@ -152,4 +152,156 @@ public class McpTomlConfiguratorTests : IDisposable
         content.Should().NotContain("[mcp_servers.mendix-studio-pro-actions]");
         content.Should().NotContain("[mcp_servers.concord-mcp]");
     }
+
+    // ---- v4.2.2 regression tests: child-section strip (Item 1) ---------
+
+    [Fact]
+    public void RemoveActions_StripsOrphanChildSubsections_NoParent()
+    {
+        // Exact repro of Neo's machine 2026-05-10: pre-v1.3.0 Concord wrote
+        // per-tool sub-sections under [mcp_servers.mendix-studio-pro-actions].
+        // Earlier RemoveNamed stripped the parent on the v1.3.0 migration but
+        // left these orphans, which Codex 0.128+ rejects with "invalid transport".
+        File.WriteAllText(filePath,
+            "model = \"gpt-5.5\"\n\n" +
+            "[mcp_servers.mendix-studio-pro-actions.tools.get_app_status]\n" +
+            "approval_mode = \"approve\"\n\n" +
+            "[mcp_servers.mendix-studio-pro-actions.tools.save_all]\n" +
+            "approval_mode = \"approve\"\n\n" +
+            "[mcp_servers.mendix-studio-pro-actions.tools.run_app]\n" +
+            "approval_mode = \"approve\"\n");
+
+        NewConfig().RemoveActions();
+
+        var content = File.ReadAllText(filePath);
+        content.Should().NotContain("mendix-studio-pro-actions");
+        content.Should().Contain("model = \"gpt-5.5\""); // unrelated keys preserved
+    }
+
+    [Fact]
+    public void RemoveActions_StripsParentAndChildren_TogetherWithLegacy()
+    {
+        // Both legacy + current sections, each with child sub-sections.
+        File.WriteAllText(filePath,
+            "[mcp_servers.mendix-studio-pro-actions]\nurl = \"http://localhost:7783/mcp\"\n\n" +
+            "[mcp_servers.mendix-studio-pro-actions.tools.run_app]\napproval_mode = \"approve\"\n\n" +
+            "[mcp_servers.concord-mcp]\nurl = \"http://localhost:7783/mcp\"\n\n" +
+            "[mcp_servers.concord-mcp.tools.maia__ping]\napproval_mode = \"approve\"\n\n" +
+            "[mcp_servers.concord-mcp.tools.maia__health]\napproval_mode = \"approve\"\n");
+
+        NewConfig().RemoveActions();
+
+        var content = File.Exists(filePath) ? File.ReadAllText(filePath) : string.Empty;
+        content.Should().NotContain("mendix-studio-pro-actions");
+        content.Should().NotContain("concord-mcp");
+    }
+
+    [Fact]
+    public void Remove_StripsParentAndChildren_PrimaryServer()
+    {
+        // Same hazard for the primary (mendix-studio-pro) server header.
+        File.WriteAllText(filePath,
+            "[mcp_servers.mendix-studio-pro]\nurl = \"http://localhost:8100/mcp\"\n\n" +
+            "[mcp_servers.mendix-studio-pro.tools.ped_create_module]\napproval_mode = \"approve\"\n\n" +
+            "[mcp_servers.mendix-studio-pro.tools.ped_read_document]\napproval_mode = \"approve\"\n\n" +
+            "[other]\nkeep = true\n");
+
+        NewConfig().Remove();
+
+        var content = File.ReadAllText(filePath);
+        content.Should().NotContain("mendix-studio-pro");
+        content.Should().Contain("[other]"); // unrelated section preserved
+    }
+
+    [Fact]
+    public void Remove_PrimaryDoesNotStripActionsChildren_NameDisambiguation()
+    {
+        // Critical: removing "mendix-studio-pro" must NOT strip
+        // "mendix-studio-pro-actions.tools.*" children. The dot in
+        // childPrefix disambiguates: `[mcp_servers.mendix-studio-pro.`
+        // does not prefix `[mcp_servers.mendix-studio-pro-actions.`.
+        File.WriteAllText(filePath,
+            "[mcp_servers.mendix-studio-pro]\nurl = \"http://localhost:8100/mcp\"\n\n" +
+            "[mcp_servers.mendix-studio-pro-actions]\nurl = \"http://localhost:7783/mcp\"\n\n" +
+            "[mcp_servers.mendix-studio-pro-actions.tools.run_app]\napproval_mode = \"approve\"\n");
+
+        NewConfig().Remove();
+
+        var content = File.ReadAllText(filePath);
+        content.Should().NotContain("[mcp_servers.mendix-studio-pro]");
+        // Adjacent-named server and its children must survive.
+        content.Should().Contain("[mcp_servers.mendix-studio-pro-actions]");
+        content.Should().Contain("[mcp_servers.mendix-studio-pro-actions.tools.run_app]");
+    }
+
+    // ---- v4.2.2 regression tests: migration-prompt suppression (Item 2b) ---
+
+    [Fact]
+    public void SuppressMigrationPromptForProject_NoFile_CreatesTableAndEntry()
+    {
+        NewConfig().SuppressMigrationPromptForProject(@"C:\Workspace\MendixApps\TestApp1");
+
+        var content = File.ReadAllText(filePath);
+        content.Should().Contain("[notice.external_config_migration_prompts.project_last_prompted_at]");
+        content.Should().Contain(@"'C:\Workspace\MendixApps\TestApp1' = 4070908800");
+    }
+
+    [Fact]
+    public void SuppressMigrationPromptForProject_ExistingTable_AppendsEntry()
+    {
+        File.WriteAllText(filePath,
+            "[notice.external_config_migration_prompts.project_last_prompted_at]\n" +
+            "'C:\\Workspace\\MendixApps\\Other' = 1778081247\n");
+
+        NewConfig().SuppressMigrationPromptForProject(@"C:\Workspace\MendixApps\NewApp");
+
+        var content = File.ReadAllText(filePath);
+        // Both entries present
+        content.Should().Contain(@"'C:\Workspace\MendixApps\Other' = 1778081247");
+        content.Should().Contain(@"'C:\Workspace\MendixApps\NewApp' = 4070908800");
+    }
+
+    [Fact]
+    public void SuppressMigrationPromptForProject_ExistingEntry_UpdatesToFutureValue()
+    {
+        File.WriteAllText(filePath,
+            "[notice.external_config_migration_prompts.project_last_prompted_at]\n" +
+            "'C:\\Workspace\\MendixApps\\TestApp1' = 1778081247\n");
+
+        NewConfig().SuppressMigrationPromptForProject(@"C:\Workspace\MendixApps\TestApp1");
+
+        var content = File.ReadAllText(filePath);
+        content.Should().Contain(@"'C:\Workspace\MendixApps\TestApp1' = 4070908800");
+        content.Should().NotContain("1778081247");
+    }
+
+    [Fact]
+    public void SuppressMigrationPromptForProject_AlreadyFuture_NoOp()
+    {
+        // If the stamp is already greater-than-or-equal-to our suppression
+        // value, don't rewrite the file — avoids gratuitous I/O on every
+        // Concord apply (apply runs at every Save plus first-run + upgrade-apply).
+        var initial =
+            "[notice.external_config_migration_prompts.project_last_prompted_at]\n" +
+            "'C:\\Workspace\\MendixApps\\TestApp1' = 4070908800\n";
+        File.WriteAllText(filePath, initial);
+        var beforeMtime = File.GetLastWriteTimeUtc(filePath);
+
+        // Wait a beat to make mtime difference observable if a write occurred.
+        System.Threading.Thread.Sleep(20);
+
+        NewConfig().SuppressMigrationPromptForProject(@"C:\Workspace\MendixApps\TestApp1");
+
+        var afterMtime = File.GetLastWriteTimeUtc(filePath);
+        afterMtime.Should().Be(beforeMtime, "no-op should not rewrite the file");
+    }
+
+    [Fact]
+    public void SuppressMigrationPromptForProject_NullOrEmpty_NoOp()
+    {
+        var cfg = NewConfig();
+        Action act = () => cfg.SuppressMigrationPromptForProject(string.Empty);
+        act.Should().NotThrow();
+        File.Exists(filePath).Should().BeFalse();
+    }
 }
