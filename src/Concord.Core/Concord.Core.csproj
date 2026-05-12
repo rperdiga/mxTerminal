@@ -30,6 +30,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Exclude imported Spmcp subtree from compile until Phase 4 (W2) wires it in. -->
+    <Compile Remove="Spmcp/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Content includes use Link metadata to preserve top-level folder names
          (wwwroot/, skills/, skills-mac/, rules/) in the output directory.
          Without Link, MSBuild strips the parent-relative path and the files
