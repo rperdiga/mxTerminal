@@ -30,19 +30,28 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Content includes use Link metadata to preserve top-level folder names
+         (wwwroot/, skills/, skills-mac/, rules/) in the output directory.
+         Without Link, MSBuild strips the parent-relative path and the files
+         land flat at the output root — TerminalWebServer's ResolvePath
+         ("wwwroot", "index.html") would then 404. -->
     <Content Include="..\..\wwwroot\**\*">
+      <Link>wwwroot\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>
     <Content Include="..\..\skills\**\*">
+      <Link>skills\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>
     <Content Include="..\..\skills-mac\**\*">
+      <Link>skills-mac\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>
     <Content Include="..\..\rules\**\*">
+      <Link>rules\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>
