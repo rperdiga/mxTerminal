@@ -32,9 +32,20 @@
     resolution against 11.x ExtensionsAPI fails, MEF skips. (Verified by spike
     test 2026-05-12.) On Studio Pro 11.x: mirror.
   -->
-  <Target Name="DeployToMendix" AfterTargets="PostBuildEvent" Condition="'$(MendixDeployTarget)' != ''">
+  <!-- Per-host deploy target: prefer $(MendixDeployTarget10x), fall back to
+       $(MendixDeployTarget). The per-host property exists so devs working
+       across versions can deploy each host to a different Mendix project
+       (e.g., a 10.24.13 test project for Host10x, a 11.10 one for Host11x).
+       Studio Pro 10.x crashes if it sees Concord11x/ in its extensions/
+       folder (type-resolution failure inside the loader's .Single() during
+       MEF discovery), so the two extensions must NOT co-deploy. -->
+  <PropertyGroup>
+    <_Host10xDeployTarget Condition="'$(MendixDeployTarget10x)' != ''">$(MendixDeployTarget10x)</_Host10xDeployTarget>
+    <_Host10xDeployTarget Condition="'$(_Host10xDeployTarget)' == ''">$(MendixDeployTarget)</_Host10xDeployTarget>
+  </PropertyGroup>
+  <Target Name="DeployToMendix" AfterTargets="PostBuildEvent" Condition="'$(_Host10xDeployTarget)' != ''">
     <ItemGroup>
-      <_MendixDeployTargets Include="$(MendixDeployTarget)" />
+      <_MendixDeployTargets Include="$(_Host10xDeployTarget)" />
     </ItemGroup>
     <Message Importance="high" Text="Deploying Host10x to %(_MendixDeployTargets.Identity)/extensions/Concord10x" />
     <Exec Condition="'$(OS)' == 'Windows_NT'"

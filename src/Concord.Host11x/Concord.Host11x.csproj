@@ -50,9 +50,16 @@
     too: find any extensions-cache subdirectory containing a Concord.dll
     (that's our extension's snapshot) and overlay our build output.
   -->
-  <Target Name="DeployToMendix" AfterTargets="PostBuildEvent" Condition="'$(MendixDeployTarget)' != ''">
+  <!-- Per-host deploy target: prefer $(MendixDeployTarget11x), fall back to
+       $(MendixDeployTarget). See the matching comment in Concord.Host10x.csproj
+       for why the two extensions cannot co-deploy. -->
+  <PropertyGroup>
+    <_Host11xDeployTarget Condition="'$(MendixDeployTarget11x)' != ''">$(MendixDeployTarget11x)</_Host11xDeployTarget>
+    <_Host11xDeployTarget Condition="'$(_Host11xDeployTarget)' == ''">$(MendixDeployTarget)</_Host11xDeployTarget>
+  </PropertyGroup>
+  <Target Name="DeployToMendix" AfterTargets="PostBuildEvent" Condition="'$(_Host11xDeployTarget)' != ''">
     <ItemGroup>
-      <_MendixDeployTargets Include="$(MendixDeployTarget)" />
+      <_MendixDeployTargets Include="$(_Host11xDeployTarget)" />
     </ItemGroup>
     <Message Importance="high" Text="Deploying Host11x to %(_MendixDeployTargets.Identity)/extensions/Concord11x" />
     <Exec Condition="'$(OS)' == 'Windows_NT'"
