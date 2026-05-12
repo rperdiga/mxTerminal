@@ -28,6 +28,7 @@
     <Compile Remove="debug/**" />
     <Compile Remove="src/Concord.Core/**" />
     <Compile Remove="src/Concord.Host11x/**" />
+    <Compile Remove="src/Concord.Host10x/**" />
   </ItemGroup>
 
   <ItemGroup>
