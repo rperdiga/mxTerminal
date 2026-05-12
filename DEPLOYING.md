@@ -7,9 +7,13 @@ Two paths. Pick whichever matches your situation.
 
 Both paths have the same Studio Pro one-time setup: see [§ Studio Pro setup](#studio-pro-setup) below.
 
-Concord runs on **Windows** (Studio Pro 11.10+ on Win10 1809+) and **macOS** (Studio Pro 11.10+). Path examples in this doc use Windows separators by default; Mac equivalents are called out inline (e.g. `<project>/extensions/Concord/`).
+Concord runs on **Windows** and **macOS**, supporting **Studio Pro 10.24.13 through 11.x** (10.x is a preview — menu entry only in 5.0.0-alpha.1; full functionality is 11.x). Path examples in this doc use Windows separators by default; Mac equivalents are called out inline.
+
+> **Deploy folder changed in 5.x.** Studio Pro 11.x projects use `extensions/Concord11x/`; Studio Pro 10.x projects use `extensions/Concord10x/`. The old `extensions/Concord/` path (4.x) is retired. See [§ Migrating from 4.x](#migrating-from-4x-old-extensionsconcord-layout) if you are upgrading.
 
 If you're upgrading from the older "**Terminal**" extension (the original `mxTerminal`), see [§ Migrating from Terminal](#migrating-from-terminal-the-old-name) at the bottom.
+
+If you're upgrading from **Concord 4.x**, see [§ Migrating from 4.x](#migrating-from-4x-old-extensionsconcord-layout) at the bottom.
 
 ---
 
@@ -29,24 +33,35 @@ This is what allows Studio Pro to load extensions from a project's `extensions/`
 
 The fastest way to get Concord into a Mendix project. No build required.
 
-### Get a prebuilt `Concord/` folder
+### Which folder do I need?
+
+| Your Studio Pro version | Folder to use |
+|---|---|
+| **11.x** (11.10+) | `Concord11x/` |
+| **10.24.13** (preview) | `Concord10x/` |
+
+**Never copy both folders into the same Mendix project.** Studio Pro will crash trying to load the wrong-version DLL.
+
+### Get a prebuilt folder
 
 Two ways:
 
-- **From a colleague who built from source:** ask them to zip up `<their-project>\extensions\Concord\` and send it to you. That folder contains `Concord.dll`, `manifest.json`, all the runtime DLLs, and the `wwwroot/` UI bundle.
+- **From a colleague who built from source:** ask them to zip up `<their-project>\extensions\Concord11x\` (or `Concord10x\`) and send it to you. That folder contains `Concord.Host11x.dll` (or `Concord.Host10x.dll`), `Concord.Core.dll`, `manifest.json`, all the runtime DLLs, and the `wwwroot/` UI bundle.
 - **From a release artifact:** if a prebuilt zip is published (e.g. as a GitHub release), download and unzip.
 
 ### Install into your Mendix project
 
 1. Open the project folder (e.g. Windows: `C:\Workspace\MendixApps\YourProject`; macOS: `~/Mendix/YourProject`).
 2. If an `extensions/` folder doesn't exist at the project root, create it.
-3. Copy the entire `Concord` folder you received into `extensions/`. You should end up with:
+3. Copy the `Concord11x` (or `Concord10x`) folder you received into `extensions/`. You should end up with:
 
+**Studio Pro 11.x:**
 ```
 YourProject/
    extensions/
-      Concord/
-         Concord.dll
+      Concord11x/
+         Concord.Host11x.dll
+         Concord.Core.dll
          manifest.json
          wwwroot/
          skills/             (7 bundled Mendix skill packs)
@@ -55,11 +70,22 @@ YourProject/
          (...other DLLs and assets)
 ```
 
+**Studio Pro 10.x (preview):**
+```
+YourProject/
+   extensions/
+      Concord10x/
+         Concord.Host10x.dll
+         Concord.Core.dll
+         manifest.json
+         (...other DLLs and assets)
+```
+
 4. Make sure **Studio Pro setup** above is done.
 5. Start Studio Pro and open the project. Studio Pro will:
    - Scan `extensions/` and find Concord.
    - Show a one-time **"Trust this extension"** prompt (per Mendix's extension-trust flow). Approve it.
-6. Open the pane: **Extensions → Concord → Open Pane**. The pane appears in the right-side pane strip (next to Properties / Toolbox / Maia). Click the **Concord** tab in that strip to focus it.
+6. **Studio Pro 11.x:** Open the pane via **Extensions → Concord → Open Pane**. The pane appears in the right-side pane strip (next to Properties / Toolbox / Maia). Click the **Concord** tab in that strip to focus it. **Studio Pro 10.x (preview):** You'll see **Extensions → Concord (10.x preview)** — a placeholder menu entry; the full pane and MCP surface will be available in a later 5.x release.
 
 **On first open of a fresh project, Concord wires itself up automatically:**
 
@@ -74,9 +100,9 @@ See [README § What Concord writes to disk](./README.md#what-concord-writes-to-d
 
 To install in additional projects, repeat steps 1–6 in each.
 
-To remove: delete the `extensions/Concord/` folder. Restart Studio Pro.
+To remove: delete the `extensions/Concord11x/` (or `extensions/Concord10x/`) folder. Restart Studio Pro.
 
-> **macOS note:** Studio Pro on Mac snapshots `extensions/` into `<project>/.mendix-cache/extensions-cache/<guid>/` at first load and serves `wwwroot/` from there. If you replace `extensions/Concord/` with a newer build while Studio Pro is running, Studio Pro will keep serving the old cached copy until restart. Either fully quit Studio Pro before swapping the folder, or also overlay the cache-snapshot directory (the developer-path build does this automatically).
+> **macOS note:** Studio Pro on Mac snapshots `extensions/` into `<project>/.mendix-cache/extensions-cache/<guid>/` at first load and serves `wwwroot/` from there. If you replace `extensions/Concord11x/` (or `extensions/Concord10x/`) with a newer build while Studio Pro is running, Studio Pro will keep serving the old cached copy until restart. Either fully quit Studio Pro before swapping the folder, or also delete the `<project>/.mendix-cache/extensions-cache/` directory so Studio Pro rebuilds the cache on next launch (the developer-path build does this automatically).
 
 ---
 
@@ -89,7 +115,7 @@ To remove: delete the `extensions/Concord/` folder. Restart Studio Pro.
 | Node.js | 18 or newer | `node --version` |
 | .NET SDK | 8.x **or** 10.x with the `net8.0` reference pack present | `dotnet --version` and `dotnet --list-runtimes` should show `Microsoft.NETCore.App 8.0.x` |
 | Git | any recent version | `git --version` |
-| Studio Pro | 11.10.0 or newer (Windows or macOS) | check **Help → About** in Studio Pro |
+| Studio Pro | 10.24.13 or newer (Windows or macOS); 11.10+ for full feature parity | check **Help → About** in Studio Pro |
 | OS | Windows 10 1809 (build 17763)+ for ConPTY, **or** macOS 10.15+ for `posix_spawn_file_actions_addchdir_np` | — |
 
 The .NET 10 SDK can target `net8.0` if the .NET 8 runtime + reference pack is installed (which it usually is on a Windows or Mac dev box that's seen any .NET work). If a build fails with "no reference pack for net8.0", install the .NET 8 SDK from https://dotnet.microsoft.com/.
@@ -106,16 +132,37 @@ copy Directory.Build.props.example Directory.Build.props
 # macOS / Linux:
 cp Directory.Build.props.example Directory.Build.props
 
-# Edit Directory.Build.props and set MendixDeployTarget to your Mendix project root.
-#
-# Windows:
-#   <MendixDeployTarget>C:\Workspace\MendixApps\YourProject</MendixDeployTarget>
-# macOS:
-#   <MendixDeployTarget>/Users/you/Mendix/YourProject</MendixDeployTarget>
-#
-# To deploy to MULTIPLE projects on each build, semicolon-separate them:
-#   <MendixDeployTarget>/Users/you/Mendix/AppOne;/Users/you/Mendix/AppTwo</MendixDeployTarget>
+# Edit Directory.Build.props and set the per-host deploy properties.
 ```
+
+Open `Directory.Build.props` in any editor and configure the per-host deploy targets:
+
+**Single-host dev (only working on one Studio Pro version) — 11.x:**
+```xml
+<MendixDeployTarget11x>C:\Workspace\MendixApps\YourProject</MendixDeployTarget11x>
+```
+
+**Single-host dev — 10.x (preview):**
+```xml
+<MendixDeployTarget10x>C:\Workspace\MendixApps\YourProject10x</MendixDeployTarget10x>
+<ExtensionsApi10xVersion>10.21.1</ExtensionsApi10xVersion>
+```
+
+**Cross-version dev (two separate test projects, one per Studio Pro version):**
+```xml
+<MendixDeployTarget10x>C:\Projects\Test_10_24_13</MendixDeployTarget10x>
+<MendixDeployTarget11x>C:\Projects\Test_11_10</MendixDeployTarget11x>
+<ExtensionsApi10xVersion>10.21.1</ExtensionsApi10xVersion>
+```
+
+**macOS paths follow the same pattern** — replace `C:\Projects\...` with `/Users/you/Mendix/...`.
+
+To deploy to **multiple projects of the same host version**, semicolon-separate the paths:
+```xml
+<MendixDeployTarget11x>C:\Projects\AppOne;C:\Projects\AppTwo</MendixDeployTarget11x>
+```
+
+> **Fallback:** `MendixDeployTarget` (no version suffix) is still accepted as a legacy single-target override — both hosts will deploy to it if their per-host property is unset. This means both `Concord11x/` and `Concord10x/` land in the same project, which crashes the wrong-version Studio Pro. Use only in a true single-host, single-project setup where you are certain only one Studio Pro version will ever open that project.
 
 ### Build
 
@@ -124,9 +171,9 @@ dotnet build
 ```
 
 What happens:
-1. The csproj's `BuildUi` target runs `npm install` (first build only — about 30 seconds) and `node esbuild.mjs` to bundle the xterm.js TypeScript UI.
-2. C# compiles `Concord.dll`.
-3. The `DeployToMendix` target copies the build output into each `MendixDeployTarget`'s `extensions/Concord/` directory — `xcopy` on Windows, `cp -R` on macOS/Linux. On Mac it also overlays Studio Pro's `<project>/.mendix-cache/extensions-cache/<guid>/` snapshot, since Studio Pro on Mac serves `wwwroot/` from the cache rather than from `extensions/` directly.
+1. The `BuildUi` target runs `npm install` (first build only — about 30 seconds) and `node esbuild.mjs` to bundle the xterm.js TypeScript UI.
+2. C# compiles `Concord.Core.dll`, `Concord.Host11x.dll`, and `Concord.Host10x.dll`.
+3. The `DeployToMendix` target copies the build output into each deploy-target project's `extensions/Concord11x/` or `extensions/Concord10x/` directory (determined by which per-host property is set) — `xcopy` on Windows, `cp -R` on macOS/Linux. On Mac it also overlays Studio Pro's `<project>/.mendix-cache/extensions-cache/<guid>/` snapshot, since Studio Pro on Mac serves `wwwroot/` from the cache rather than from `extensions/` directly.
 
 **First-build gotcha:** the csproj's `<Content Include="wwwroot\**\*">` copies the UI bundle into the output, but on a fresh clone `wwwroot/` doesn't exist yet — esbuild creates it during the BuildUi step, AFTER MSBuild has already evaluated the Content glob. **Workaround: run `dotnet build` a second time on the very first build of a fresh clone.** Subsequent builds work the first time. (See `LEARNINGS.md` if it lands in repo for the eventual proper fix.)
 
@@ -167,14 +214,14 @@ Capture the `paste bracketed=...` and `paced-input ...` log lines from each test
 After a code change:
 
 ```sh
-dotnet build       # rebuilds + redeploys to all MendixDeployTarget folders
+dotnet build       # rebuilds + redeploys to all MendixDeployTarget10x / MendixDeployTarget11x folders
 ```
 
 Then **fully close and reopen Studio Pro.** .NET assemblies loaded into Studio Pro's AppDomain can't be unloaded without ending the process — Studio Pro's "reload project" does NOT pick up new DLLs. Plan for a full Studio Pro restart per iteration.
 
 If you're only changing TypeScript UI files (xterm tab manager, settings modal, etc.), the rebuild is fast (~3-5 seconds), but Studio Pro still needs a restart because it loaded the old `wwwroot/index.html` into the WebView at pane-open time.
 
-> **macOS iteration tip:** the build copies fresh assets into both `<project>/extensions/Concord/` and the per-project Studio Pro cache snapshot at `<project>/.mendix-cache/extensions-cache/<guid>/`, so `dotnet build` followed by a full Studio Pro restart picks up your changes without manually clearing the cache.
+> **macOS iteration tip:** the build copies fresh assets into both `<project>/extensions/Concord11x/` (or `Concord10x/`) and the per-project Studio Pro cache snapshot at `<project>/.mendix-cache/extensions-cache/<guid>/`, so `dotnet build` followed by a full Studio Pro restart picks up your changes without manually clearing the cache.
 
 ### Logs (build + runtime)
 
@@ -215,18 +262,76 @@ If you previously had a `terminal-settings.json` in `<project>\resources\`, Conc
 
 ---
 
+## Migrating from 4.x (old `extensions/Concord/` layout)
+
+Concord 5.x changed the deploy folder name. Where 4.x used `extensions/Concord/`, 5.x uses `extensions/Concord11x/` (Studio Pro 11.x) or `extensions/Concord10x/` (Studio Pro 10.x).
+
+### Steps
+
+1. **Delete the old folder:**
+
+   ```powershell
+   Remove-Item -Recurse -Force "C:\Workspace\MendixApps\YourProject\extensions\Concord"
+   ```
+
+2. **Deploy the new folder** — follow the Consumer path above (drop in `Concord11x/` or `Concord10x/`) or rebuild from source with the updated per-host deploy targets.
+
+3. **Wipe the extensions cache** so Studio Pro picks up the new layout cleanly:
+
+   ```powershell
+   Remove-Item -Recurse -Force "C:\Workspace\MendixApps\YourProject\.mendix-cache\extensions-cache"
+   ```
+
+   (macOS: `rm -rf ~/Mendix/YourProject/.mendix-cache/extensions-cache`)
+
+4. **Restart Studio Pro.** It will rebuild the cache from the new `Concord11x/` (or `Concord10x/`) folder.
+
+### Settings compatibility
+
+Your existing `<project>/resources/terminal-settings.json` is backward-compatible — Concord 5.x reads it, migrates the values forward, and stamps the new version. No manual edits needed.
+
+### WARNING — never co-deploy both folders
+
+Do **NOT** deploy both `extensions/Concord11x/` and `extensions/Concord10x/` to the same Mendix project. Studio Pro of either version will crash when it attempts to load the wrong-version DLL (the 11.x binary references `IMenuExtension` from the 11.x API; the 10.x binary references the `MenuExtension` abstract base class from the 10.x API — type resolution fails hard on the mismatched version).
+
+---
+
+## Extensions cache (Studio Pro caches a snapshot on first load)
+
+Studio Pro snapshots `extensions/` into `<project>/.mendix-cache/extensions-cache/<guid>/` the first time it loads a project. Subsequent launches serve `wwwroot/` from this cache rather than from `extensions/` directly.
+
+**When to wipe the cache:**
+- After upgrading from 4.x (the old `Concord/` snapshot is stale).
+- After switching from `Concord11x/` to `Concord10x/` in a project (or vice versa).
+- If Studio Pro shows a blank WebView or loads old UI despite a fresh build.
+
+**How to wipe:**
+
+```powershell
+Remove-Item -Recurse -Force "C:\Workspace\MendixApps\YourProject\.mendix-cache\extensions-cache"
+```
+
+```sh
+# macOS
+rm -rf ~/Mendix/YourProject/.mendix-cache/extensions-cache
+```
+
+Restart Studio Pro. It rebuilds the cache from `extensions/` on next launch. The developer-path `dotnet build` refreshes the cache automatically; consumer-path upgrades (drop-in folder swap) require either a manual wipe or a full quit-before-swap.
+
+---
+
 ## Troubleshooting
 
 ### "Concord doesn't appear in the Extensions menu"
 
 - **Extension Development isn't enabled.** Edit → Preferences → Advanced → check Extension Development → restart Studio Pro.
-- **`extensions/Concord/` folder is in the wrong place.** Must be at `<MendixProject-root>\extensions\Concord\` — same level as `<Project>.mpr`.
+- **`extensions/Concord11x/` (or `Concord10x/`) folder is in the wrong place.** Must be at `<MendixProject-root>\extensions\Concord11x\` (or `Concord10x\`) — same level as `<Project>.mpr`.
 - **Studio Pro hasn't been restarted since the folder appeared.** Extensions are scanned at startup.
 
 ### "Build succeeds but pane is empty / shows blank WebView"
 
 - First-build wwwroot chicken-and-egg. Run `dotnet build` once more. (See § Build.)
-- Look at `<project>\resources\terminal.log` for `InitWebView` line — if it shows a URL but the WebView is blank, the bundle didn't make it into `extensions\Concord\wwwroot\`. Inspect that folder.
+- Look at `<project>\resources\terminal.log` for `InitWebView` line — if it shows a URL but the WebView is blank, the bundle didn't make it into `extensions\Concord11x\wwwroot\` (or `Concord10x\wwwroot\`). Inspect that folder. Also check that the `extensions-cache` is fresh — if an old snapshot from a 4.x `Concord/` folder is cached, wipe `.mendix-cache\extensions-cache\` and restart.
 
 ### "Concord MCP tools time out / Claude says it can't reach the server"
 

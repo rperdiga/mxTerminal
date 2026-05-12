@@ -4,7 +4,9 @@
 
 **Current version: 4.2.2** ([CHANGELOG](./CHANGELOG.md)) — **TOML hygiene + crash-safety cadence.** Two fixes and two rule sharpenings driven by the first production Codex run on v4.2.1: (1) the v1.3.0-migration TOML cleanup now strips orphan `[mcp_servers.<name>.tools.<X>]` child sub-sections that previously survived parent removal — Codex 0.128+ refuses to start when those orphans are present, so any user with a pre-v1.3.0 Concord install + Codex enabled was hard-blocked until they edited the TOML by hand. v4.2.2 fixes this automatically on the next Concord Save. (2) Codex's *"External agent config detected"* migration prompt is now suppressed for Concord-managed projects — Concord stamps a per-project future-dated entry in `~/.codex/config.toml` so Codex stops offering to migrate Claude config across (Concord already configured Codex). (3) §2 Maia recovery ladder sharpened: `maia__reset` is for recovering FROM observed failure, not for prophylactic bridge hygiene. Empirically: Codex called reset 51 times in two sessions despite zero bridge disconnects. (4) §12 verification gate adds a time-based `save_all` fallback (15 minutes) for visual-polish phases that don't cross natural batch boundaries — closes the crash-safety gap (2026-05-10 machine crash narrowly avoided losing 54 minutes of polish work). Builds on v4.2.1's bridge introspection toolkit + three-CLI rules parity. Combined with the Concord MCP server, the CLI agent in your terminal is ready to drive Studio Pro from day one — and crash-recovery friction is materially lower.
 
-Concord is a Mendix Studio Pro 11.10+ extension (Windows and macOS) that embeds a tabbed terminal as a dockable pane. The pane is the workspace where you run **Claude Code**, **Codex**, or **GitHub Copilot CLI** — and they talk directly to:
+Concord is a Mendix Studio Pro extension (Windows and macOS) supporting **Studio Pro 10.24.13 through 11.x**[^10x] that embeds a tabbed terminal as a dockable pane. The pane is the workspace where you run **Claude Code**, **Codex**, or **GitHub Copilot CLI** — and they talk directly to:
+
+[^10x]: Studio Pro 10.x support is a **preview** in 5.0.0-alpha.1 — a menu entry (`Extensions → Concord (10.x preview)`) is present but the terminal pane, MCP server, and full feature surface are 11.x-only for now. Full 10.x functionality is planned for the 5.x release line.
 
 - **Studio Pro's built-in MCP server** (model-tier — entities, microflows, pages, OQL, file ops on `/themes` + `/jsactions`, knowledge)
 - **Concord MCP** — Concord's own in-process MCP server with two tool families: Studio Pro UI actions (run / stop / refresh / save / status) and Maia integration (programmatic access to Studio Pro's in-IDE AI assistant)
@@ -16,12 +18,27 @@ A **Siemens CoE Team** extension.
 
 ---
 
+## Cross-version support
+
+| Studio Pro version | Status | Deploy folder |
+|---|---|---|
+| **11.x** (11.10+) | Full — terminal pane, Concord MCP, Maia integration, skill packs | `extensions/Concord11x/` |
+| **10.24.13** | Preview — menu entry only; full UI/MCP in 5.x release line | `extensions/Concord10x/` |
+
+Each Mendix project gets **one** of the two folders, never both. Deploying both to the same project will crash Studio Pro of either version when it tries to load the wrong-version DLL.
+
+The deploy folder name tells Studio Pro which host assembly to load. `Concord11x/` contains `Concord.Host11x.dll` + `Concord.Core.dll`; `Concord10x/` contains `Concord.Host10x.dll` + `Concord.Core.dll`. Each folder has its own `manifest.json` listing only the DLLs it contains.
+
+See [DEPLOYING.md](./DEPLOYING.md) for per-host deploy target setup (`MendixDeployTarget10x` / `MendixDeployTarget11x`).
+
+---
+
 ## Install / deploy → see [DEPLOYING.md](./DEPLOYING.md)
 
 That doc covers both paths:
 
 - **Developer path** — clone this repo, `dotnet build`, deploy to one or many Mendix projects.
-- **Consumer path** — copy a prebuilt `extensions/Concord/` folder into any Mendix project's `extensions/` directory. No build required.
+- **Consumer path** — copy a prebuilt `extensions/Concord11x/` (or `extensions/Concord10x/`) folder into any Mendix project's `extensions/` directory. No build required.
 
 It also covers migrating from the old "Terminal" extension (clean up the orphan folder so Studio Pro doesn't load both).
 
@@ -244,7 +261,7 @@ Quick reference:
 ```sh
 # Configure deploy target (one-time)
 copy Directory.Build.props.example Directory.Build.props
-# edit MendixDeployTarget to your project root
+# edit MendixDeployTarget10x / MendixDeployTarget11x to your project root(s)
 
 # Build + deploy
 dotnet build
@@ -253,28 +270,41 @@ dotnet build
 dotnet test
 ```
 
-The csproj's `BuildUi` target runs `npm install` (first build only) + `node esbuild.mjs` to bundle the xterm.js TypeScript into `wwwroot/terminal.bundle.js`. The `DeployToMendix` target then `xcopy`s the build output into each `MendixDeployTarget`'s `extensions/Concord/` directory.
+The `BuildUi` target runs `npm install` (first build only) + `node esbuild.mjs` to bundle the xterm.js TypeScript into `wwwroot/terminal.bundle.js`. The `DeployToMendix` target then copies build output into each deploy-target project's `extensions/Concord11x/` or `extensions/Concord10x/` directory depending on which per-host property is set. See [DEPLOYING.md](./DEPLOYING.md) for the per-host property details.
 
 ---
 
 ## Project layout
 
 ```
-src/                    C# extension code (MEF, Concord MCP server, theme probe)
-src/PtySession.cs       ConPTY backend — Windows (kernel32!CreatePseudoConsole)
-src/UnixPtySession.cs   POSIX PTY backend — macOS (openpty + posix_spawnp via libSystem)
-src/Maia/               Maia bridge — CDP transports + tool registrations
-src/SkillInstaller.cs   Per-CLI bundled-skill install/uninstall (.claude/.github/.codex)
-ui/src/                 TypeScript UI (xterm.js, settings modal, bridge, icons, logo)
-ui/src/bridge.ts        WebView2 (Windows) and WKWebView (Mac) transport
-ui/index.html           Single-page UI bundled into the extension
-skills/                 7 bundled Mendix skill packs (microflow, page, view-entity, workflow patterns)
-tests/                  xunit test suite
-docs/PASTE.md           Paste pipeline rationale + diagnostic playbook
-docs/superpowers/       Original design docs (specs + plans)
-modules/Concord.mxmodule Studio Pro add-on module wrapper for marketplace distribution
-manifest.json           Mendix extension manifest — points at Concord.dll
-Terminal.csproj         Project file (assembly name = Concord)
+src/Concord.Core/             Shared library, no Studio Pro reference
+  Terminal/                   PTY, settings, web server message DTOs, skill installer
+  Mcp/                        Concord MCP host (StudioProActions + ActionServer)
+  Maia/                       CDP-based Maia bridge + injected JS agent
+  Interop/                    Host service interfaces (registry pattern)
+src/Concord.Host11x/          Studio Pro 11.x host
+  MenuExtensions/             [Export] menu items
+  Pane/                       Dockable pane + view model
+  Ui/                         TerminalWebServer (Studio Pro IWebServer adapter)
+  Interop/                    11.x service implementations
+  Host11xEntry.cs             MEF activation entry — initializes HostContext + HostServices
+src/Concord.Host10x/          Studio Pro 10.x host (preview)
+  MenuExtensions/             Minimal MenuExtension showing preview message
+  Interop/                    10.x service stubs (W2 wiring)
+  Host10xEntry.cs             MEF activation entry
+ui/src/                       TypeScript UI (xterm.js, settings modal, bridge, icons, logo)
+ui/src/bridge.ts              WebView2 (Windows) and WKWebView (Mac) transport
+ui/index.html                 Single-page UI bundled into the extension
+skills/                       7 bundled Mendix skill packs (microflow, page, view-entity, workflow patterns)
+skills-mac/                   Mac overlay — mendix-page-gen variant for macOS
+rules/                        Always-loaded build rules (concord-build-rules.md)
+wwwroot/                      Bundled UI assets (generated by esbuild — not committed)
+tests/                        xunit test suite
+docs/PASTE.md                 Paste pipeline rationale + diagnostic playbook
+docs/superpowers/             Original design docs (specs + plans)
+modules/Concord.mxmodule      Studio Pro add-on module wrapper for marketplace distribution
+Directory.Build.props.example Per-host deploy target configuration template
+Terminal.sln                  Solution file (Concord.Core + Concord.Host11x + Concord.Host10x)
 ```
 
 ---
