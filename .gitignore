@@ -8,6 +8,7 @@ obj/
 # Test outputs
 TestResults/
 coverage.*
+test-output.txt
 
 # UI build artifacts
 ui/node_modules/
