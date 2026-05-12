@@ -15,4 +15,23 @@
     <ProjectReference Include="..\Concord.Core\Concord.Core.csproj" />
     <PackageReference Include="Mendix.StudioPro.ExtensionsAPI" Version="$(ExtensionsApi10xVersion)" />
   </ItemGroup>
+
+  <!--
+    DeployToMendix here copies Host10x's TargetDir into the same extensions/Concord/
+    folder that Host11x writes to. The two host projects share a deploy target;
+    xcopy /y is idempotent for the shared files (Concord.Core.dll, wwwroot/, skills/,
+    rules/, skills-mac/). Studio Pro 10.x loads Concord.Host10x.dll and silently
+    skips Concord.Host11x.dll (type-load failure on 11.x-only APIs); 11.x loads the
+    opposite.
+  -->
+  <Target Name="DeployToMendix" AfterTargets="PostBuildEvent" Condition="'$(MendixDeployTarget)' != ''">
+    <ItemGroup>
+      <_MendixDeployTargets Include="$(MendixDeployTarget)" />
+    </ItemGroup>
+    <Message Importance="high" Text="Deploying Host10x to %(_MendixDeployTargets.Identity)/extensions/Concord" />
+    <Exec Condition="'$(OS)' == 'Windows_NT'"
+          Command="xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%(_MendixDeployTargets.Identity)\extensions\Concord&quot;" />
+    <Exec Condition="'$(OS)' != 'Windows_NT'"
+          Command="mkdir -p &quot;%(_MendixDeployTargets.Identity)/extensions/Concord&quot; &amp;&amp; cp -R &quot;$(TargetDir).&quot; &quot;%(_MendixDeployTargets.Identity)/extensions/Concord/&quot;" />
+  </Target>
 </Project>

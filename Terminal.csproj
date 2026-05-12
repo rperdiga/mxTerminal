@@ -42,9 +42,7 @@
     <InternalsVisibleTo Include="Terminal.Tests" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- manifest.json stays here until Task 14 adjusts the manifest layout. -->
-    <Content Include="manifest.json"><CopyToOutputDirectory>Always</CopyToOutputDirectory></Content>
-  </ItemGroup>
+  <!-- manifest.json moved to Concord.Host11x.csproj so it ships with the
+       host deploy output. Task 16 deletes this csproj entirely. -->
 
 </Project>

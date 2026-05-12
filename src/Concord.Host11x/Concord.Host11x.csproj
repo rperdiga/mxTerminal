@@ -20,6 +20,15 @@
     <PackageReference Include="Mendix.StudioPro.ExtensionsAPI" Version="11.6.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Shared manifest at repo root lists both host DLLs (single-manifest layout).
+         Host11x carries it because Host11x's DeployToMendix is the canonical deploy
+         target for shared artifacts. Studio Pro 10.x and 11.x each load only the
+         host DLL whose ExtensionsAPI version matches; the other DLL fails type
+         resolution silently and is skipped. -->
+    <Content Include="..\..\manifest.json"><CopyToOutputDirectory>Always</CopyToOutputDirectory></Content>
+  </ItemGroup>
+
   <Target Name="BuildUi" BeforeTargets="BeforeBuild"
           Inputs="$(MSBuildThisFileDirectory)..\..\ui\src\**\*;$(MSBuildThisFileDirectory)..\..\ui\package.json;$(MSBuildThisFileDirectory)..\..\ui\esbuild.mjs;$(MSBuildThisFileDirectory)..\..\ui\index.html"
           Outputs="$(MSBuildThisFileDirectory)..\..\wwwroot\terminal.bundle.js">
@@ -51,10 +60,18 @@
           Command="xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%(_MendixDeployTargets.Identity)\extensions\Concord&quot;" />
     <Exec Condition="'$(OS)' != 'Windows_NT'"
           Command="mkdir -p &quot;%(_MendixDeployTargets.Identity)/extensions/Concord&quot; &amp;&amp; cp -R &quot;$(TargetDir).&quot; &quot;%(_MendixDeployTargets.Identity)/extensions/Concord/&quot;" />
-    <!-- Refresh Studio Pro's per-project extension cache (best-effort; no-op if missing). -->
+    <!-- Refresh Studio Pro's per-project extension cache (best-effort; no-op if missing).
+         The probe looks for any of: Concord.Host11x.dll, Concord.Host10x.dll, or the
+         legacy Concord.dll (v4.x cache folders). -->
     <Exec Condition="'$(OS)' != 'Windows_NT'"
           IgnoreExitCode="true"
-          Command="for d in &quot;%(_MendixDeployTargets.Identity)/.mendix-cache/extensions-cache/&quot;*/ ; do if [ -f &quot;$d/Concord.dll&quot; ]; then cp -R &quot;$(TargetDir).&quot; &quot;$d&quot;; echo &quot;Refreshed cache: $d&quot;; fi; done" />
+          Command="for d in &quot;%(_MendixDeployTargets.Identity)/.mendix-cache/extensions-cache/&quot;*/ ; do if [ -f &quot;$d/Concord.Host11x.dll&quot; ] || [ -f &quot;$d/Concord.Host10x.dll&quot; ] || [ -f &quot;$d/Concord.dll&quot; ]; then cp -R &quot;$(TargetDir).&quot; &quot;$d&quot;; echo &quot;Refreshed cache: $d&quot;; fi; done" />
+    <Exec Condition="'$(OS)' == 'Windows_NT'"
+          IgnoreExitCode="true"
+          Command="for /d %%d in (&quot;%(_MendixDeployTargets.Identity)\.mendix-cache\extensions-cache\*&quot;) do if exist &quot;%%d\Concord.Host11x.dll&quot; xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%%d&quot;" />
+    <Exec Condition="'$(OS)' == 'Windows_NT'"
+          IgnoreExitCode="true"
+          Command="for /d %%d in (&quot;%(_MendixDeployTargets.Identity)\.mendix-cache\extensions-cache\*&quot;) do if exist &quot;%%d\Concord.Host10x.dll&quot; xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%%d&quot;" />
     <Exec Condition="'$(OS)' == 'Windows_NT'"
           IgnoreExitCode="true"
           Command="for /d %%d in (&quot;%(_MendixDeployTargets.Identity)\.mendix-cache\extensions-cache\*&quot;) do if exist &quot;%%d\Concord.dll&quot; xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%%d&quot;" />
