@@ -1,5 +1,39 @@
 # Changelog
 
+## 5.0.0-alpha.1 — Cross-version foundation
+
+**Architecture change.** Concord now ships as `Concord.Core.dll` + two version-specific host DLLs (`Concord.Host11x.dll` for Studio Pro 11.x, `Concord.Host10x.dll` for Studio Pro 10.24.13). Each host binds its version's `Mendix.StudioPro.ExtensionsAPI`; Studio Pro picks the matching host. Shared infrastructure (PTY, settings, MCP host, Maia bridge, skill installer) lives in Core and works on both versions.
+
+This is an **alpha**: 11.x is feature-complete and matches v4.2.2's behavior; 10.x is currently a preview (single "Concord (10.x preview)" menu entry showing a message dialog) while we port the UI-tier classes against the 10.21.1 API surface.
+
+### What works on each Studio Pro version
+
+| Version | Extension folder | Status |
+|---|---|---|
+| Studio Pro 11.x | `extensions/Concord11x/` | Full feature surface — terminal pane, MCP server, Maia bridge, skill installer, all v4.2.2 functionality |
+| Studio Pro 10.24.13 | `extensions/Concord10x/` | Preview only — menu entry confirming Concord is loaded; full functionality coming in subsequent 5.x releases |
+
+### Highlights
+
+- `Concord.Core.dll`: a single shared library, no Studio Pro dependency at the package-reference level. Contains PTY layer, terminal session manager, settings/skills/rules installers, MCP host (StudioProActions + StudioProActionServer), Maia bridge (CDP transports + injected JS agent), and the new Interop-interface boundary (`IStudioProAppHost`, `IRunConfigurationsHost`, `IRunStateHost`, `IModuleImportHost`) plus a `HostServices` registry.
+- `Concord.Host11x.dll`: binds `Mendix.StudioPro.ExtensionsAPI 11.6.2`. Hosts the existing 11.x MEF surface (TerminalMenuExtension, TerminalPaneExtension, TerminalPaneViewModel, TerminalWebServer, RunStateProbe, StudioProUiAutomation). All exports import `Host11xEntry` to guarantee MEF activation order so `HostContext.Initialize` + `HostServices.Register` run before any other host-side construction.
+- `Concord.Host10x.dll`: binds `Mendix.StudioPro.ExtensionsAPI 10.21.1` (the version MCPExtension uses for 10.24.13 support). Currently exposes one `MenuExtension`-based menu entry; the rest of the UI surface lands in a follow-up as we reconcile the 10.x `MenuExtension` (abstract base class) vs 11.x `IMenuExtension` (interface) API drift.
+- `manifest.json` is per-host with exactly one DLL — Studio Pro 10.24.13's extension loader rejects multi-DLL manifests (calls `.Single()` during hashing, throws `InvalidOperationException`).
+- New per-host MSBuild deploy targets: `MendixDeployTarget10x` and `MendixDeployTarget11x` in `Directory.Build.props`. Cross-version devs set both to different test projects so a Studio Pro instance never sees the wrong-version extension folder (which would crash on type resolution).
+
+### Migration from 4.2.2
+
+- Delete the old `extensions/Concord/` folder from your Mendix projects before installing 5.0.0-alpha.1.
+- Wipe `<project>/.mendix-cache/extensions-cache/` so Studio Pro rebuilds the snapshot from the new layout.
+- See `DEPLOYING.md` for the full developer + consumer paths.
+
+### Internal
+
+- 4 new Interop interfaces in Core, plus a `HostServices` static registry. Currently registered-but-unused (the existing host code still injects Studio Pro services through MEF `[Import]` constructors directly). Consolidating to a single host-injection mechanism is W2 work.
+- `Concord.Core.Tests` project added (5 unit tests covering `TargetMode` + `HostContext`).
+- All 245 existing tests (4 in Concord.Core.Tests + 241 in Terminal.Tests) pass on the new layout.
+- Legacy `Terminal.csproj` shim deleted.
+
 ## 4.2.2 — 2026-05-10
 
 ### Fixed

@@ -9,7 +9,7 @@
     <LangVersion>preview</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
-    <Version>4.1.0</Version>
+    <Version>5.0.0-alpha.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
