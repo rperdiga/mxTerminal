@@ -4,12 +4,18 @@ using Mendix.StudioPro.ExtensionsAPI.Services;
 using Mendix.StudioPro.ExtensionsAPI.UI.WebServer;
 using Terminal;
 using Terminal.Interop;
+using Concord.Host11x;
 
 namespace Concord.Host11x.Ui;
 
 [Export(typeof(WebServerExtension))]
 public sealed class TerminalWebServer : WebServerExtension
 {
+    [Import(typeof(Host11xEntry))]
+#pragma warning disable CS0649  // Field is assigned by MEF, never read directly
+    private Host11xEntry? _entry = null;
+#pragma warning restore CS0649
+
     private readonly IExtensionFileService extensionFileService;
 
     [ImportingConstructor]

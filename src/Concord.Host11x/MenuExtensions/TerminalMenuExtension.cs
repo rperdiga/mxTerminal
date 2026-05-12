@@ -3,6 +3,7 @@ using Mendix.StudioPro.ExtensionsAPI.UI.Menu;
 using Mendix.StudioPro.ExtensionsAPI.UI.Services;
 using Terminal;
 using Terminal.Interop;
+using Concord.Host11x;
 using Concord.Host11x.Pane;
 
 namespace Concord.Host11x.MenuExtensions;
@@ -10,6 +11,11 @@ namespace Concord.Host11x.MenuExtensions;
 [Export(typeof(MenuExtension))]
 public sealed class TerminalMenuExtension : MenuExtension
 {
+    [Import(typeof(Host11xEntry))]
+#pragma warning disable CS0649  // Field is assigned by MEF, never read directly
+    private Host11xEntry? _entry = null;
+#pragma warning restore CS0649
+
     private readonly IDockingWindowService docking;
 
     [ImportingConstructor]
