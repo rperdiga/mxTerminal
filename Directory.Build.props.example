@@ -12,5 +12,10 @@
 <Project>
   <PropertyGroup>
     <MendixDeployTarget></MendixDeployTarget>
+    <!-- Mendix.StudioPro.ExtensionsAPI version compatible with Studio Pro 10.24.13.
+         10.21.1 matches the version MCPExtension uses for 10.24 support.
+         W1 discovery spike (Task 1) will confirm this version works for Concord
+         too — until then, treat as a default. -->
+    <ExtensionsApi10xVersion>10.21.1</ExtensionsApi10xVersion>
   </PropertyGroup>
 </Project>

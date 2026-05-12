@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyName>Concord.Host10x</AssemblyName>
+    <RootNamespace>Concord.Host10x</RootNamespace>
+    <LangVersion>preview</LangVersion>
+    <IsPackable>false</IsPackable>
+    <Version>4.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Concord.Core\Concord.Core.csproj" />
+    <PackageReference Include="Mendix.StudioPro.ExtensionsAPI" Version="$(ExtensionsApi10xVersion)" />
+  </ItemGroup>
+</Project>
