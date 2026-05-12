@@ -6,8 +6,12 @@ using Mendix.StudioPro.ExtensionsAPI.UI.WebView;
 using Terminal.Messages;
 using System.Reflection;
 using System.Text.Json;
+using Terminal;
+using Terminal.Interop;
+using Concord.Host11x.Interop;
+using Messages = Terminal.Messages;
 
-namespace Terminal;
+namespace Concord.Host11x.Pane;
 
 public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
 {
@@ -26,7 +30,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     // during TryAutoStartActionServer. Without these the get_active_run_configuration
     // tool returned "Active-run-configuration callback not wired" any time the
     // user saved Settings and the action server was rebuilt.
-    private readonly Func<RunConfigurationInfo?>? getActiveRunConfig;
+    private readonly Func<RunConfigurationSnapshot?>? getActiveRunConfig;
     private readonly Func<(string? path, string? name)>? getProjectInfo;
 
     private IWebView? webView;
@@ -49,7 +53,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         string bundledSkillsRoot,
         string bundledRulesRoot,
         Func<string[]> consumePendingFirstRunNotices,
-        Func<RunConfigurationInfo?>? getActiveRunConfig = null,
+        Func<RunConfigurationSnapshot?>? getActiveRunConfig = null,
         Func<(string? path, string? name)>? getProjectInfo = null)
     {
         Title = title;

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using FluentAssertions;
 using Terminal;
+using Concord.Host11x.Interop;
 using Xunit;
 
 namespace Terminal.Tests;

@@ -1,16 +1,43 @@
 <!--
-  Copy this file to Directory.Build.props (gitignored) and set MendixDeployTarget
-  to the Mendix project(s) where you want builds to deploy. Each target gets
-  its own xcopy of the build output into <target>\extensions\Terminal\.
+  Copy this file to Directory.Build.props (gitignored) and set deploy targets.
 
-  Single target:
-    <MendixDeployTarget>C:\Mendix Projects\MyTestApp</MendixDeployTarget>
+  Per-host deploy:
+    MendixDeployTarget10x — Concord.Host10x.dll deploys here (extensions/Concord10x/)
+    MendixDeployTarget11x — Concord.Host11x.dll deploys here (extensions/Concord11x/)
 
-  Multiple targets (semicolon-separated):
-    <MendixDeployTarget>C:\Projects\AppOne;C:\Projects\AppTwo</MendixDeployTarget>
+  Each accepts a semicolon-separated list of project roots.
+
+  Studio Pro 10.x crashes if it sees Concord11x/ in its extensions/ folder
+  (type-resolution failure on 11.x ExtensionsAPI types), and vice versa. So a
+  dev working across both Studio Pro versions needs two separate test
+  projects — one for each host.
+
+  Single-host setups (only working on one Studio Pro version): set just the
+  matching property and ignore the other.
+
+  Fallback:
+    MendixDeployTarget — used by either host if its per-host override is unset.
+
+  Examples:
+
+    Cross-version dev (two test projects):
+      <MendixDeployTarget10x>C:\Projects\Test_10_24_13</MendixDeployTarget10x>
+      <MendixDeployTarget11x>C:\Projects\Test_11_10</MendixDeployTarget11x>
+
+    Single-version dev (11.x only):
+      <MendixDeployTarget11x>C:\Projects\MyApp</MendixDeployTarget11x>
+
+    Legacy single-target (deprecated — works for both hosts but both extension
+    folders land in the same project, which crashes the wrong-version Studio
+    Pro):
+      <MendixDeployTarget>C:\Projects\MyApp</MendixDeployTarget>
 -->
 <Project>
   <PropertyGroup>
-    <MendixDeployTarget></MendixDeployTarget>
+    <MendixDeployTarget10x></MendixDeployTarget10x>
+    <MendixDeployTarget11x></MendixDeployTarget11x>
+    <!-- Mendix.StudioPro.ExtensionsAPI version compatible with Studio Pro 10.24.13.
+         10.21.1 matches the version MCPExtension uses for 10.24 support. -->
+    <ExtensionsApi10xVersion>10.21.1</ExtensionsApi10xVersion>
   </PropertyGroup>
 </Project>

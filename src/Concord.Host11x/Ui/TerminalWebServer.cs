@@ -2,12 +2,20 @@ using System.ComponentModel.Composition;
 using System.Net;
 using Mendix.StudioPro.ExtensionsAPI.Services;
 using Mendix.StudioPro.ExtensionsAPI.UI.WebServer;
+using Terminal;
+using Terminal.Interop;
+using Concord.Host11x;
 
-namespace Terminal;
+namespace Concord.Host11x.Ui;
 
 [Export(typeof(WebServerExtension))]
 public sealed class TerminalWebServer : WebServerExtension
 {
+    [Import(typeof(Host11xEntry))]
+#pragma warning disable CS0414  // Sentinel: field is read by MEF activation, never used by host code
+    private Host11xEntry? _entry = null;
+#pragma warning restore CS0414
+
     private readonly IExtensionFileService extensionFileService;
 
     [ImportingConstructor]

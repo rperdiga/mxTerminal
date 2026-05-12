@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyName>Concord.Host10x</AssemblyName>
+    <RootNamespace>Concord.Host10x</RootNamespace>
+    <LangVersion>preview</LangVersion>
+    <IsPackable>false</IsPackable>
+    <Version>5.0.0-alpha.1</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Concord.Core\Concord.Core.csproj" />
+    <PackageReference Include="Mendix.StudioPro.ExtensionsAPI" Version="$(ExtensionsApi10xVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="manifest.json"><CopyToOutputDirectory>Always</CopyToOutputDirectory></Content>
+  </ItemGroup>
+
+  <!--
+    Two-extension layout: Host10x deploys to extensions/Concord10x/; Host11x to
+    extensions/Concord11x/. Each is a separate Studio Pro extension with its own
+    single-DLL manifest. Required because Studio Pro 10.24.13's extension loader
+    rejects multi-DLL manifests (calls .Single() during hashing — System.Linq
+    InvalidOperationException). The two-folder layout duplicates Concord.Core.dll
+    and the shared assets but is the only structure that loads on both versions.
+
+    On Studio Pro 10.x: loads Concord10x/ cleanly; attempts Concord11x/, type
+    resolution against 11.x ExtensionsAPI fails, MEF skips. (Verified by spike
+    test 2026-05-12.) On Studio Pro 11.x: mirror.
+  -->
+  <!-- Per-host deploy target: prefer $(MendixDeployTarget10x), fall back to
+       $(MendixDeployTarget). The per-host property exists so devs working
+       across versions can deploy each host to a different Mendix project
+       (e.g., a 10.24.13 test project for Host10x, a 11.10 one for Host11x).
+       Studio Pro 10.x crashes if it sees Concord11x/ in its extensions/
+       folder (type-resolution failure inside the loader's .Single() during
+       MEF discovery), so the two extensions must NOT co-deploy. -->
+  <PropertyGroup>
+    <_Host10xDeployTarget Condition="'$(MendixDeployTarget10x)' != ''">$(MendixDeployTarget10x)</_Host10xDeployTarget>
+    <_Host10xDeployTarget Condition="'$(_Host10xDeployTarget)' == ''">$(MendixDeployTarget)</_Host10xDeployTarget>
+  </PropertyGroup>
+  <Target Name="DeployToMendix" AfterTargets="PostBuildEvent" Condition="'$(_Host10xDeployTarget)' != ''">
+    <ItemGroup>
+      <_MendixDeployTargets Include="$(_Host10xDeployTarget)" />
+    </ItemGroup>
+    <Message Importance="high" Text="Deploying Host10x to %(_MendixDeployTargets.Identity)/extensions/Concord10x" />
+    <Exec Condition="'$(OS)' == 'Windows_NT'"
+          Command="xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%(_MendixDeployTargets.Identity)\extensions\Concord10x&quot;" />
+    <Exec Condition="'$(OS)' != 'Windows_NT'"
+          Command="mkdir -p &quot;%(_MendixDeployTargets.Identity)/extensions/Concord10x&quot; &amp;&amp; cp -R &quot;$(TargetDir).&quot; &quot;%(_MendixDeployTargets.Identity)/extensions/Concord10x/&quot;" />
+    <!-- Refresh Studio Pro's per-project extension cache (best-effort; no-op if missing). -->
+    <Exec Condition="'$(OS)' == 'Windows_NT'"
+          IgnoreExitCode="true"
+          Command="for /d %%d in (&quot;%(_MendixDeployTargets.Identity)\.mendix-cache\extensions-cache\*&quot;) do if exist &quot;%%d\Concord.Host10x.dll&quot; xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%%d&quot;" />
+  </Target>
+</Project>

@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyName>Concord.Core</AssemblyName>
+    <RootNamespace>Terminal</RootNamespace>
+    <LangVersion>preview</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <Version>5.0.0-alpha.1</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Terminal.Tests" />
+    <InternalsVisibleTo Include="Concord.Core.Tests" />
+    <InternalsVisibleTo Include="Concord.Host10x" />
+    <InternalsVisibleTo Include="Concord.Host11x" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Eto.Forms" Version="2.9.*" />
+    <PackageReference Include="System.Text.Json" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Maia/maia_agent.js" LogicalName="Terminal.Maia.maia_agent.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Content includes use Link metadata to preserve top-level folder names
+         (wwwroot/, skills/, skills-mac/, rules/) in the output directory.
+         Without Link, MSBuild strips the parent-relative path and the files
+         land flat at the output root — TerminalWebServer's ResolvePath
+         ("wwwroot", "index.html") would then 404. -->
+    <Content Include="..\..\wwwroot\**\*">
+      <Link>wwwroot\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <Content Include="..\..\skills\**\*">
+      <Link>skills\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <Content Include="..\..\skills-mac\**\*">
+      <Link>skills-mac\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <Content Include="..\..\rules\**\*">
+      <Link>rules\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+  </ItemGroup>
+</Project>

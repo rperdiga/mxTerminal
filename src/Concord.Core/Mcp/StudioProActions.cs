@@ -1,33 +1,6 @@
 namespace Terminal;
 
 /// <summary>
-/// Result of one action call. <see cref="Error"/> set means failure;
-/// otherwise <see cref="Status"/> describes the outcome and any of the
-/// optional payload fields may carry richer detail.
-/// </summary>
-public sealed record ActionResult(
-    string? Status = null,
-    string? Url = null,
-    string? Error = null,
-    object? Data = null)
-{
-    public static ActionResult Ok(string status, string? url = null) => new(Status: status, Url: url);
-    public static ActionResult OkWith(string status, object data) => new(Status: status, Data: data);
-    public static ActionResult Fail(string error) => new(Error: error);
-}
-
-/// <summary>Snapshot of a Mendix local run configuration.</summary>
-public sealed record RunConfigurationInfo(string? Id, string? Name, string? ApplicationRootUrl);
-
-/// <summary>Composite status for the get_app_status tool.</summary>
-public sealed record AppStatusInfo(
-    string? ProjectPath,
-    string? ProjectName,
-    string Running,                    // "running" | "stopped" | "unknown"
-    string? RunningUrl,
-    RunConfigurationInfo? ActiveRunConfiguration);
-
-/// <summary>
 /// State machine for run_app / stop_app / refresh_project. Pure logic — no
 /// HTTP, no DllImports. Acquires a single semaphore so only one action runs at a time.
 /// </summary>
@@ -45,7 +18,7 @@ public sealed class StudioProActions
     private readonly SemaphoreSlim gate = new(1, 1);
     // Optional callbacks supplied by the pane extension. Decoupled from the
     // Mendix Extensibility API surface so this class stays unit-testable.
-    private readonly Func<RunConfigurationInfo?>? getActiveRunConfig;
+    private readonly Func<RunConfigurationSnapshot?>? getActiveRunConfig;
     private readonly Func<(string? path, string? name)>? getProjectInfo;
 
     public StudioProActions(
@@ -54,7 +27,7 @@ public sealed class StudioProActions
         TimeSpan? runTimeout = null,
         TimeSpan? stopTimeout = null,
         TimeSpan? pollInterval = null,
-        Func<RunConfigurationInfo?>? getActiveRunConfig = null,
+        Func<RunConfigurationSnapshot?>? getActiveRunConfig = null,
         Func<(string? path, string? name)>? getProjectInfo = null)
     {
         this.probe = probe;

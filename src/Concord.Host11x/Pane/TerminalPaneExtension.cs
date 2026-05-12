@@ -5,12 +5,21 @@ using Mendix.StudioPro.ExtensionsAPI.UI.Events;
 using Mendix.StudioPro.ExtensionsAPI.UI.Services;
 using Mendix.StudioPro.ExtensionsAPI.Model;
 using Mendix.StudioPro.ExtensionsAPI.Model.Projects;
+using Terminal;
+using Terminal.Interop;
+using Concord.Host11x;
+using Concord.Host11x.Interop;
 
-namespace Terminal;
+namespace Concord.Host11x.Pane;
 
 [Export(typeof(DockablePaneExtension))]
 public sealed class TerminalPaneExtension : DockablePaneExtension
 {
+    [Import(typeof(Host11xEntry))]
+#pragma warning disable CS0414  // Sentinel: field is read by MEF activation, never used by host code
+    private Host11xEntry? _entry = null;
+#pragma warning restore CS0414
+
     // Product name. Used by Studio Pro both as the pane's MEF identity AND
     // the visible tab title in the right-pane strip. Renamed from "Terminal"
     // to "Concord" — see About panel for the meaning.
@@ -90,7 +99,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
             manager: manager,
             getCurrentApp: () => CurrentApp,
             webIndexUri: indexUri,
-            log: log,
+            log: log!,
             getApplicationRootUrl: () =>
             {
                 var model = CurrentApp;
@@ -123,7 +132,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                     string? id  = TryStr(() => (string?)d.Id?.ToString());
                     string? nm  = TryStr(() => (string?)d.Name);
                     string? url = TryStr(() => (string?)d.ApplicationRootUrl);
-                    return new RunConfigurationInfo(id, nm, url);
+                    return new RunConfigurationSnapshot(id, nm, url);
                 }
                 catch (Exception ex) { log?.Warn($"getActiveRunConfig threw: {ex.Message}"); return null; }
             },
@@ -305,7 +314,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                         string? id  = TryStr(() => (string?)d.Id?.ToString());
                         string? nm  = TryStr(() => (string?)d.Name);
                         string? url = TryStr(() => (string?)d.ApplicationRootUrl);
-                        return new RunConfigurationInfo(id, nm, url);
+                        return new RunConfigurationSnapshot(id, nm, url);
                     }
                     catch (Exception ex) { log?.Warn($"getActiveRunConfig threw: {ex.Message}"); return null; }
                 },

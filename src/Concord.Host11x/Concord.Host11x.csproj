@@ -1,0 +1,77 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyName>Concord.Host11x</AssemblyName>
+    <RootNamespace>Concord.Host11x</RootNamespace>
+    <LangVersion>preview</LangVersion>
+    <IsPackable>false</IsPackable>
+    <Version>5.0.0-alpha.1</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Terminal.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Concord.Core\Concord.Core.csproj" />
+    <PackageReference Include="Mendix.StudioPro.ExtensionsAPI" Version="11.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Per-host manifest. Studio Pro 10.x rejects manifests that list more than
+         one DLL (the loader calls .Single() during hashing), so each host ships
+         as its OWN extension folder with its OWN single-DLL manifest. See
+         DeployToMendix below — Host11x deploys to extensions/Concord11x/. -->
+    <Content Include="manifest.json"><CopyToOutputDirectory>Always</CopyToOutputDirectory></Content>
+  </ItemGroup>
+
+  <Target Name="BuildUi" BeforeTargets="BeforeBuild"
+          Inputs="$(MSBuildThisFileDirectory)..\..\ui\src\**\*;$(MSBuildThisFileDirectory)..\..\ui\package.json;$(MSBuildThisFileDirectory)..\..\ui\esbuild.mjs;$(MSBuildThisFileDirectory)..\..\ui\index.html"
+          Outputs="$(MSBuildThisFileDirectory)..\..\wwwroot\terminal.bundle.js">
+    <Message Importance="high" Text="Installing UI dependencies (first build only)…" Condition="!Exists('$(MSBuildThisFileDirectory)..\..\ui\node_modules')" />
+    <Exec Command="npm install --prefix &quot;$(MSBuildThisFileDirectory)..\..\ui&quot; --silent" Condition="!Exists('$(MSBuildThisFileDirectory)..\..\ui\node_modules')" />
+    <Message Importance="high" Text="Bundling UI…" />
+    <Exec Command="node &quot;$(MSBuildThisFileDirectory)..\..\ui\esbuild.mjs&quot;" />
+  </Target>
+
+  <!--
+    MendixDeployTarget is a semicolon-separated list of project roots. Each one
+    receives its own copy of $(TargetDir) into <target>/extensions/Concord/.
+    Set in Directory.Build.props (per-developer, gitignored). Cross-platform:
+    xcopy on Windows, cp -R on macOS/Linux.
+
+    Studio Pro on macOS (and possibly recent Windows versions) snapshots the
+    extension directory into <project>/.mendix-cache/extensions-cache/<guid>/
+    at first load and serves wwwroot from there — so writing to extensions/
+    after Studio Pro is already running has no effect. We refresh the cache
+    too: find any extensions-cache subdirectory containing a Concord.dll
+    (that's our extension's snapshot) and overlay our build output.
+  -->
+  <!-- Per-host deploy target: prefer $(MendixDeployTarget11x), fall back to
+       $(MendixDeployTarget). See the matching comment in Concord.Host10x.csproj
+       for why the two extensions cannot co-deploy. -->
+  <PropertyGroup>
+    <_Host11xDeployTarget Condition="'$(MendixDeployTarget11x)' != ''">$(MendixDeployTarget11x)</_Host11xDeployTarget>
+    <_Host11xDeployTarget Condition="'$(_Host11xDeployTarget)' == ''">$(MendixDeployTarget)</_Host11xDeployTarget>
+  </PropertyGroup>
+  <Target Name="DeployToMendix" AfterTargets="PostBuildEvent" Condition="'$(_Host11xDeployTarget)' != ''">
+    <ItemGroup>
+      <_MendixDeployTargets Include="$(_Host11xDeployTarget)" />
+    </ItemGroup>
+    <Message Importance="high" Text="Deploying Host11x to %(_MendixDeployTargets.Identity)/extensions/Concord11x" />
+    <Exec Condition="'$(OS)' == 'Windows_NT'"
+          Command="xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%(_MendixDeployTargets.Identity)\extensions\Concord11x&quot;" />
+    <Exec Condition="'$(OS)' != 'Windows_NT'"
+          Command="mkdir -p &quot;%(_MendixDeployTargets.Identity)/extensions/Concord11x&quot; &amp;&amp; cp -R &quot;$(TargetDir).&quot; &quot;%(_MendixDeployTargets.Identity)/extensions/Concord11x/&quot;" />
+    <!-- Refresh Studio Pro's per-project extension cache (best-effort; no-op if missing). -->
+    <Exec Condition="'$(OS)' != 'Windows_NT'"
+          IgnoreExitCode="true"
+          Command="for d in &quot;%(_MendixDeployTargets.Identity)/.mendix-cache/extensions-cache/&quot;*/ ; do if [ -f &quot;$d/Concord.Host11x.dll&quot; ]; then cp -R &quot;$(TargetDir).&quot; &quot;$d&quot;; echo &quot;Refreshed cache: $d&quot;; fi; done" />
+    <Exec Condition="'$(OS)' == 'Windows_NT'"
+          IgnoreExitCode="true"
+          Command="for /d %%d in (&quot;%(_MendixDeployTargets.Identity)\.mendix-cache\extensions-cache\*&quot;) do if exist &quot;%%d\Concord.Host11x.dll&quot; xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%%d&quot;" />
+  </Target>
+</Project>
