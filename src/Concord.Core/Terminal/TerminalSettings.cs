@@ -96,7 +96,7 @@ public sealed record TerminalSettings(
     /// without a path separator (<c>bash</c>, <c>zsh</c>) passes through and
     /// will be resolved against PATH at spawn time.
     /// </summary>
-    public static string MigrateShellPathForPlatform(string saved)
+    internal static string MigrateShellPathForPlatform(string saved)
     {
         if (string.IsNullOrEmpty(saved)) return DefaultShellPath();
         bool looksWindows = saved.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
