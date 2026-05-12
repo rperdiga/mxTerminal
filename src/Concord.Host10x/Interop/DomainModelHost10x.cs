@@ -1,4 +1,4 @@
-﻿namespace Concord.Host10x.Interop;
+namespace Concord.Host10x.Interop;
 
 using System.Security.Cryptography;
 using System.Text;
@@ -33,7 +33,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
         _nameValidation = nameValidation;
     }
 
-    // â”€â”€ Module-level â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Module-level ─────────────────────────────────────────────────────────
 
     public ModuleId CreateModule(string moduleName)
     {
@@ -60,7 +60,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
         tx.Commit();
     }
 
-    // â”€â”€ Entity CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Entity CRUD ──────────────────────────────────────────────────────────
 
     public IReadOnlyList<EntityRef> ListEntities(ModuleId moduleId)
     {
@@ -281,7 +281,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
         tx.Commit();
     }
 
-    // â”€â”€ Attribute CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Attribute CRUD ───────────────────────────────────────────────────────
 
     public AttributeRef AddAttribute(EntityRef entity, AttributeSpec spec)
     {
@@ -413,7 +413,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
         tx.Commit();
     }
 
-    // â”€â”€ Association CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Association CRUD ─────────────────────────────────────────────────────
 
     public AssociationRef CreateAssociation(CreateAssociationRequest request)
     {
@@ -605,7 +605,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
             .ToList();
     }
 
-    // â”€â”€ Generalization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Generalization ────────────────────────────────────────────────────────
 
     public void SetGeneralization(EntityRef entity, EntityRef parent)
     {
@@ -636,7 +636,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
         tx.Commit();
     }
 
-    // â”€â”€ Event handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Event handlers ────────────────────────────────────────────────────────
 
     public void AddEventHandler(EntityRef entity, EventHandlerSpec handler)
     {
@@ -658,7 +658,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
         tx.Commit();
     }
 
-    // â”€â”€ Enumeration documents â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Enumeration documents ─────────────────────────────────────────────────
 
     public IReadOnlyList<EnumerationRef> ListEnumerations(ModuleId moduleId)
     {
@@ -763,7 +763,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
         tx.Commit();
     }
 
-    // â”€â”€ Document-level operations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Document-level operations ─────────────────────────────────────────────
 
     public void RenameDocument(DocumentId document, string newName)
     {
@@ -781,7 +781,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
         throw new InvalidOperationException($"Document '{document.QualifiedName}' (id={document.Value}) not found.");
     }
 
-    // â”€â”€ Documentation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Documentation ─────────────────────────────────────────────────────────
 
     public void SetEntityDocumentation(EntityRef entity, string documentation)
     {
@@ -821,7 +821,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
         tx.Commit();
     }
 
-    // â”€â”€ Layout / arrange â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Layout / arrange ──────────────────────────────────────────────────────
 
     public void ArrangeDomainModel(ArrangeDomainModelRequest request)
     {
@@ -831,7 +831,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
         tx.Commit();
     }
 
-    // â”€â”€ Name validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Name validation ───────────────────────────────────────────────────────
 
     public NameValidationResult? ValidateName(string name, bool autoFix = false)
     {
@@ -846,7 +846,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
         return new NameValidationResult(result.IsValid, result.IsValid ? null : result.ErrorMessage, suggestion);
     }
 
-    // â”€â”€ Copy / clone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Copy / clone ──────────────────────────────────────────────────────────
 
     public CopyResult CopyElement(CopyRequest request)
     {
@@ -919,7 +919,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
         }
     }
 
-    // â”€â”€ Model integrity checks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Model integrity checks ────────────────────────────────────────────────
 
     public IReadOnlyList<ModelCheckItem> CheckModel(string? moduleName = null)
     {
@@ -1019,7 +1019,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
         return results;
     }
 
-    // â”€â”€ Private helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Private helpers ───────────────────────────────────────────────────────
 
     private static Guid ParseId(string id)
         => Guid.TryParse(id, out var guid) ? guid : GuidFromString(id);
@@ -1388,7 +1388,7 @@ public sealed class DomainModelHost10x : IDomainModelHost
         return dot >= 0 ? qualifiedOrSimple[(dot + 1)..] : qualifiedOrSimple;
     }
 
-    // Sugiyama-style layout â€” adapted from MendixDomainModelTools.ArrangeDomainModelInternal
+    // Sugiyama-style layout — adapted from MendixDomainModelTools.ArrangeDomainModelInternal
     private void ArrangeDomainModelInternal(IModule module, string? rootEntityName = null)
     {
         var entities = module.DomainModel.GetEntities().ToList();
