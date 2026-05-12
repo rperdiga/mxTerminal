@@ -9,6 +9,11 @@
     <LangVersion>preview</LangVersion>
     <IsPackable>false</IsPackable>
     <Version>5.0.0-alpha.1</Version>
+    <!-- Default 10.x ExtensionsAPI version. Devs can override in
+         Directory.Build.props (gitignored) if a different Studio Pro 10.x
+         version requires a different NuGet pin. 10.21.1 matches the version
+         MCPExtension uses for Studio Pro 10.24.13 support. -->
+    <ExtensionsApi10xVersion Condition="'$(ExtensionsApi10xVersion)' == ''">10.21.1</ExtensionsApi10xVersion>
   </PropertyGroup>
 
   <ItemGroup>
