@@ -11,6 +11,13 @@ public static class HostServices
     private static IRunConfigurationsHost? _runConfigs;
     private static IRunStateHost? _runState;
     private static IModuleImportHost? _moduleImport;
+    private static IModelHost? _model;
+    private static IDomainModelHost? _domainModel;
+    private static IPageGenerationHost? _pageGeneration;
+    private static INavigationHost? _navigation;
+    private static IVersionControlHost? _versionControl;
+    private static IUntypedModelHost? _untypedModel;
+    private static IMicroflowAuthoringHost? _microflowAuthoring;
     private static readonly object _gate = new();
 
     public static IStudioProAppHost App
@@ -21,7 +28,26 @@ public static class HostServices
         => _runState ?? throw NotInitialized(nameof(IRunStateHost));
     public static IModuleImportHost ModuleImport
         => _moduleImport ?? throw NotInitialized(nameof(IModuleImportHost));
+    public static IModelHost Model
+        => _model ?? throw NotInitialized(nameof(IModelHost));
+    public static IDomainModelHost DomainModel
+        => _domainModel ?? throw NotInitialized(nameof(IDomainModelHost));
+    public static IPageGenerationHost PageGeneration
+        => _pageGeneration ?? throw NotInitialized(nameof(IPageGenerationHost));
+    public static INavigationHost Navigation
+        => _navigation ?? throw NotInitialized(nameof(INavigationHost));
+    public static IVersionControlHost VersionControl
+        => _versionControl ?? throw NotInitialized(nameof(IVersionControlHost));
+    public static IUntypedModelHost UntypedModel
+        => _untypedModel ?? throw NotInitialized(nameof(IUntypedModelHost));
+    public static IMicroflowAuthoringHost MicroflowAuthoring
+        => _microflowAuthoring ?? throw NotInitialized(nameof(IMicroflowAuthoringHost));
 
+    /// <summary>
+    /// Legacy 4-argument overload retained for backward compatibility.
+    /// New accessors (Model … MicroflowAuthoring) will throw until the
+    /// 11-argument overload is called.
+    /// </summary>
     public static void Register(
         IStudioProAppHost app,
         IRunConfigurationsHost runConfigs,
@@ -37,6 +63,40 @@ public static class HostServices
         }
     }
 
+    /// <summary>
+    /// Full 11-argument overload that registers all Core Interop services at once.
+    /// Host DLLs should prefer this overload; the 4-argument overload is kept for
+    /// test compatibility and incremental adoption.
+    /// </summary>
+    public static void Register(
+        IStudioProAppHost app,
+        IRunConfigurationsHost runConfigs,
+        IRunStateHost runState,
+        IModuleImportHost moduleImport,
+        IModelHost model,
+        IDomainModelHost domainModel,
+        IPageGenerationHost pageGeneration,
+        INavigationHost navigation,
+        IVersionControlHost versionControl,
+        IUntypedModelHost untypedModel,
+        IMicroflowAuthoringHost microflowAuthoring)
+    {
+        lock (_gate)
+        {
+            _app = app;
+            _runConfigs = runConfigs;
+            _runState = runState;
+            _moduleImport = moduleImport;
+            _model = model;
+            _domainModel = domainModel;
+            _pageGeneration = pageGeneration;
+            _navigation = navigation;
+            _versionControl = versionControl;
+            _untypedModel = untypedModel;
+            _microflowAuthoring = microflowAuthoring;
+        }
+    }
+
     internal static void Reset()
     {
         lock (_gate)
@@ -45,6 +105,13 @@ public static class HostServices
             _runConfigs = null;
             _runState = null;
             _moduleImport = null;
+            _model = null;
+            _domainModel = null;
+            _pageGeneration = null;
+            _navigation = null;
+            _versionControl = null;
+            _untypedModel = null;
+            _microflowAuthoring = null;
         }
     }
 
