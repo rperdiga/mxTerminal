@@ -12,9 +12,9 @@ namespace Concord.Host11x.MenuExtensions;
 public sealed class TerminalMenuExtension : MenuExtension
 {
     [Import(typeof(Host11xEntry))]
-#pragma warning disable CS0649  // Field is assigned by MEF, never read directly
+#pragma warning disable CS0414  // Sentinel: field is read by MEF activation, never used by host code
     private Host11xEntry? _entry = null;
-#pragma warning restore CS0649
+#pragma warning restore CS0414
 
     private readonly IDockingWindowService docking;
 

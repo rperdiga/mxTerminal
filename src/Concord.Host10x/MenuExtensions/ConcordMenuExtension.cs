@@ -17,9 +17,9 @@ using Mendix.StudioPro.ExtensionsAPI.UI.Menu;
 public class ConcordMenuExtension : MenuExtension
 {
     [Import(typeof(Host10xEntry))]
-#pragma warning disable CS0649  // Field is assigned by MEF; reference triggers activation order.
+#pragma warning disable CS0414  // Sentinel: field is read by MEF activation, never used by host code
     private Host10xEntry? _entry = null;
-#pragma warning restore CS0649
+#pragma warning restore CS0414
 
     public override IEnumerable<MenuViewModel> GetMenus()
     {
