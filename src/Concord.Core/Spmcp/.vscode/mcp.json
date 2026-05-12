@@ -1,9 +1,0 @@
-{
-	"servers": {
-		"Studio Pro MCP": {
-			"url": "http://localhost:3001",
-			"type": "http"
-		}
-	},
-	"inputs": []
-}
