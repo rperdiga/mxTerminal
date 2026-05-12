@@ -618,6 +618,25 @@ Core resolves through HostServices."
 
 Each task below moves one logical group from `src/` into `src/Concord.Core/` and verifies the build still passes. **Use `git mv`** for each move so blame history follows.
 
+**File-classification rule for subagents.** The lists below were drafted against an earlier snapshot of `src/`. The current tree may include additional files. For any file in `src/` that a Phase 2 task touches but doesn't explicitly name, classify it with:
+
+```powershell
+Select-String -Path src/<file>.cs -Pattern "Mendix\.StudioPro"
+```
+
+- **No match** → file is Studio-Pro-agnostic. Move to `Concord.Core` under the matching subfolder (use `Terminal/` for managers/probes, `Ui/` for HTTP/UI plumbing, `Mcp/` for MCP host code, `Maia/` for the Maia bridge). Add it to the task's git mv list.
+- **Match** → file uses `Mendix.StudioPro.ExtensionsAPI` types. It must live in a host project, not Core. Skip it in Phase 2 tasks; it'll be picked up in Task 11 (Host11x move) and Task 13 (Host10x mirror).
+
+If a file's classification is ambiguous (e.g., it uses an interface that *could* be host-implemented), report it as `DONE_WITH_CONCERNS` rather than guessing.
+
+**Known Studio-Pro-typed files in v4.2.2** (confirmed via grep at plan-write time):
+- `src/TerminalMenuExtension.cs`
+- `src/TerminalPaneExtension.cs`
+- `src/TerminalPaneViewModel.cs`
+- `src/TerminalWebServer.cs`
+
+All four belong in Host11x via Task 11 (and mirrored in Host10x via Task 13). Everything else in `src/` is currently Core-bound.
+
 ### Task 5: Move terminal session + PTY files
 
 **Files moved (git mv):**
@@ -695,7 +714,7 @@ files. Terminal.csproj now references Concord.Core and excludes the
 moved tree from its own compile."
 ```
 
-### Task 6: Move settings + MCP config writer files
+### Task 6: Move settings + MCP config writer + CLI config manager files
 
 **Files moved (git mv):**
 
@@ -708,7 +727,13 @@ src/McpProbe.cs                   → src/Concord.Core/Terminal/McpProbe.cs
 src/StudioProThemeProbe.cs        → src/Concord.Core/Terminal/StudioProThemeProbe.cs
 src/BundledSkillReader.cs         → src/Concord.Core/Terminal/BundledSkillReader.cs
 src/SkillInstaller.cs             → src/Concord.Core/Terminal/SkillInstaller.cs
+src/RulesInstaller.cs             → src/Concord.Core/Terminal/RulesInstaller.cs
+src/AgentsMdManager.cs            → src/Concord.Core/Terminal/AgentsMdManager.cs
+src/ClaudeMdManager.cs            → src/Concord.Core/Terminal/ClaudeMdManager.cs
+src/CopilotInstructionsManager.cs → src/Concord.Core/Terminal/CopilotInstructionsManager.cs
 ```
+
+The four CLI-config managers (`AgentsMdManager`, `ClaudeMdManager`, `CopilotInstructionsManager`, `RulesInstaller`) were added in v4.2.x and play the same role as `SkillInstaller` — they write/manage agent-side config files based on Settings, no Studio Pro coupling.
 
 - [ ] **Step 1: Verify none import Mendix.StudioPro.ExtensionsAPI**
 
@@ -748,23 +773,24 @@ McpProbe, SkillInstaller, BundledSkillReader, TerminalSettings,
 SettingsApplyHelper, StudioProThemeProbe now live in Core."
 ```
 
-### Task 7: Move web server + UI message types
+### Task 7: Move UI message DTOs into Core
+
+`TerminalWebServer.cs` was originally planned for Core but is Studio-Pro-typed (uses `Mendix.StudioPro.ExtensionsAPI.UI.WebServer.IWebServer`). It stays in the host bucket and moves in Task 11. Task 7 covers only the message-DTO folder.
 
 **Files moved (git mv):**
 
 ```
-src/TerminalWebServer.cs   → src/Concord.Core/Ui/TerminalWebServer.cs
-src/Messages/              → src/Concord.Core/Ui/Messages/
+src/Messages/   → src/Concord.Core/Ui/Messages/
 ```
 
-- [ ] **Step 1: Verify Web server doesn't import ExtensionsAPI**
+- [ ] **Step 1: Verify Messages folder doesn't import ExtensionsAPI**
 
-Run `Select-String` on the two paths. Expected: no matches.
+Run: `Select-String -Path src/Messages -Pattern "Mendix\.StudioPro" -Recurse`
+Expected: no matches. These are plain DTOs.
 
-- [ ] **Step 2: Move files**
+- [ ] **Step 2: Move folder**
 
 ```powershell
-git mv src/TerminalWebServer.cs src/Concord.Core/Ui/TerminalWebServer.cs
 git mv src/Messages src/Concord.Core/Ui/Messages
 ```
 
@@ -777,7 +803,11 @@ Expected: both succeed.
 
 ```bash
 git add -A
-git commit -m "refactor(core): move web server + message DTOs into Concord.Core/Ui (W1)"
+git commit -m "refactor(core): move message DTOs into Concord.Core/Ui (W1)
+
+TerminalWebServer.cs intentionally remains in the host bucket — it
+depends on Studio Pro's IWebServer service and will move to Host11x
+in Task 11 (mirrored to Host10x in Task 13)."
 ```
 
 ### Task 8: Move Maia bridge into Core
@@ -968,13 +998,18 @@ MEF entry classes move from Terminal.csproj into here in the next task."
 src/TerminalMenuExtension.cs     → src/Concord.Host11x/MenuExtensions/TerminalMenuExtension.cs
 src/TerminalPaneExtension.cs     → src/Concord.Host11x/Pane/TerminalPaneExtension.cs
 src/TerminalPaneViewModel.cs     → src/Concord.Host11x/Pane/TerminalPaneViewModel.cs
+src/TerminalWebServer.cs         → src/Concord.Host11x/Ui/TerminalWebServer.cs
 src/RunStateProbe.cs             → src/Concord.Host11x/Interop/RunStateProbe.cs
 src/StudioProUiAutomation.cs     → src/Concord.Host11x/Interop/StudioProUiAutomation.cs
 src/IStudioProUiAutomation.cs    → src/Concord.Host11x/Interop/IStudioProUiAutomation.cs
 src/IRunStateProbe.cs            → src/Concord.Host11x/Interop/IRunStateProbe.cs
 ```
 
-These files import `Mendix.StudioPro.ExtensionsAPI` types and must live in a host project, not Core.
+These files import `Mendix.StudioPro.ExtensionsAPI` types and must live in a host project, not Core. Confirm with `Select-String -Path <file> -Pattern "Mendix\.StudioPro"` before moving any file not on this list — if the v4.2.2 src/ tree drifts again, an additional Studio-Pro-typed file should land in this task too.
+
+Note on `IRunStateProbe.cs` / `RunStateProbe.cs` and `IStudioProUiAutomation.cs` / `StudioProUiAutomation.cs`: if `Select-String` returns no `Mendix.StudioPro` match for these (i.e., they're pure interfaces or use service injection through abstractions), move them to `Concord.Core/Interop/` instead and document the change in the commit. The plan defaults them to Host11x because the historical pattern of names suggests Studio Pro coupling, but verify each.
+
+The `TerminalWebServer.cs` move duplicates the full file into each host project (mirrored in Task 13). The HTTP route handling code itself is Studio-Pro-agnostic; only Studio Pro's `IWebServer` registration is host-specific. A cleaner refactor that splits the routing logic into Core and keeps only the registration adapter per host is a W2 polish item — not in scope for W1.
 
 - [ ] **Step 1: Move the files**
 
@@ -1062,14 +1097,28 @@ Repeat the stub pattern for `RunConfigurationsHost11x`, `RunStateHost11x`, `Modu
 
 This **deferred wiring** is intentional: the build must succeed first; the runtime behavior comes back online incrementally in Task 15.
 
-- [ ] **Step 5: Convert the old Terminal.csproj to a deprecation shim**
+- [ ] **Step 5: Move shared Content includes from Terminal.csproj to Concord.Core.csproj**
+
+The current `Terminal.csproj` declares four shared resource trees as Content (these ship in the deploy output and are loaded at runtime by SkillInstaller, RulesInstaller, and the web server):
+
+```xml
+<Content Include="wwwroot/**/*">...</Content>
+<Content Include="skills/**/*">...</Content>
+<Content Include="skills-mac/**/*">...</Content>
+<Content Include="rules/**/*">...</Content>
+```
+
+Move all four into `src/Concord.Core/Concord.Core.csproj`, adjusting the include paths to be relative to the Core project (`..\..\wwwroot\**\*`, `..\..\skills\**\*`, etc.). Set `<CopyToOutputDirectory>Always</CopyToOutputDirectory>` and `<Visible>false</Visible>` on each. The skills/rules trees stay at the repo root (no folder move needed — they're stable as-is).
+
+- [ ] **Step 6: Convert the old Terminal.csproj to a deprecation shim**
 
 Edit `Terminal.csproj`:
 - Change `<AssemblyName>Concord</AssemblyName>` to `<AssemblyName>Concord.Legacy</AssemblyName>` (will be deleted in Task 16, but for now we want a clean build).
-- Remove `<Compile Include="src/**" />` (everything moved).
+- Remove any `<Compile Include="src/**" />` (everything moved).
 - Keep `<Compile Remove="tests/**" />`, `<Compile Remove="debug/**" />`.
 - Drop the `Mendix.StudioPro.ExtensionsAPI` PackageReference (lives in host projects now).
-- Drop the `Maia/maia_agent.js` EmbeddedResource (moved to Core).
+- Drop the `Maia/maia_agent.js` EmbeddedResource (moved to Core in Task 8).
+- Drop the four bulk Content includes (moved to Core in Step 5 above).
 - Drop the `manifest.json` Content include (will be replaced in Task 14).
 
 The result is a near-empty `Terminal.csproj` that still builds but produces an unused DLL we delete in Task 16.
@@ -1164,6 +1213,7 @@ compatible version (configured via \$(ExtensionsApi10xVersion))."
 - Create: `src/Concord.Host10x/MenuExtensions/TerminalMenuExtension.cs`
 - Create: `src/Concord.Host10x/Pane/TerminalPaneExtension.cs`
 - Create: `src/Concord.Host10x/Pane/TerminalPaneViewModel.cs`
+- Create: `src/Concord.Host10x/Ui/TerminalWebServer.cs`
 - Create: `src/Concord.Host10x/Interop/StudioProAppHost10x.cs`
 - Create: `src/Concord.Host10x/Interop/RunConfigurationsHost10x.cs`
 - Create: `src/Concord.Host10x/Interop/RunStateHost10x.cs`
