@@ -5,8 +5,11 @@ using Mendix.StudioPro.ExtensionsAPI.UI.Events;
 using Mendix.StudioPro.ExtensionsAPI.UI.Services;
 using Mendix.StudioPro.ExtensionsAPI.Model;
 using Mendix.StudioPro.ExtensionsAPI.Model.Projects;
+using Terminal;
+using Terminal.Interop;
+using Concord.Host11x.Interop;
 
-namespace Terminal;
+namespace Concord.Host11x.Pane;
 
 [Export(typeof(DockablePaneExtension))]
 public sealed class TerminalPaneExtension : DockablePaneExtension

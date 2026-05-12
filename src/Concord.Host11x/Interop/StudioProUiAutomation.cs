@@ -1,8 +1,10 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using Terminal;
+using Terminal.Interop;
 
-namespace Terminal;
+namespace Concord.Host11x.Interop;
 
 /// <summary>
 /// Drives Studio Pro's own menu/hotkey handlers from the action bridge so

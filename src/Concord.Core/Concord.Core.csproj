@@ -28,4 +28,23 @@
   <ItemGroup>
     <EmbeddedResource Include="Maia/maia_agent.js" LogicalName="Terminal.Maia.maia_agent.js" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\wwwroot\**\*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <Content Include="..\..\skills\**\*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <Content Include="..\..\skills-mac\**\*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <Content Include="..\..\rules\**\*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+  </ItemGroup>
 </Project>

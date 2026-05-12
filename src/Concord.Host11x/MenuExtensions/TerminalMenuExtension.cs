@@ -1,8 +1,11 @@
 using System.ComponentModel.Composition;
 using Mendix.StudioPro.ExtensionsAPI.UI.Menu;
 using Mendix.StudioPro.ExtensionsAPI.UI.Services;
+using Terminal;
+using Terminal.Interop;
+using Concord.Host11x.Pane;
 
-namespace Terminal;
+namespace Concord.Host11x.MenuExtensions;
 
 [Export(typeof(MenuExtension))]
 public sealed class TerminalMenuExtension : MenuExtension

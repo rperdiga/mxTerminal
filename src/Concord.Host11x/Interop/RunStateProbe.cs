@@ -1,6 +1,8 @@
 using System.Net.Sockets;
+using Terminal;
+using Terminal.Interop;
 
-namespace Terminal;
+namespace Concord.Host11x.Interop;
 
 public sealed class RunStateProbe : IRunStateProbe
 {

@@ -2,8 +2,10 @@ using System.ComponentModel.Composition;
 using System.Net;
 using Mendix.StudioPro.ExtensionsAPI.Services;
 using Mendix.StudioPro.ExtensionsAPI.UI.WebServer;
+using Terminal;
+using Terminal.Interop;
 
-namespace Terminal;
+namespace Concord.Host11x.Ui;
 
 [Export(typeof(WebServerExtension))]
 public sealed class TerminalWebServer : WebServerExtension

@@ -29,5 +29,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Terminal.csproj" />
+    <ProjectReference Include="..\src\Concord.Host11x\Concord.Host11x.csproj" />
   </ItemGroup>
 </Project>

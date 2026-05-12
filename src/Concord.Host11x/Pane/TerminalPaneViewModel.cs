@@ -6,8 +6,12 @@ using Mendix.StudioPro.ExtensionsAPI.UI.WebView;
 using Terminal.Messages;
 using System.Reflection;
 using System.Text.Json;
+using Terminal;
+using Terminal.Interop;
+using Concord.Host11x.Interop;
+using Messages = Terminal.Messages;
 
-namespace Terminal;
+namespace Concord.Host11x.Pane;
 
 public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
 {

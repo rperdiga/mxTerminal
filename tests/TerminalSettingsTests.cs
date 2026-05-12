@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Terminal;
+using Concord.Host11x.Pane;
 using Xunit;
 
 namespace Terminal.Tests;
