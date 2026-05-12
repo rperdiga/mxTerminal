@@ -21,12 +21,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Shared manifest at repo root lists both host DLLs (single-manifest layout).
-         Host11x carries it because Host11x's DeployToMendix is the canonical deploy
-         target for shared artifacts. Studio Pro 10.x and 11.x each load only the
-         host DLL whose ExtensionsAPI version matches; the other DLL fails type
-         resolution silently and is skipped. -->
-    <Content Include="..\..\manifest.json"><CopyToOutputDirectory>Always</CopyToOutputDirectory></Content>
+    <!-- Per-host manifest. Studio Pro 10.x rejects manifests that list more than
+         one DLL (the loader calls .Single() during hashing), so each host ships
+         as its OWN extension folder with its OWN single-DLL manifest. See
+         DeployToMendix below — Host11x deploys to extensions/Concord11x/. -->
+    <Content Include="manifest.json"><CopyToOutputDirectory>Always</CopyToOutputDirectory></Content>
   </ItemGroup>
 
   <Target Name="BuildUi" BeforeTargets="BeforeBuild"
@@ -55,25 +54,17 @@
     <ItemGroup>
       <_MendixDeployTargets Include="$(MendixDeployTarget)" />
     </ItemGroup>
-    <Message Importance="high" Text="Deploying to %(_MendixDeployTargets.Identity)/extensions/Concord" />
+    <Message Importance="high" Text="Deploying Host11x to %(_MendixDeployTargets.Identity)/extensions/Concord11x" />
     <Exec Condition="'$(OS)' == 'Windows_NT'"
-          Command="xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%(_MendixDeployTargets.Identity)\extensions\Concord&quot;" />
+          Command="xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%(_MendixDeployTargets.Identity)\extensions\Concord11x&quot;" />
     <Exec Condition="'$(OS)' != 'Windows_NT'"
-          Command="mkdir -p &quot;%(_MendixDeployTargets.Identity)/extensions/Concord&quot; &amp;&amp; cp -R &quot;$(TargetDir).&quot; &quot;%(_MendixDeployTargets.Identity)/extensions/Concord/&quot;" />
-    <!-- Refresh Studio Pro's per-project extension cache (best-effort; no-op if missing).
-         The probe looks for any of: Concord.Host11x.dll, Concord.Host10x.dll, or the
-         legacy Concord.dll (v4.x cache folders). -->
+          Command="mkdir -p &quot;%(_MendixDeployTargets.Identity)/extensions/Concord11x&quot; &amp;&amp; cp -R &quot;$(TargetDir).&quot; &quot;%(_MendixDeployTargets.Identity)/extensions/Concord11x/&quot;" />
+    <!-- Refresh Studio Pro's per-project extension cache (best-effort; no-op if missing). -->
     <Exec Condition="'$(OS)' != 'Windows_NT'"
           IgnoreExitCode="true"
-          Command="for d in &quot;%(_MendixDeployTargets.Identity)/.mendix-cache/extensions-cache/&quot;*/ ; do if [ -f &quot;$d/Concord.Host11x.dll&quot; ] || [ -f &quot;$d/Concord.Host10x.dll&quot; ] || [ -f &quot;$d/Concord.dll&quot; ]; then cp -R &quot;$(TargetDir).&quot; &quot;$d&quot;; echo &quot;Refreshed cache: $d&quot;; fi; done" />
+          Command="for d in &quot;%(_MendixDeployTargets.Identity)/.mendix-cache/extensions-cache/&quot;*/ ; do if [ -f &quot;$d/Concord.Host11x.dll&quot; ]; then cp -R &quot;$(TargetDir).&quot; &quot;$d&quot;; echo &quot;Refreshed cache: $d&quot;; fi; done" />
     <Exec Condition="'$(OS)' == 'Windows_NT'"
           IgnoreExitCode="true"
           Command="for /d %%d in (&quot;%(_MendixDeployTargets.Identity)\.mendix-cache\extensions-cache\*&quot;) do if exist &quot;%%d\Concord.Host11x.dll&quot; xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%%d&quot;" />
-    <Exec Condition="'$(OS)' == 'Windows_NT'"
-          IgnoreExitCode="true"
-          Command="for /d %%d in (&quot;%(_MendixDeployTargets.Identity)\.mendix-cache\extensions-cache\*&quot;) do if exist &quot;%%d\Concord.Host10x.dll&quot; xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%%d&quot;" />
-    <Exec Condition="'$(OS)' == 'Windows_NT'"
-          IgnoreExitCode="true"
-          Command="for /d %%d in (&quot;%(_MendixDeployTargets.Identity)\.mendix-cache\extensions-cache\*&quot;) do if exist &quot;%%d\Concord.dll&quot; xcopy /y /s /i /q &quot;$(TargetDir)*&quot; &quot;%%d&quot;" />
   </Target>
 </Project>
