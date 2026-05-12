@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyName>Concord.Core</AssemblyName>
+    <RootNamespace>Terminal</RootNamespace>
+    <LangVersion>preview</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <Version>4.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Terminal.Tests" />
+    <InternalsVisibleTo Include="Concord.Core.Tests" />
+    <InternalsVisibleTo Include="Concord.Host10x" />
+    <InternalsVisibleTo Include="Concord.Host11x" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Eto.Forms" Version="2.9.*" />
+    <PackageReference Include="System.Text.Json" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*" />
+  </ItemGroup>
+</Project>
