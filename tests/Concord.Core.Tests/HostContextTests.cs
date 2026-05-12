@@ -27,4 +27,11 @@ public class HostContextTests
         HostContext.Initialize(TargetMode.Studio11x);
         Assert.Throws<InvalidOperationException>(() => HostContext.Initialize(TargetMode.Studio10x));
     }
+
+    [Fact]
+    public void Initialize_Throws_WhenCalledWithUninitialized()
+    {
+        HostContext.Reset();
+        Assert.Throws<ArgumentException>(() => HostContext.Initialize(TargetMode.Uninitialized));
+    }
 }
