@@ -26,7 +26,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     // during TryAutoStartActionServer. Without these the get_active_run_configuration
     // tool returned "Active-run-configuration callback not wired" any time the
     // user saved Settings and the action server was rebuilt.
-    private readonly Func<RunConfigurationInfo?>? getActiveRunConfig;
+    private readonly Func<RunConfigurationSnapshot?>? getActiveRunConfig;
     private readonly Func<(string? path, string? name)>? getProjectInfo;
 
     private IWebView? webView;
@@ -49,7 +49,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         string bundledSkillsRoot,
         string bundledRulesRoot,
         Func<string[]> consumePendingFirstRunNotices,
-        Func<RunConfigurationInfo?>? getActiveRunConfig = null,
+        Func<RunConfigurationSnapshot?>? getActiveRunConfig = null,
         Func<(string? path, string? name)>? getProjectInfo = null)
     {
         Title = title;

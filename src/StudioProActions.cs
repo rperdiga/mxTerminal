@@ -18,7 +18,7 @@ public sealed class StudioProActions
     private readonly SemaphoreSlim gate = new(1, 1);
     // Optional callbacks supplied by the pane extension. Decoupled from the
     // Mendix Extensibility API surface so this class stays unit-testable.
-    private readonly Func<RunConfigurationInfo?>? getActiveRunConfig;
+    private readonly Func<RunConfigurationSnapshot?>? getActiveRunConfig;
     private readonly Func<(string? path, string? name)>? getProjectInfo;
 
     public StudioProActions(
@@ -27,7 +27,7 @@ public sealed class StudioProActions
         TimeSpan? runTimeout = null,
         TimeSpan? stopTimeout = null,
         TimeSpan? pollInterval = null,
-        Func<RunConfigurationInfo?>? getActiveRunConfig = null,
+        Func<RunConfigurationSnapshot?>? getActiveRunConfig = null,
         Func<(string? path, string? name)>? getProjectInfo = null)
     {
         this.probe = probe;

@@ -123,7 +123,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                     string? id  = TryStr(() => (string?)d.Id?.ToString());
                     string? nm  = TryStr(() => (string?)d.Name);
                     string? url = TryStr(() => (string?)d.ApplicationRootUrl);
-                    return new RunConfigurationInfo(id, nm, url);
+                    return new RunConfigurationSnapshot(id, nm, url);
                 }
                 catch (Exception ex) { log?.Warn($"getActiveRunConfig threw: {ex.Message}"); return null; }
             },
@@ -305,7 +305,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                         string? id  = TryStr(() => (string?)d.Id?.ToString());
                         string? nm  = TryStr(() => (string?)d.Name);
                         string? url = TryStr(() => (string?)d.ApplicationRootUrl);
-                        return new RunConfigurationInfo(id, nm, url);
+                        return new RunConfigurationSnapshot(id, nm, url);
                     }
                     catch (Exception ex) { log?.Warn($"getActiveRunConfig threw: {ex.Message}"); return null; }
                 },
