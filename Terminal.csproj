@@ -26,6 +26,11 @@
   <ItemGroup>
     <Compile Remove="tests/**" />
     <Compile Remove="debug/**" />
+    <Compile Remove="src/Concord.Core/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="src/Concord.Core/Concord.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
