@@ -1,5 +1,37 @@
 # Changelog
 
+## 5.0.0-alpha.2 — W2 SPMCP merge + Host10x UI port
+
+**Feature merge.** MCPExtension's source-merged tool catalog ships as part of Concord. A standalone SPMCP install is no longer required — `concord-mcp` on port 7783 advertises the full SPMCP surface (on 10.x) or a curated subset (on 11.x where Studio Pro's built-in MCP covers the rest).
+
+### Architecture
+
+- **`Concord.Core` has zero references to `Mendix.StudioPro.ExtensionsAPI`.** All Studio Pro modeling routes through 7 new Interop interfaces (`IModelHost`, `IDomainModelHost`, `IPageGenerationHost`, `INavigationHost`, `IVersionControlHost`, `IUntypedModelHost`, `IMicroflowAuthoringHost`) registered on the existing `HostServices` registry. Each host DLL provides the version-specific implementation.
+- **MCPExtension source-merged into `src/Concord.Core/Spmcp/`** (subtree from `github.com/mendix-community/mcp-extensions`). 87 tools across DomainModel, Microflows, Pages, Navigation, Security, Workflows, ConstantsEnums, DataSample, Diagnostics, ProjectSettings families. All refactored to read through `HostServices.*` accessors — no direct Mendix-type references in the merged source.
+- **`ToolCatalog` is the single dispatch path.** `src/Concord.Core/Mcp/ToolCatalog.cs` + `ITool` + `ToolFamily` + `Studio11xAllowlist`. SPMCP tools register via `SpmcpToolBootstrap{10|11}x`; UI-action tools (`run_app`, `stop_app`, `save_all`, `refresh_project`, `get_active_run_configuration`, `get_app_status`) via `UiActionsBootstrap`; Maia tools (10 entries) via `MaiaToolsBootstrap`. The hardcoded UI/Maia switch in `StudioProActionServer.HandleToolsCallAsync` retires. `tools/list` iterates the catalog.
+- **Family toggles drive visibility.** Settings changes call `catalog.SetFamilyEnabled(ToolFamily.UiActions, ...)` and `(ToolFamily.Maia, ...)` — registering happens once at MEF activation; settings-save flips visibility without re-registration.
+
+### Studio Pro 10.x
+
+- **Full UI tier ported from Host11x.** `TerminalPaneExtension`, `TerminalPaneViewModel`, `TerminalWebServer`, `RunStateProbe`, `StudioProUiAutomation`, `TerminalMenuExtension` against the 10.21.1 ExtensionsAPI. The v5.0.0-alpha.1 "Concord (10.x preview)" placeholder is gone; clicking Extensions → Concord → Open Pane opens the real terminal pane.
+- **Empirical finding: zero Mendix API drift between 10.21.1 and 11.6.2 across every UI type Concord consumes.** `DockablePaneExtension`, `WebViewDockablePaneViewModel`, `IWebView`, `MessageReceivedEventArgs`, `WebServerExtension`, `IWebServer.AddRoute`, `MenuExtension`, `IDockingWindowService.OpenPane`, `IExtensionFileService.ResolvePath`, `ILocalRunConfigurationsService.GetActiveConfiguration`, `IModel`, `IProject`, `Subscribe<T>` — all identical. Pre-port speculation about base-class-vs-interface divergence didn't materialize.
+- **Caveat: this is compile-time API-shape parity.** Runtime behavior parity on a real Studio Pro 10.24.13 install (MEF activation timing, WebView2 differences, run-state event ordering) is still subject to a manual smoke test before declaring full feature parity.
+
+### Internal
+
+- `StudioProActions` no longer takes `IRunStateProbe`, `IStudioProUiAutomation`, or two `Func<>` callbacks via its constructor. All reads route through `HostServices.{RunStateProbe, UiAutomation, RunConfigurations, App}`. The pane sets these via `HostServices.SetRunStateProbe` / `SetUiAutomation` / `SetMaiaActions` at startup and on settings save.
+- `StudioProActionServer` constructor simplified to `(int port, Logger? log)`. The legacy `studioProActionsEnabled` / `maiaIntegrationEnabled` boolean flags retire; visibility is catalog-driven.
+- JSON-RPC wire format preserved: `ActionResult.Fail` returns from any catalog-dispatched tool surface as `isError: true` (the catalog dispatch detects `ActionResult` and sets the field; non-ActionResult returns keep `isError: false`).
+- 271 tests passing (244 Terminal.Tests including 3 skipped Maia-live + 27 Concord.Core.Tests). Up from 244 in v5.0.0-alpha.1.
+
+### Known follow-ups (deferred to 5.0.0-alpha.3)
+
+- `tools/list` shows a placeholder description (`"Concord SPMCP tool (Family). Schema TBD."`) for every tool. Rich per-tool descriptions + input schemas need an `ITool` extension; deferred.
+- `Terminal.RunConfigurationSnapshot` (DTO, nullable fields) and `Terminal.Interop.RunConfigurationInfo` (record, non-nullable) still coexist; consolidation deferred (W2 Task 32).
+- Dead-code audit of pre-W1 injection paths + `#pragma warning disable CS0649` → `CS0414` correction deferred (W2 Tasks 30, 31).
+- Studio Pro 10.24.13 runtime smoke test deferred to next milestone.
+- 11.x curated allowlist (`Studio11xAllowlist.cs`) reconciliation against newer Studio Pro builds remains an ongoing review.
+
 ## 5.0.0-alpha.1 — Cross-version foundation
 
 **Architecture change.** Concord now ships as `Concord.Core.dll` + two version-specific host DLLs (`Concord.Host11x.dll` for Studio Pro 11.x, `Concord.Host10x.dll` for Studio Pro 10.24.13). Each host binds its version's `Mendix.StudioPro.ExtensionsAPI`; Studio Pro picks the matching host. Shared infrastructure (PTY, settings, MCP host, Maia bridge, skill installer) lives in Core and works on both versions.
