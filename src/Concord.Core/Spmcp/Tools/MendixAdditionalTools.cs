@@ -5833,13 +5833,34 @@ namespace Terminal.Spmcp.Tools
 
         public async Task<string> ManageNavigation(JsonObject parameters)
         {
+            await Task.CompletedTask;
             try
             {
+                // INavigationHost exposes AddItems (append-only via PopulateWebNavigationWith).
+                // List/remove/modify operations are not exposed on the typed API surface —
+                // those paths surface escalation:manual.
+                var action = parameters["action"]?.ToString()?.ToLowerInvariant() ?? "add";
+
+                if (action is "list" or "remove" or "set_icon" or "set_target")
+                {
+                    return JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        escalation = "manual",
+                        action,
+                        message = $"Navigation action '{action}' is not available on the typed INavigationHost API. " +
+                                  "Only 'add' (append items to the Responsive profile) is supported. " +
+                                  "Use Studio Pro UI to list, remove, or modify existing navigation items."
+                    });
+                }
+
+                // Default / "add" path — build NavigationItem list and call AddItems.
                 var pagesNode = parameters["pages"];
                 if (pagesNode is not JsonArray pagesArray || pagesArray.Count == 0)
                     return JsonSerializer.Serialize(new { error = "pages is required: array of {caption, page_name, module_name}" });
 
-                var resolvedPages = new List<(string caption, Mendix.StudioPro.ExtensionsAPI.Model.Pages.IPage page)>();
+                var navItems = new List<NavigationItem>();
+                var addedSummary = new List<object>();
 
                 foreach (var item in pagesArray)
                 {
@@ -5857,31 +5878,24 @@ namespace Terminal.Spmcp.Tools
                     if (string.IsNullOrEmpty(moduleName))
                         return JsonSerializer.Serialize(new { error = "module_name is required for each page entry" });
 
-                    var module = _model.Root.GetModules().FirstOrDefault(m => m.Name.Equals(moduleName, StringComparison.OrdinalIgnoreCase));
-                    if (module == null)
-                        return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" });
+                    var documentQualifiedName = $"{moduleName}.{pageName}";
+                    var iconQualifiedName = pageObj["icon"]?.ToString();
 
-                    var page = module.GetDocuments().OfType<Mendix.StudioPro.ExtensionsAPI.Model.Pages.IPage>()
-                        .FirstOrDefault(p => p.Name.Equals(pageName, StringComparison.OrdinalIgnoreCase));
-                    if (page == null)
-                    {
-                        // Search recursively in subfolders
-                        page = FindPageRecursive(module, pageName);
-                    }
-                    if (page == null)
-                        return JsonSerializer.Serialize(new { error = $"Page '{pageName}' not found in module '{moduleName}'" });
-
-                    resolvedPages.Add((caption, page));
+                    navItems.Add(new NavigationItem(caption, documentQualifiedName, iconQualifiedName, null));
+                    addedSummary.Add(new { caption, page = pageName, qualifiedName = documentQualifiedName });
                 }
 
-                _navigationManagerService.PopulateWebNavigationWith(_model, resolvedPages.ToArray());
+                var profileName = parameters["profile"]?.ToString() ?? "Responsive";
+                HostServices.Navigation.AddItems(profileName, navItems);
 
-                _logger.LogInformation($"Added {resolvedPages.Count} pages to web navigation");
+                _logger.LogInformation($"Added {navItems.Count} item(s) to '{profileName}' navigation via HostServices.Navigation");
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    message = $"Added {resolvedPages.Count} page(s) to responsive web navigation",
-                    pages = resolvedPages.Select(p => new { caption = p.caption, page = p.page.Name }).ToList()
+                    action = "add",
+                    profile = profileName,
+                    message = $"Added {navItems.Count} page(s) to {profileName} navigation",
+                    pages = addedSummary
                 });
             }
             catch (Exception ex)
@@ -5910,6 +5924,7 @@ namespace Terminal.Spmcp.Tools
 
         public async Task<string> CheckVariableName(JsonObject parameters)
         {
+            await Task.CompletedTask;
             try
             {
                 var microflowName = parameters["microflow_name"]?.ToString();
@@ -5921,94 +5936,35 @@ namespace Terminal.Spmcp.Tools
                 if (string.IsNullOrEmpty(variableName))
                     return JsonSerializer.Serialize(new { error = "variable_name is required" });
 
-                // Support qualified names
-                if (microflowName.Contains('.') && string.IsNullOrEmpty(moduleName))
+                // Build qualified name
+                string qualifiedName;
+                if (microflowName.Contains('.'))
                 {
-                    var parts = microflowName.Split('.', 2);
-                    moduleName = parts[0];
-                    microflowName = parts[1];
+                    qualifiedName = microflowName;
+                }
+                else if (!string.IsNullOrEmpty(moduleName))
+                {
+                    qualifiedName = $"{moduleName}.{microflowName}";
+                }
+                else
+                {
+                    var all = HostServices.MicroflowAuthoring.ListMicroflows(null);
+                    var match = all.FirstOrDefault(m => m.Name.Equals(microflowName, StringComparison.OrdinalIgnoreCase));
+                    if (match == null)
+                        return JsonSerializer.Serialize(new { error = $"Microflow '{microflowName}' not found. Specify module_name to disambiguate." });
+                    qualifiedName = match.QualifiedName;
                 }
 
-                var module = Utils.Utils.ResolveModule(_model, moduleName);
-                if (module == null)
-                    return JsonSerializer.Serialize(new { error = $"Module '{moduleName ?? "(default)"}' not found" });
-
-                var microflow = module.GetDocuments().OfType<IMicroflow>()
-                    .FirstOrDefault(mf => mf.Name.Equals(microflowName, StringComparison.OrdinalIgnoreCase));
-                if (microflow == null)
-                    return JsonSerializer.Serialize(new { error = $"Microflow '{microflowName}' not found in module '{module.Name}'" });
-
-                var microflowService = _serviceProvider?.GetService<IMicroflowService>();
-                if (microflowService == null)
-                    return JsonSerializer.Serialize(new { error = "IMicroflowService is not available" });
-
-                var inUse = microflowService.IsVariableNameInUse(microflow, variableName);
-
-                // Collect existing variable names for context
-                var existingVars = new List<string>();
-                try
-                {
-                    var activities = microflowService.GetAllMicroflowActivities(microflow);
-                    foreach (var activity in activities)
-                    {
-                        if (activity is IActionActivity actionActivity)
-                        {
-                            switch (actionActivity.Action)
-                            {
-                                case ICreateObjectAction coa:
-                                    if (!string.IsNullOrEmpty(coa.OutputVariableName))
-                                        existingVars.Add(coa.OutputVariableName);
-                                    break;
-                                case IRetrieveAction ra:
-                                    if (!string.IsNullOrEmpty(ra.OutputVariableName))
-                                        existingVars.Add(ra.OutputVariableName);
-                                    break;
-                                case ICreateListAction cla:
-                                    if (!string.IsNullOrEmpty(cla.OutputVariableName))
-                                        existingVars.Add(cla.OutputVariableName);
-                                    break;
-                                case IListOperationAction loa:
-                                    if (!string.IsNullOrEmpty(loa.OutputVariableName))
-                                        existingVars.Add(loa.OutputVariableName);
-                                    break;
-                                case IMicroflowCallAction mca:
-                                    if (mca.UseReturnVariable && !string.IsNullOrEmpty(mca.OutputVariableName))
-                                        existingVars.Add(mca.OutputVariableName);
-                                    break;
-                            }
-                        }
-                    }
-
-                    // Also add parameter names
-                    var paramObjs = microflowService.GetParameters(microflow);
-                    foreach (var p in paramObjs)
-                        existingVars.Add(p.Name);
-                }
-                catch { /* best effort */ }
-
-                string? suggestedName = null;
-                if (inUse)
-                {
-                    // Suggest an alternative
-                    for (int i = 2; i <= 20; i++)
-                    {
-                        var candidate = $"{variableName}{i}";
-                        if (!microflowService.IsVariableNameInUse(microflow, candidate))
-                        {
-                            suggestedName = candidate;
-                            break;
-                        }
-                    }
-                }
+                var checkResult = HostServices.MicroflowAuthoring.CheckVariableName(qualifiedName, variableName!);
 
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    microflow = $"{module.Name}.{microflow.Name}",
+                    microflow = qualifiedName,
                     variableName,
-                    inUse,
-                    suggestedAlternative = suggestedName,
-                    existingVariables = existingVars.Distinct().ToList()
+                    in_use = checkResult.InUse,
+                    suggested_alternative = checkResult.SuggestedAlternative,
+                    existing_variables = checkResult.ExistingVariables.ToList()
                 });
             }
             catch (Exception ex)
@@ -6020,6 +5976,7 @@ namespace Terminal.Spmcp.Tools
 
         public async Task<string> ModifyMicroflowActivity(JsonObject parameters)
         {
+            await Task.CompletedTask;
             try
             {
                 var microflowName = parameters["microflow_name"]?.ToString();
@@ -6033,243 +5990,52 @@ namespace Terminal.Spmcp.Tools
 
                 int position = positionNode.GetValue<int>();
 
-                // Support qualified names
-                if (microflowName.Contains('.') && string.IsNullOrEmpty(moduleName))
+                // Build qualified name
+                string qualifiedName;
+                if (microflowName!.Contains('.'))
                 {
-                    var parts = microflowName.Split('.', 2);
-                    moduleName = parts[0];
-                    microflowName = parts[1];
+                    qualifiedName = microflowName;
+                }
+                else if (!string.IsNullOrEmpty(moduleName))
+                {
+                    qualifiedName = $"{moduleName}.{microflowName}";
+                }
+                else
+                {
+                    var all = HostServices.MicroflowAuthoring.ListMicroflows(null);
+                    var match = all.FirstOrDefault(m => m.Name.Equals(microflowName, StringComparison.OrdinalIgnoreCase));
+                    if (match == null)
+                        return JsonSerializer.Serialize(new { error = $"Microflow '{microflowName}' not found. Specify module_name to disambiguate." });
+                    qualifiedName = match.QualifiedName;
                 }
 
-                var module = Utils.Utils.ResolveModule(_model, moduleName);
-                if (module == null)
-                    return JsonSerializer.Serialize(new { error = $"Module '{moduleName ?? "(default)"}' not found" });
+                // Validate position against existing activities
+                var existingActivities = HostServices.MicroflowAuthoring.ReadActivities(qualifiedName);
+                if (position < 1 || position > existingActivities.Count)
+                    return JsonSerializer.Serialize(new { error = $"Invalid position {position}. Microflow has {existingActivities.Count} action activities (1-{existingActivities.Count})" });
 
-                var microflow = module.GetDocuments().OfType<IMicroflow>()
-                    .FirstOrDefault(mf => mf.Name.Equals(microflowName, StringComparison.OrdinalIgnoreCase));
-                if (microflow == null)
-                    return JsonSerializer.Serialize(new { error = $"Microflow '{microflowName}' not found in module '{module.Name}'" });
-
-                var microflowService = _serviceProvider?.GetService<IMicroflowService>();
-                if (microflowService == null)
-                    return JsonSerializer.Serialize(new { error = "IMicroflowService is not available" });
-
-                var activities = microflowService.GetAllMicroflowActivities(microflow);
-
-                // Filter to action activities only (skip start/end events)
-                var actionActivities = activities
-                    .Where(a => a is IActionActivity)
-                    .Cast<IActionActivity>()
-                    .ToList();
-
-                if (position < 1 || position > actionActivities.Count)
-                    return JsonSerializer.Serialize(new { error = $"Invalid position {position}. Microflow has {actionActivities.Count} action activities (1-{actionActivities.Count})" });
-
-                var targetActivity = actionActivities[position - 1];
-                var changes = new List<string>();
-
-                using var transaction = _model.StartTransaction($"Modify activity at position {position}");
-
-                // Common properties
-                var newCaption = parameters["caption"]?.ToString();
-                if (newCaption != null)
+                // Build changes dictionary from all non-reserved JSON keys
+                var changesDict = new Dictionary<string, string>();
+                foreach (var kv in parameters)
                 {
-                    targetActivity.Caption = newCaption;
-                    changes.Add($"caption = '{newCaption}'");
+                    if (kv.Key is "microflow_name" or "module_name" or "position")
+                        continue;
+                    if (kv.Value != null)
+                        changesDict[kv.Key] = kv.Value.ToString() ?? "";
                 }
 
-                var disabledNode = parameters["disabled"];
-                if (disabledNode != null)
-                {
-                    targetActivity.Disabled = disabledNode.GetValue<bool>();
-                    changes.Add($"disabled = {targetActivity.Disabled}");
-                }
-
-                // Action-specific modifications
-                switch (targetActivity.Action)
-                {
-                    case ICreateObjectAction createObj:
-                    {
-                        var newOutputVar = parameters["output_variable"]?.ToString();
-                        if (newOutputVar != null)
-                        {
-                            createObj.OutputVariableName = newOutputVar;
-                            changes.Add($"outputVariable = '{newOutputVar}'");
-                        }
-                        var newCommit = parameters["commit"]?.ToString();
-                        if (newCommit != null)
-                        {
-                            if (Enum.TryParse<CommitEnum>(newCommit, true, out var commitVal))
-                            {
-                                createObj.Commit = commitVal;
-                                changes.Add($"commit = {commitVal}");
-                            }
-                            else
-                            {
-                                changes.Add($"WARNING: Invalid commit value '{newCommit}'. Valid values: Yes, YesWithoutEvents, No");
-                            }
-                        }
-                        var newRefresh = parameters["refresh_in_client"];
-                        if (newRefresh != null)
-                        {
-                            createObj.RefreshInClient = newRefresh.GetValue<bool>();
-                            changes.Add($"refreshInClient = {createObj.RefreshInClient}");
-                        }
-                        break;
-                    }
-
-                    case IChangeObjectAction changeObj:
-                    {
-                        var newChangeVar = parameters["change_variable"]?.ToString();
-                        if (newChangeVar != null)
-                        {
-                            changeObj.ChangeVariableName = newChangeVar;
-                            changes.Add($"changeVariable = '{newChangeVar}'");
-                        }
-                        var newCommit = parameters["commit"]?.ToString();
-                        if (newCommit != null)
-                        {
-                            if (Enum.TryParse<CommitEnum>(newCommit, true, out var commitVal))
-                            {
-                                changeObj.Commit = commitVal;
-                                changes.Add($"commit = {commitVal}");
-                            }
-                            else
-                            {
-                                changes.Add($"WARNING: Invalid commit value '{newCommit}'. Valid values: Yes, YesWithoutEvents, No");
-                            }
-                        }
-                        var newRefresh = parameters["refresh_in_client"];
-                        if (newRefresh != null)
-                        {
-                            changeObj.RefreshInClient = newRefresh.GetValue<bool>();
-                            changes.Add($"refreshInClient = {changeObj.RefreshInClient}");
-                        }
-                        break;
-                    }
-
-                    case IRetrieveAction retrieve:
-                    {
-                        var newOutputVar = parameters["output_variable"]?.ToString();
-                        if (newOutputVar != null)
-                        {
-                            retrieve.OutputVariableName = newOutputVar;
-                            changes.Add($"outputVariable = '{newOutputVar}'");
-                        }
-                        break;
-                    }
-
-                    case ICommitAction commit:
-                    {
-                        var newCommitVar = parameters["commit_variable"]?.ToString();
-                        if (newCommitVar != null)
-                        {
-                            commit.CommitVariableName = newCommitVar;
-                            changes.Add($"commitVariable = '{newCommitVar}'");
-                        }
-                        var newWithEvents = parameters["with_events"];
-                        if (newWithEvents != null)
-                        {
-                            commit.WithEvents = newWithEvents.GetValue<bool>();
-                            changes.Add($"withEvents = {commit.WithEvents}");
-                        }
-                        var newRefresh = parameters["refresh_in_client"];
-                        if (newRefresh != null)
-                        {
-                            commit.RefreshInClient = newRefresh.GetValue<bool>();
-                            changes.Add($"refreshInClient = {commit.RefreshInClient}");
-                        }
-                        break;
-                    }
-
-                    case IRollbackAction rollback:
-                    {
-                        var newRollbackVar = parameters["rollback_variable"]?.ToString();
-                        if (newRollbackVar != null)
-                        {
-                            rollback.RollbackVariableName = newRollbackVar;
-                            changes.Add($"rollbackVariable = '{newRollbackVar}'");
-                        }
-                        var newRefresh = parameters["refresh_in_client"];
-                        if (newRefresh != null)
-                        {
-                            rollback.RefreshInClient = newRefresh.GetValue<bool>();
-                            changes.Add($"refreshInClient = {rollback.RefreshInClient}");
-                        }
-                        break;
-                    }
-
-                    case IDeleteAction delete:
-                    {
-                        var newDeleteVar = parameters["delete_variable"]?.ToString();
-                        if (newDeleteVar != null)
-                        {
-                            delete.DeleteVariableName = newDeleteVar;
-                            changes.Add($"deleteVariable = '{newDeleteVar}'");
-                        }
-                        break;
-                    }
-
-                    case ICreateListAction createList:
-                    {
-                        var newOutputVar = parameters["output_variable"]?.ToString();
-                        if (newOutputVar != null)
-                        {
-                            createList.OutputVariableName = newOutputVar;
-                            changes.Add($"outputVariable = '{newOutputVar}'");
-                        }
-                        break;
-                    }
-
-                    case IMicroflowCallAction mfCall:
-                    {
-                        var newOutputVar = parameters["output_variable"]?.ToString();
-                        if (newOutputVar != null)
-                        {
-                            mfCall.OutputVariableName = newOutputVar;
-                            changes.Add($"outputVariable = '{newOutputVar}'");
-                        }
-                        var newUseReturn = parameters["use_return_variable"];
-                        if (newUseReturn != null)
-                        {
-                            mfCall.UseReturnVariable = newUseReturn.GetValue<bool>();
-                            changes.Add($"useReturnVariable = {mfCall.UseReturnVariable}");
-                        }
-                        break;
-                    }
-                }
-
-                if (changes.Count == 0)
-                {
-                    transaction.Rollback();
+                if (changesDict.Count == 0)
                     return JsonSerializer.Serialize(new { error = "No modifiable properties were supplied. Provide at least one property to change (e.g. caption, disabled, output_variable, commit, refresh_in_client)." });
-                }
 
-                transaction.Commit();
+                HostServices.MicroflowAuthoring.ModifyActivity(qualifiedName, position, changesDict);
 
-                var actionType = targetActivity.Action switch
-                {
-                    ICreateObjectAction => "create_object",
-                    IChangeObjectAction => "change_object",
-                    IRetrieveAction => "retrieve",
-                    ICommitAction => "commit",
-                    IRollbackAction => "rollback",
-                    IDeleteAction => "delete",
-                    ICreateListAction => "create_list",
-                    IMicroflowCallAction => "microflow_call",
-                    IListOperationAction => "list_operation",
-                    IChangeListAction => "change_list",
-                    _ => targetActivity.Action?.GetType().Name ?? "unknown"
-                };
-
-                _logger.LogInformation($"Modified activity at position {position} in {module.Name}.{microflow.Name}: {string.Join(", ", changes)}");
+                _logger.LogInformation($"Modified activity at position {position} in {qualifiedName} via HostServices.MicroflowAuthoring");
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    microflow = $"{module.Name}.{microflow.Name}",
+                    microflow = qualifiedName,
                     position,
-                    actionType,
-                    changes = changes
+                    changes = changesDict.Keys.ToList()
                 });
             }
             catch (Exception ex)
@@ -6281,6 +6047,7 @@ namespace Terminal.Spmcp.Tools
 
         public async Task<string> InsertBeforeActivity(JsonObject parameters)
         {
+            await Task.CompletedTask;
             try
             {
                 var microflowName = parameters["microflow_name"]?.ToString();
@@ -6297,102 +6064,75 @@ namespace Terminal.Spmcp.Tools
 
                 int beforePosition = positionNode.GetValue<int>();
 
-                // Support qualified names
-                if (microflowName.Contains('.') && string.IsNullOrEmpty(moduleName))
+                // Build qualified name
+                string qualifiedName;
+                if (microflowName!.Contains('.'))
                 {
-                    var parts = microflowName.Split('.', 2);
-                    moduleName = parts[0];
-                    microflowName = parts[1];
+                    qualifiedName = microflowName;
+                }
+                else if (!string.IsNullOrEmpty(moduleName))
+                {
+                    qualifiedName = $"{moduleName}.{microflowName}";
+                }
+                else
+                {
+                    var all = HostServices.MicroflowAuthoring.ListMicroflows(null);
+                    var match = all.FirstOrDefault(m => m.Name.Equals(microflowName, StringComparison.OrdinalIgnoreCase));
+                    if (match == null)
+                        return JsonSerializer.Serialize(new { error = $"Microflow '{microflowName}' not found. Specify module_name to disambiguate." });
+                    qualifiedName = match.QualifiedName;
                 }
 
-                var module = Utils.Utils.ResolveModule(_model, moduleName);
-                if (module == null)
-                    return JsonSerializer.Serialize(new { error = $"Module '{moduleName ?? "(default)"}' not found" });
+                // Validate before_position
+                var existingActivities = HostServices.MicroflowAuthoring.ReadActivities(qualifiedName);
+                if (beforePosition < 1 || beforePosition > existingActivities.Count)
+                    return JsonSerializer.Serialize(new { error = $"Invalid before_position {beforePosition}. Microflow has {existingActivities.Count} action activities (1-{existingActivities.Count})" });
 
-                var microflow = module.GetDocuments().OfType<IMicroflow>()
-                    .FirstOrDefault(mf => mf.Name.Equals(microflowName, StringComparison.OrdinalIgnoreCase));
-                if (microflow == null)
-                    return JsonSerializer.Serialize(new { error = $"Microflow '{microflowName}' not found in module '{module.Name}'" });
-
-                var microflowService = _serviceProvider?.GetService<IMicroflowService>();
-                if (microflowService == null)
-                    return JsonSerializer.Serialize(new { error = "IMicroflowService is not available" });
-
-                var activities = microflowService.GetAllMicroflowActivities(microflow);
-
-                // Filter to action activities only
-                var actionActivities = activities
-                    .Where(a => a is IActionActivity)
-                    .Cast<IActionActivity>()
-                    .ToList();
-
-                if (beforePosition < 1 || beforePosition > actionActivities.Count)
-                    return JsonSerializer.Serialize(new { error = $"Invalid before_position {beforePosition}. Microflow has {actionActivities.Count} action activities (1-{actionActivities.Count})" });
-
-                var insertBeforeActivity = actionActivities[beforePosition - 1];
-
-                // Create the activity using the same logic as add_microflow_activity
                 var activityType = activityData["type"]?.ToString()?.ToLowerInvariant();
                 if (string.IsNullOrEmpty(activityType))
                     return JsonSerializer.Serialize(new { error = "activity.type is required (create_object, change_object, retrieve, commit, rollback, delete, create_list, etc.)" });
 
-                // Start transaction before activity creation (some factory methods require it)
-                using var transaction = _model.StartTransaction($"Insert activity before position {beforePosition}");
-
-                IActionActivity? newActivity = null;
-                bool isKnownType = true;
-                try
+                // Build the activity parameters dictionary
+                var activityParams = new Dictionary<string, string>();
+                foreach (var kv in activityData)
                 {
-                    newActivity = activityType switch
-                    {
-                        "create_object" or "create_variable" or "create" => CreateCreateVariableActivity(activityData),
-                        "change_object" => CreateChangeObjectActivity(activityData),
-                        "retrieve" or "retrieve_from_database" or "database_retrieve" => CreateDatabaseRetrieveActivity(activityData),
-                        "retrieve_by_association" or "association_retrieve" => CreateAssociationRetrieveActivity(activityData),
-                        "commit" or "commit_object" => CreateCommitActivity(activityData),
-                        "rollback" or "rollback_object" => CreateRollbackActivity(activityData),
-                        "delete" or "delete_object" => CreateDeleteActivity(activityData),
-                        "create_list" or "new_list" => CreateListActivity(activityData),
-                        "change_list" or "modify_list" => CreateChangeListActivity(activityData),
-                        "microflow_call" or "call_microflow" => CreateMicroflowCallActivity(activityData),
-                        "change_variable" or "change_value" => CreateChangeVariableActivity(activityData),
-                        _ => (isKnownType = false) ? null : null
-                    };
-                }
-                catch (Exception ex)
-                {
-                    transaction.Rollback();
-                    return JsonSerializer.Serialize(new { error = $"Failed to create activity: {ex.Message}" });
+                    if (kv.Key != "type" && kv.Value != null)
+                        activityParams[kv.Key] = kv.Value.ToString() ?? "";
                 }
 
-                if (!isKnownType)
-                {
-                    transaction.Rollback();
-                    return JsonSerializer.Serialize(new { error = $"Unsupported activity type '{activityType}'. Supported: create_object, change_object, retrieve, retrieve_by_association, commit, rollback, delete, create_list, change_list, microflow_call, change_variable" });
-                }
+                // Extract well-known fields for the MicroflowActivitySummary record
+                var caption = activityData["caption"]?.ToString();
+                var outputVariable = activityData["output_variable"]?.ToString()
+                    ?? activityData["outputVariable"]?.ToString()
+                    ?? activityData["variable_name"]?.ToString();
+                var targetEntity = activityData["entity"]?.ToString()
+                    ?? activityData["entity_name"]?.ToString()
+                    ?? activityData["entityName"]?.ToString();
+                var targetMicroflow = activityData["microflow"]?.ToString()
+                    ?? activityData["microflow_name"]?.ToString()
+                    ?? activityData["calledMicroflow"]?.ToString();
+                var targetJavaAction = activityData["java_action"]?.ToString()
+                    ?? activityData["javaAction"]?.ToString();
 
-                if (newActivity == null)
-                {
-                    transaction.Rollback();
-                    return JsonSerializer.Serialize(new { error = $"Failed to create {activityType} activity. {(string.IsNullOrEmpty(_lastError) ? "Check activity parameters." : _lastError)}" });
-                }
+                var activitySummary = new MicroflowActivitySummary(
+                    Position: 0,  // host overwrites with actual inserted position
+                    ActivityType: activityType!,
+                    Caption: caption,
+                    OutputVariable: outputVariable,
+                    TargetEntity: targetEntity,
+                    TargetMicroflow: targetMicroflow,
+                    TargetJavaAction: targetJavaAction,
+                    Parameters: activityParams);
 
-                var result = microflowService.TryInsertBeforeActivity(insertBeforeActivity, newActivity);
+                int insertedPosition = HostServices.MicroflowAuthoring.InsertBeforeActivity(qualifiedName, beforePosition, activitySummary);
 
-                if (!result)
-                {
-                    transaction.Rollback();
-                    return JsonSerializer.Serialize(new { error = $"Failed to insert activity before position {beforePosition}. The microflow service rejected the insertion." });
-                }
-
-                transaction.Commit();
-
-                _logger.LogInformation($"Inserted {activityType} activity before position {beforePosition} in {module.Name}.{microflow.Name}");
+                _logger.LogInformation($"Inserted {activityType} activity before position {beforePosition} in {qualifiedName} via HostServices.MicroflowAuthoring (actual position: {insertedPosition})");
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    microflow = $"{module.Name}.{microflow.Name}",
+                    microflow = qualifiedName,
                     insertedBefore = beforePosition,
+                    position = insertedPosition,
                     activityType,
                     message = $"Inserted {activityType} activity before position {beforePosition}"
                 });
@@ -6591,6 +6331,7 @@ namespace Terminal.Spmcp.Tools
 
         public async Task<string> UpdateMicroflow(JsonObject parameters)
         {
+            await Task.CompletedTask;
             try
             {
                 var microflowName = parameters["microflow_name"]?.ToString();
@@ -6599,8 +6340,9 @@ namespace Terminal.Spmcp.Tools
                 if (string.IsNullOrEmpty(microflowName))
                     return JsonSerializer.Serialize(new { error = "microflow_name is required" });
 
-                // Support qualified names
-                if (microflowName.Contains('.') && string.IsNullOrEmpty(moduleName))
+                // Build qualified name and resolve native microflow (needed for return_type / return_variable_name
+                // which are not exposed on IMicroflowAuthoringHost — escalation:manual for typed API).
+                if (microflowName!.Contains('.') && string.IsNullOrEmpty(moduleName))
                 {
                     var parts = microflowName.Split('.', 2);
                     moduleName = parts[0];
@@ -6616,106 +6358,114 @@ namespace Terminal.Spmcp.Tools
                 if (microflow == null)
                     return JsonSerializer.Serialize(new { error = $"Microflow '{microflowName}' not found in module '{module.Name}'" });
 
+                var qualifiedName = $"{module.Name}.{microflow.Name}";
                 var changes = new List<string>();
                 var warnings = new List<string>();
 
-                using var transaction = _model.StartTransaction($"Update microflow '{microflowName}'");
-
-                // Change return type
-                var returnTypeStr = parameters["return_type"]?.ToString()?.ToLowerInvariant();
-                if (!string.IsNullOrEmpty(returnTypeStr))
-                {
-                    DataType? newReturnType = returnTypeStr switch
-                    {
-                        "void" or "nothing" => DataType.Void,
-                        "boolean" or "bool" => DataType.Boolean,
-                        "string" => DataType.String,
-                        "integer" or "int" => DataType.Integer,
-                        "decimal" => DataType.Decimal,
-                        "float" => DataType.Float,
-                        "datetime" or "date" => DataType.DateTime,
-                        _ => null
-                    };
-
-                    // Handle entity types: "Object:Module.Entity" or "List:Module.Entity"
-                    if (newReturnType == null && returnTypeStr.StartsWith("object:"))
-                    {
-                        var entityQualifiedName = returnTypeStr.Substring(7);
-                        var (entity, _) = Utils.Utils.FindEntityAcrossModules(_model, entityQualifiedName, null);
-                        if (entity != null)
-                            newReturnType = DataType.Object(entity.QualifiedName);
-                        else
-                            return JsonSerializer.Serialize(new { error = $"Entity '{entityQualifiedName}' not found for return type" });
-                    }
-                    else if (newReturnType == null && returnTypeStr.StartsWith("list:"))
-                    {
-                        var entityQualifiedName = returnTypeStr.Substring(5);
-                        var (entity, _) = Utils.Utils.FindEntityAcrossModules(_model, entityQualifiedName, null);
-                        if (entity != null)
-                            newReturnType = DataType.List(entity.QualifiedName);
-                        else
-                            return JsonSerializer.Serialize(new { error = $"Entity '{entityQualifiedName}' not found for return type" });
-                    }
-
-                    if (newReturnType == null)
-                    {
-                        transaction.Rollback();
-                        return JsonSerializer.Serialize(new { error = $"Unknown return type '{returnTypeStr}'. Supported: void, boolean, string, integer, decimal, float, datetime, object:Module.Entity, list:Module.Entity" });
-                    }
-
-                    microflow.ReturnType = newReturnType;
-                    changes.Add($"returnType = {FormatDataType(newReturnType)}");
-
-                    // BUG-024: Extensions API explicitly excludes "flows" from IMicroflowBase,
-                    // and the untyped model API is read-only — no way to update end event expression.
-                    if (newReturnType != DataType.Void)
-                    {
-                        var defaultExpr = GetDefaultExpressionForDataType(newReturnType);
-                        warnings.Add($"IMPORTANT: Return type changed to {FormatDataType(newReturnType)} but the end event " +
-                            $"expression was NOT updated (Mendix Extensions API limitation — end events are inaccessible). " +
-                            $"This WILL cause error CE0117 in check_project_errors. " +
-                            $"Workaround: delete this microflow (delete_document) and recreate it with the correct return type " +
-                            $"using create_microflow with returnType={FormatDataType(newReturnType)}. " +
-                            $"Expected end event expression: '{defaultExpr}'.");
-                    }
-                    else
-                    {
-                        // Changing TO void also needs end event update (remove the return expression)
-                        warnings.Add($"Return type changed to Void but the end event expression was NOT cleared " +
-                            $"(Mendix Extensions API limitation). This may cause error CE0117. " +
-                            $"Workaround: delete this microflow (delete_document) and recreate it as Void.");
-                    }
-                }
-
-                // Change return variable name
-                var returnVarName = parameters["return_variable_name"]?.ToString();
-                if (returnVarName != null)
-                {
-                    microflow.ReturnVariableName = returnVarName;
-                    changes.Add($"returnVariableName = '{returnVarName}'");
-                }
-
-                // Change URL
+                // --- URL path: route through HostServices.MicroflowAuthoring.SetUrl ---
                 var url = parameters["url"]?.ToString();
                 if (url != null)
                 {
-                    microflow.Url = url;
+                    HostServices.MicroflowAuthoring.SetUrl(qualifiedName, url);
                     changes.Add($"url = '{url}'");
                 }
 
-                if (changes.Count == 0)
+                // --- Return type + return variable name: no typed host method exists (escalation:manual).
+                //     Retain direct IMendix-model mutation so functionality is not regressed. ---
+                var returnTypeStr = parameters["return_type"]?.ToString()?.ToLowerInvariant();
+                var returnVarName = parameters["return_variable_name"]?.ToString();
+
+                bool needsNativeTransaction = !string.IsNullOrEmpty(returnTypeStr) || returnVarName != null;
+                if (needsNativeTransaction)
                 {
-                    transaction.Rollback();
-                    return JsonSerializer.Serialize(new { error = "No modifiable properties supplied. Provide return_type, return_variable_name, or url." });
+                    using var transaction = _model.StartTransaction($"Update microflow '{microflowName}'");
+
+                    if (!string.IsNullOrEmpty(returnTypeStr))
+                    {
+                        DataType? newReturnType = returnTypeStr switch
+                        {
+                            "void" or "nothing" => DataType.Void,
+                            "boolean" or "bool" => DataType.Boolean,
+                            "string" => DataType.String,
+                            "integer" or "int" => DataType.Integer,
+                            "decimal" => DataType.Decimal,
+                            "float" => DataType.Float,
+                            "datetime" or "date" => DataType.DateTime,
+                            _ => null
+                        };
+
+                        // Handle entity types: "Object:Module.Entity" or "List:Module.Entity"
+                        if (newReturnType == null && returnTypeStr.StartsWith("object:"))
+                        {
+                            var entityQualifiedName = returnTypeStr.Substring(7);
+                            var (entity, _) = Utils.Utils.FindEntityAcrossModules(_model, entityQualifiedName, null);
+                            if (entity != null)
+                                newReturnType = DataType.Object(entity.QualifiedName);
+                            else
+                            {
+                                transaction.Rollback();
+                                return JsonSerializer.Serialize(new { error = $"Entity '{entityQualifiedName}' not found for return type" });
+                            }
+                        }
+                        else if (newReturnType == null && returnTypeStr.StartsWith("list:"))
+                        {
+                            var entityQualifiedName = returnTypeStr.Substring(5);
+                            var (entity, _) = Utils.Utils.FindEntityAcrossModules(_model, entityQualifiedName, null);
+                            if (entity != null)
+                                newReturnType = DataType.List(entity.QualifiedName);
+                            else
+                            {
+                                transaction.Rollback();
+                                return JsonSerializer.Serialize(new { error = $"Entity '{entityQualifiedName}' not found for return type" });
+                            }
+                        }
+
+                        if (newReturnType == null)
+                        {
+                            transaction.Rollback();
+                            return JsonSerializer.Serialize(new { error = $"Unknown return type '{returnTypeStr}'. Supported: void, boolean, string, integer, decimal, float, datetime, object:Module.Entity, list:Module.Entity" });
+                        }
+
+                        microflow.ReturnType = newReturnType;
+                        changes.Add($"returnType = {FormatDataType(newReturnType)}");
+
+                        // BUG-024: Extensions API explicitly excludes "flows" from IMicroflowBase,
+                        // and the untyped model API is read-only — no way to update end event expression.
+                        if (newReturnType != DataType.Void)
+                        {
+                            var defaultExpr = GetDefaultExpressionForDataType(newReturnType);
+                            warnings.Add($"IMPORTANT: Return type changed to {FormatDataType(newReturnType)} but the end event " +
+                                $"expression was NOT updated (Mendix Extensions API limitation — end events are inaccessible). " +
+                                $"This WILL cause error CE0117 in check_project_errors. " +
+                                $"Workaround: delete this microflow (delete_document) and recreate it with the correct return type " +
+                                $"using create_microflow with returnType={FormatDataType(newReturnType)}. " +
+                                $"Expected end event expression: '{defaultExpr}'.");
+                        }
+                        else
+                        {
+                            warnings.Add($"Return type changed to Void but the end event expression was NOT cleared " +
+                                $"(Mendix Extensions API limitation). This may cause error CE0117. " +
+                                $"Workaround: delete this microflow (delete_document) and recreate it as Void.");
+                        }
+                    }
+
+                    if (returnVarName != null)
+                    {
+                        microflow.ReturnVariableName = returnVarName;
+                        changes.Add($"returnVariableName = '{returnVarName}'");
+                    }
+
+                    transaction.Commit();
                 }
 
-                transaction.Commit();
+                if (changes.Count == 0)
+                    return JsonSerializer.Serialize(new { error = "No modifiable properties supplied. Provide return_type, return_variable_name, or url." });
 
-                _logger.LogInformation($"Updated microflow {module.Name}.{microflow.Name}: {string.Join(", ", changes)}");
+                _logger.LogInformation($"Updated microflow {qualifiedName}: {string.Join(", ", changes)}");
                 var result = new Dictionary<string, object>
                 {
                     ["success"] = true,
-                    ["microflow"] = $"{module.Name}.{microflow.Name}",
+                    ["microflow"] = qualifiedName,
                     ["changes"] = changes
                 };
                 if (warnings.Count > 0)
