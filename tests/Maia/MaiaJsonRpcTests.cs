@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using Terminal;
+using Terminal.Interop;
 using Terminal.Maia;
 using Xunit;
 
@@ -47,10 +48,13 @@ public class MaiaJsonRpcTests : IAsyncLifetime
     private static async Task<(StudioProActionServer server, HttpClient http)> BuildServerAsync(
         bool studioProActionsEnabled, bool maiaIntegrationEnabled)
     {
+        HostServices.Reset();
+        HostServices.SetRunStateProbe(new FakeProbe());
+        HostServices.SetUiAutomation(new FakeUi());
         var router = new MaiaRouter(new IMaiaTransport[] { new StubTransport() });
         await router.ProbeAllAsync(CancellationToken.None);
         var maia = new MaiaActions(router);
-        var actions = new StudioProActions(new FakeProbe(), new FakeUi());
+        var actions = new StudioProActions();
         var s = new StudioProActionServer(
             actions, port: 0, log: null, maia: maia,
             studioProActionsEnabled: studioProActionsEnabled,

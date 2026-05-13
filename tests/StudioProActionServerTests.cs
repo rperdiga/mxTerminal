@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using FluentAssertions;
 using Terminal;
+using Terminal.Interop;
 using Xunit;
 
 namespace Terminal.Tests;
@@ -34,8 +35,10 @@ public class StudioProActionServerTests : IAsyncLifetime
 
     public Task InitializeAsync()
     {
-        var probe = new FakeProbe { Next = () => RunState.Running };
-        var actions = new StudioProActions(probe, new FakeUi(),
+        HostServices.Reset();
+        HostServices.SetRunStateProbe(new FakeProbe { Next = () => RunState.Running });
+        HostServices.SetUiAutomation(new FakeUi());
+        var actions = new StudioProActions(
             runTimeout: TimeSpan.FromMilliseconds(200),
             stopTimeout: TimeSpan.FromMilliseconds(200),
             pollInterval: TimeSpan.FromMilliseconds(50));
@@ -140,8 +143,10 @@ public class StudioProActionServerTests : IAsyncLifetime
     [Fact]
     public async Task DisposeStopsListener()
     {
-        var probe = new FakeProbe();
-        var actions = new StudioProActions(probe, new FakeUi());
+        HostServices.Reset();
+        HostServices.SetRunStateProbe(new FakeProbe());
+        HostServices.SetUiAutomation(new FakeUi());
+        var actions = new StudioProActions();
         var s = new StudioProActionServer(actions, port: 0);
         s.Start();
         var port = s.Port;

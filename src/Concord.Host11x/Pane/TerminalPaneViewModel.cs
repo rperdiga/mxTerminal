@@ -25,13 +25,6 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     private readonly string bundledSkillsRoot;
     private readonly string bundledRulesRoot;
     private readonly Func<string[]> consumePendingFirstRunNotices;
-    // v4.2.1: passed through from TerminalPaneExtension so the StudioProActions
-    // built during HandleSaveSettings is wired the same way as the one built
-    // during TryAutoStartActionServer. Without these the get_active_run_configuration
-    // tool returned "Active-run-configuration callback not wired" any time the
-    // user saved Settings and the action server was rebuilt.
-    private readonly Func<RunConfigurationSnapshot?>? getActiveRunConfig;
-    private readonly Func<(string? path, string? name)>? getProjectInfo;
 
     private IWebView? webView;
     /// <summary>
@@ -52,9 +45,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         Func<string?> getApplicationRootUrl,
         string bundledSkillsRoot,
         string bundledRulesRoot,
-        Func<string[]> consumePendingFirstRunNotices,
-        Func<RunConfigurationSnapshot?>? getActiveRunConfig = null,
-        Func<(string? path, string? name)>? getProjectInfo = null)
+        Func<string[]> consumePendingFirstRunNotices)
     {
         Title = title;
         this.manager = manager;
@@ -65,8 +56,6 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         this.bundledSkillsRoot = bundledSkillsRoot;
         this.bundledRulesRoot = bundledRulesRoot;
         this.consumePendingFirstRunNotices = consumePendingFirstRunNotices;
-        this.getActiveRunConfig = getActiveRunConfig;
-        this.getProjectInfo = getProjectInfo;
     }
 
     public override void InitWebView(IWebView webView)
@@ -277,13 +266,10 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     stopHotkey: "Shift+F5",
                     refreshHotkey: newRefreshHotkey,
                     log: log);
+                HostServices.SetUiAutomation(ui);
                 var probe = new RunStateProbe(getApplicationRootUrl);
-                // v4.2.1: pass the same callbacks the TryAutoStartActionServer
-                // path uses so get_active_run_configuration / get_app_status
-                // continue to work after a Settings save rebuilds the server.
-                var actions = new StudioProActions(probe, ui,
-                    getActiveRunConfig: getActiveRunConfig,
-                    getProjectInfo: getProjectInfo);
+                HostServices.SetRunStateProbe(probe);
+                var actions = new StudioProActions();
 
                 // Build Maia plumbing only on Windows when the toggle is on. The router
                 // probe runs in the background; the router is functional even before it

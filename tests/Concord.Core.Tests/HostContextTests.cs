@@ -116,4 +116,46 @@ public class HostContextTests
         // New accessors throw because the legacy overload didn't supply them
         Assert.Throws<InvalidOperationException>(() => _ = HostServices.Model);
     }
+
+    [Fact]
+    public void HostServices_RunStateProbe_ThrowsBeforeSetterCalled()
+    {
+        HostServices.Reset();
+        Assert.Throws<InvalidOperationException>(() => _ = HostServices.RunStateProbe);
+    }
+
+    [Fact]
+    public void HostServices_UiAutomation_ThrowsBeforeSetterCalled()
+    {
+        HostServices.Reset();
+        Assert.Throws<InvalidOperationException>(() => _ = HostServices.UiAutomation);
+    }
+
+    [Fact]
+    public void HostServices_SetRunStateProbe_ResolvesAfterSet()
+    {
+        HostServices.Reset();
+        var fake = new Fakes.FakeRunStateProbe();
+        HostServices.SetRunStateProbe(fake);
+        Assert.Same(fake, HostServices.RunStateProbe);
+    }
+
+    [Fact]
+    public void HostServices_SetUiAutomation_ResolvesAfterSet()
+    {
+        HostServices.Reset();
+        var fake = new Fakes.FakeUiAutomation();
+        HostServices.SetUiAutomation(fake);
+        Assert.Same(fake, HostServices.UiAutomation);
+    }
+
+    [Fact]
+    public void HostServices_Reset_ClearsRunStateProbeAndUiAutomation()
+    {
+        HostServices.SetRunStateProbe(new Fakes.FakeRunStateProbe());
+        HostServices.SetUiAutomation(new Fakes.FakeUiAutomation());
+        HostServices.Reset();
+        Assert.Throws<InvalidOperationException>(() => _ = HostServices.RunStateProbe);
+        Assert.Throws<InvalidOperationException>(() => _ = HostServices.UiAutomation);
+    }
 }

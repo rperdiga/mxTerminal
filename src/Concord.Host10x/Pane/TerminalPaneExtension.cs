@@ -118,32 +118,6 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 var notices = pendingFirstRunNotices.ToArray();
                 pendingFirstRunNotices.Clear();
                 return notices;
-            },
-            // v4.2.1: pass the run-config + project-info callbacks through so the
-            // VM's HandleSaveSettings rebuild produces a fully-wired StudioProActions
-            // (matches what TryAutoStartActionServer already does). Without these,
-            // get_active_run_configuration returned "Active-run-configuration
-            // callback not wired" after any Settings save.
-            getActiveRunConfig: () =>
-            {
-                var model = CurrentApp;
-                if (model is null) return null;
-                try
-                {
-                    var c = localRunConfigs.GetActiveConfiguration(model);
-                    if (c is null) return null;
-                    dynamic d = c;
-                    string? id  = TryStr(() => (string?)d.Id?.ToString());
-                    string? nm  = TryStr(() => (string?)d.Name);
-                    string? url = TryStr(() => (string?)d.ApplicationRootUrl);
-                    return new RunConfigurationSnapshot(id, nm, url);
-                }
-                catch (Exception ex) { log?.Warn($"getActiveRunConfig threw: {ex.Message}"); return null; }
-            },
-            getProjectInfo: () =>
-            {
-                var proj = CurrentApp?.Root as IProject;
-                return (proj?.DirectoryPath, proj?.Name);
             });
         activeViewModel = vm;
         return vm;
@@ -295,6 +269,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 stopHotkey: "Shift+F5",
                 refreshHotkey: settings.RefreshFromDiskHotkey,
                 log: log);
+            HostServices.SetUiAutomation(ui);
             var probe = new RunStateProbe(() =>
             {
                 var model = CurrentApp;
@@ -302,31 +277,8 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 try { return localRunConfigs.GetActiveConfiguration(model)?.ApplicationRootUrl; }
                 catch (Exception ex) { log?.Warn($"GetActiveConfiguration threw: {ex.Message}"); return null; }
             });
-            var actions = new StudioProActions(
-                probe, ui,
-                getActiveRunConfig: () =>
-                {
-                    var model = CurrentApp;
-                    if (model is null) return null;
-                    try
-                    {
-                        var c = localRunConfigs.GetActiveConfiguration(model);
-                        if (c is null) return null;
-                        // Use reflection-friendly property access via dynamic; Mendix's
-                        // service contract may evolve and we want to fail soft, not hard.
-                        dynamic d = c;
-                        string? id  = TryStr(() => (string?)d.Id?.ToString());
-                        string? nm  = TryStr(() => (string?)d.Name);
-                        string? url = TryStr(() => (string?)d.ApplicationRootUrl);
-                        return new RunConfigurationSnapshot(id, nm, url);
-                    }
-                    catch (Exception ex) { log?.Warn($"getActiveRunConfig threw: {ex.Message}"); return null; }
-                },
-                getProjectInfo: () =>
-                {
-                    var proj = CurrentApp?.Root as IProject;
-                    return (proj?.DirectoryPath, proj?.Name);
-                });
+            HostServices.SetRunStateProbe(probe);
+            var actions = new StudioProActions();
             // Build Maia plumbing only on Windows when the toggle is on. The router
             // probe runs in the background; the router is functional even before it
             // returns (early calls just see all-tiers-down and fail with a clear message).

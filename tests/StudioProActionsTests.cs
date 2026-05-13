@@ -1,10 +1,11 @@
 using FluentAssertions;
 using Terminal;
+using Terminal.Interop;
 using Xunit;
 
 namespace Terminal.Tests;
 
-public class StudioProActionsTests
+public class StudioProActionsTests : IDisposable
 {
     private sealed class FakeProbe : IRunStateProbe
     {
@@ -29,9 +30,17 @@ public class StudioProActionsTests
         public string? LastFailureReason => FailureReason;
     }
 
-    private static StudioProActions NewActions(FakeProbe probe, FakeUi ui) =>
-        new(probe, ui, runTimeout: TimeSpan.FromMilliseconds(500), stopTimeout: TimeSpan.FromMilliseconds(500),
+    private static StudioProActions NewActions(FakeProbe probe, FakeUi ui)
+    {
+        HostServices.SetRunStateProbe(probe);
+        HostServices.SetUiAutomation(ui);
+        return new StudioProActions(
+            runTimeout: TimeSpan.FromMilliseconds(500),
+            stopTimeout: TimeSpan.FromMilliseconds(500),
             pollInterval: TimeSpan.FromMilliseconds(50));
+    }
+
+    public void Dispose() { /* HostServices state is re-set per-call in NewActions */ }
 
     [Fact]
     public async Task RunApp_AlreadyRunning_ReturnsAlreadyRunning_DoesNotTrigger()

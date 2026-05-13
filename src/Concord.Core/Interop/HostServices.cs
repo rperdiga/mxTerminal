@@ -1,3 +1,5 @@
+using Terminal;
+
 namespace Terminal.Interop;
 
 /// <summary>
@@ -18,6 +20,12 @@ public static class HostServices
     private static IVersionControlHost? _versionControl;
     private static IUntypedModelHost? _untypedModel;
     private static IMicroflowAuthoringHost? _microflowAuthoring;
+    // Late-bound pane-scoped services set by the pane after construction.
+    // These are NOT passed to Register because their inputs (CurrentApp,
+    // localRunConfigs, user settings, Logger) are only available after the
+    // pane opens, not at MEF activation time.
+    private static IRunStateProbe? _runStateProbe;
+    private static IStudioProUiAutomation? _uiAutomation;
     private static readonly object _gate = new();
 
     public static IStudioProAppHost App
@@ -42,6 +50,32 @@ public static class HostServices
         => _untypedModel ?? throw NotInitialized(nameof(IUntypedModelHost));
     public static IMicroflowAuthoringHost MicroflowAuthoring
         => _microflowAuthoring ?? throw NotInitialized(nameof(IMicroflowAuthoringHost));
+
+    /// <summary>
+    /// Set by the pane after constructing RunStateProbe (which needs the pane's
+    /// CurrentApp and localRunConfigs closure). Hot-reload on settings save
+    /// re-sets this with a fresh instance.
+    /// </summary>
+    public static IRunStateProbe RunStateProbe
+        => _runStateProbe ?? throw NotInitialized(nameof(IRunStateProbe));
+
+    /// <summary>
+    /// Set by the pane after constructing StudioProUiAutomation (which needs
+    /// hotkeys from user settings and a Logger). Hot-reload on settings save
+    /// re-sets this with a fresh instance.
+    /// </summary>
+    public static IStudioProUiAutomation UiAutomation
+        => _uiAutomation ?? throw NotInitialized(nameof(IStudioProUiAutomation));
+
+    public static void SetRunStateProbe(IRunStateProbe probe)
+    {
+        lock (_gate) { _runStateProbe = probe; }
+    }
+
+    public static void SetUiAutomation(IStudioProUiAutomation ui)
+    {
+        lock (_gate) { _uiAutomation = ui; }
+    }
 
     /// <summary>
     /// Legacy 4-argument overload retained for backward compatibility.
@@ -112,6 +146,8 @@ public static class HostServices
             _versionControl = null;
             _untypedModel = null;
             _microflowAuthoring = null;
+            _runStateProbe = null;
+            _uiAutomation = null;
         }
     }
 
