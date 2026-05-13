@@ -1137,46 +1137,6 @@ namespace Terminal.Spmcp.Tools
             return expression.Replace('"', '\'');
         }
 
-        /// <summary>
-        /// Normalizes reduce expressions by qualifying $currentObject/Attribute paths with the entity's qualified name.
-        /// Mendix requires entity-qualified attribute access: $currentObject/Module.Entity/Attribute
-        /// </summary>
-        private string NormalizeReduceExpression(string expr, string listVariable, JsonObject? activityData)
-        {
-            if (string.IsNullOrEmpty(expr)) return expr;
-
-            // Try to resolve entity from context
-            var entityName = activityData?["entity"]?.ToString() ??
-                            activityData?["entity_name"]?.ToString() ??
-                            activityData?["entityName"]?.ToString();
-            if (string.IsNullOrEmpty(entityName))
-            {
-                _logger.LogWarning($"NormalizeReduceExpression: No entity context provided for list '{listVariable}', cannot qualify attribute paths");
-                return expr;
-            }
-
-            var (entity, _) = Utils.Utils.FindEntityAcrossModules(_model, entityName);
-            if (entity == null)
-            {
-                _logger.LogWarning($"NormalizeReduceExpression: Entity '{entityName}' not found, cannot qualify attribute paths");
-                return expr;
-            }
-
-            // Replace $currentObject/AttrName with $currentObject/Module.Entity/AttrName
-            // Only replace if not already qualified (path segment doesn't contain a dot)
-            var normalized = Regex.Replace(expr, @"\$currentObject/([A-Za-z_]\w*)", match =>
-            {
-                var attrName = match.Groups[1].Value;
-                if (attrName.Contains('.')) return match.Value; // Already qualified
-                return $"$currentObject/{entity.QualifiedName}/{attrName}";
-            });
-
-            if (normalized != expr)
-                _logger.LogInformation($"NormalizeReduceExpression: '{expr}' → '{normalized}'");
-
-            return normalized;
-        }
-
         public async Task<object> CreateMicroflowActivity(JsonObject arguments)
         {
             await Task.CompletedTask;
@@ -2780,18 +2740,6 @@ namespace Terminal.Spmcp.Tools
 
         #region Phase 10: Project Settings & Runtime Configuration
 
-        private IProjectSettings? GetProjectSettings()
-        {
-            var project = _model.Root as IProject;
-            return project?.GetProjectDocuments().OfType<IProjectSettings>().FirstOrDefault();
-        }
-
-        private T? GetSettingsPart<T>() where T : class, IProjectSettingsPart
-        {
-            var settings = GetProjectSettings();
-            return settings?.GetSettingsParts().OfType<T>().FirstOrDefault();
-        }
-
         public async Task<string> ReadRuntimeSettings(JsonObject parameters)
         {
             try
@@ -4005,30 +3953,15 @@ namespace Terminal.Spmcp.Tools
             }
         }
 
-        public async Task<string> SyncFilesystem(JsonObject parameters)
+        public Task<string> SyncFilesystem(JsonObject parameters)
         {
-            try
+            // IAppService.SynchronizeWithFileSystem is not exposed on the typed Interop surface.
+            return Task.FromResult(JsonSerializer.Serialize(new
             {
-                // IAppService is a UI service — try to get it from service provider
-                var appService = _serviceProvider?.GetService<IAppService>();
-
-                if (appService == null)
-                    return JsonSerializer.Serialize(new { error = "IAppService is not available. This service may not be accessible from extensions." });
-
-                appService.SynchronizeWithFileSystem(_model);
-
-                _logger.LogInformation("Synchronized model with file system");
-                return JsonSerializer.Serialize(new
-                {
-                    success = true,
-                    message = "Synchronized model with file system. JavaScript actions, widgets, and other file-based changes have been imported."
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error synchronizing with file system");
-                return JsonSerializer.Serialize(new { error = ex.Message });
-            }
+                success = false,
+                escalation = "manual",
+                message = "SyncFilesystem requires IAppService.SynchronizeWithFileSystem, which is not exposed on the typed Interop surface. Use Studio Pro's File > Synchronize with File System menu."
+            }));
         }
 
         #endregion
@@ -4126,6 +4059,7 @@ namespace Terminal.Spmcp.Tools
 
         public async Task<string> ReadAttributeDetails(JsonObject parameters)
         {
+            await Task.CompletedTask;
             try
             {
                 var entityName = parameters["entity_name"]?.ToString();
@@ -4137,71 +4071,67 @@ namespace Terminal.Spmcp.Tools
                 if (string.IsNullOrEmpty(attributeName))
                     return JsonSerializer.Serialize(new { error = "attribute_name is required" });
 
-                var (entity, foundModule) = Utils.Utils.FindEntityAcrossModules(_model, entityName, moduleName);
-                if (entity == null)
+                // Parse qualified name (e.g. "MyModule.MyEntity")
+                string? resolvedModule = moduleName;
+                string resolvedEntity = entityName!;
+                if (entityName!.Contains('.') && string.IsNullOrEmpty(moduleName))
+                {
+                    var parts = entityName.Split('.', 2);
+                    resolvedModule = parts[0];
+                    resolvedEntity = parts[1];
+                }
+
+                // Find the entity across modules via HostServices.DomainModel
+                EntityRef? foundEntity = null;
+                ModuleId? foundModuleId = null;
+                string? foundModuleName = null;
+
+                var modules = HostServices.Model.ListModules();
+                foreach (var mod in modules)
+                {
+                    if (!string.IsNullOrEmpty(resolvedModule) &&
+                        !mod.Name.Equals(resolvedModule, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var entities = HostServices.DomainModel.ListEntities(mod);
+                    var match = entities.FirstOrDefault(e =>
+                        e.QualifiedName.EndsWith("." + resolvedEntity, StringComparison.OrdinalIgnoreCase) ||
+                        e.QualifiedName.Equals(resolvedEntity, StringComparison.OrdinalIgnoreCase));
+                    if (match.Id != Guid.Empty)
+                    {
+                        foundEntity = match;
+                        foundModuleId = mod;
+                        foundModuleName = mod.Name;
+                        break;
+                    }
+                }
+
+                if (foundEntity == null)
                     return JsonSerializer.Serialize(new { error = $"Entity '{entityName}' not found" });
 
-                var attribute = entity.GetAttributes()
-                    .FirstOrDefault(a => a.Name.Equals(attributeName, StringComparison.OrdinalIgnoreCase));
-                if (attribute == null)
+                var shape = HostServices.DomainModel.ReadEntity(foundEntity.Value);
+
+                var attrRef = shape.Attributes.FirstOrDefault(a =>
+                    a.Name.Equals(attributeName, StringComparison.OrdinalIgnoreCase));
+                if (attrRef.Id == Guid.Empty && attrRef.Name == null)
                     return JsonSerializer.Serialize(new { error = $"Attribute '{attributeName}' not found on entity '{entityName}'" });
 
                 var result = new Dictionary<string, object?>
                 {
-                    ["name"] = attribute.Name,
-                    ["qualifiedName"] = attribute.QualifiedName?.FullName,
-                    ["entity"] = entityName,
-                    ["module"] = foundModule?.Name,
-                    ["documentation"] = string.IsNullOrEmpty(attribute.Documentation) ? null : attribute.Documentation
+                    ["name"] = attrRef.Name,
+                    ["qualifiedName"] = $"{shape.Self.QualifiedName}/{attrRef.Name}",
+                    ["entity"] = shape.Self.QualifiedName,
+                    ["module"] = foundModuleName,
+                    ["type"] = attrRef.Kind.ToString(),
+                    // Extended metadata (MaxLength, EnumerationValues, DefaultValue, LocalizeDate,
+                    // CalculatedMicroflow) is not exposed on AttributeRef — use the typed DomainModel
+                    // host if you need to add this; it requires attribute-level detail reading.
+                    ["maxLength"] = (object?)null,
+                    ["enumeration"] = (object?)null,
+                    ["defaultValue"] = (object?)null,
+                    ["note"] = "Extended attribute metadata (maxLength, enumeration, defaultValue, calculatedMicroflow) " +
+                               "not exposed on Core Interop AttributeRef. Available: name, type (AttributeKind)."
                 };
-
-                // Type details
-                var attrType = attribute.Type;
-                if (attrType is IStringAttributeType stringType)
-                {
-                    result["type"] = "String";
-                    result["maxLength"] = stringType.Length;
-                }
-                else if (attrType is IDateTimeAttributeType dateType)
-                {
-                    result["type"] = "DateTime";
-                    result["localizeDate"] = dateType.LocalizeDate;
-                }
-                else if (attrType is IEnumerationAttributeType enumType)
-                {
-                    result["type"] = "Enumeration";
-                    result["enumeration"] = enumType.Enumeration?.FullName;
-                }
-                else if (attrType is IBooleanAttributeType)
-                    result["type"] = "Boolean";
-                else if (attrType is IIntegerAttributeType)
-                    result["type"] = "Integer";
-                else if (attrType is ILongAttributeType)
-                    result["type"] = "Long";
-                else if (attrType is IAutoNumberAttributeType)
-                    result["type"] = "AutoNumber";
-                else if (attrType is IDecimalAttributeType)
-                    result["type"] = "Decimal";
-                else if (attrType is IBinaryAttributeType)
-                    result["type"] = "Binary";
-                else if (attrType is IHashedStringAttributeType)
-                    result["type"] = "HashedString";
-                else
-                    result["type"] = attrType?.GetType().Name ?? "Unknown";
-
-                // Value details (stored vs calculated)
-                var value = attribute.Value;
-                if (value is IStoredValue storedValue)
-                {
-                    result["valueType"] = "stored";
-                    result["defaultValue"] = string.IsNullOrEmpty(storedValue.DefaultValue) ? null : storedValue.DefaultValue;
-                }
-                else if (value is ICalculatedValue calculatedValue)
-                {
-                    result["valueType"] = "calculated";
-                    result["calculatedMicroflow"] = calculatedValue.Microflow?.FullName;
-                    result["passEntity"] = calculatedValue.PassEntity;
-                }
 
                 return JsonSerializer.Serialize(new { success = true, attribute = result });
             }
@@ -4212,118 +4142,17 @@ namespace Terminal.Spmcp.Tools
             }
         }
 
-        public async Task<string> ConfigureConstantValues(JsonObject parameters)
+        public Task<string> ConfigureConstantValues(JsonObject parameters)
         {
-            try
+            // Direct mutation of IConfigurationSettings → IConstantValue → ISharedValue is not exposed
+            // on the typed Interop surface. Configure constants in Studio Pro's
+            // Project Settings > Configurations dialog.
+            return Task.FromResult(JsonSerializer.Serialize(new
             {
-                var configName = parameters["configuration_name"]?.ToString();
-                var constantName = parameters["constant_name"]?.ToString();
-                var constantModule = parameters["module_name"]?.ToString();
-                var newValue = parameters["value"]?.ToString();
-
-                // Support qualified names like "Module.ConstantName"
-                if (!string.IsNullOrEmpty(constantName) && constantName.Contains('.') && string.IsNullOrEmpty(constantModule))
-                {
-                    var parts = constantName.Split('.', 2);
-                    constantModule = parts[0];
-                    constantName = parts[1];
-                }
-
-                if (string.IsNullOrEmpty(configName))
-                    return JsonSerializer.Serialize(new { error = "configuration_name is required (e.g. 'Development', 'Production')" });
-                if (string.IsNullOrEmpty(constantName))
-                    return JsonSerializer.Serialize(new { error = "constant_name is required" });
-                if (newValue == null)
-                    return JsonSerializer.Serialize(new { error = "value is required" });
-
-                // Navigate to project settings -> configurations
-                var project = _model.Root as IProject;
-                if (project == null)
-                    return JsonSerializer.Serialize(new { error = "Cannot access project root" });
-
-                var projectSettings = project.GetProjectDocuments()
-                    .OfType<Mendix.StudioPro.ExtensionsAPI.Model.Settings.IProjectSettings>()
-                    .FirstOrDefault();
-                if (projectSettings == null)
-                    return JsonSerializer.Serialize(new { error = "Cannot access project settings" });
-
-                var configSettings = projectSettings.GetSettingsParts()
-                    .OfType<Mendix.StudioPro.ExtensionsAPI.Model.Settings.IConfigurationSettings>()
-                    .FirstOrDefault();
-                if (configSettings == null)
-                    return JsonSerializer.Serialize(new { error = "Cannot access configuration settings" });
-
-                var configurations = configSettings.GetConfigurations();
-                var config = configurations.FirstOrDefault(c => c.Name.Equals(configName, StringComparison.OrdinalIgnoreCase));
-                if (config == null)
-                {
-                    var availConfigs = configurations.Select(c => c.Name).ToList();
-                    return JsonSerializer.Serialize(new { error = $"Configuration '{configName}' not found. Available: {string.Join(", ", availConfigs)}" });
-                }
-
-                // Find the constant
-                IConstant? constant = null;
-                foreach (var module in _model.Root.GetModules())
-                {
-                    if (!string.IsNullOrEmpty(constantModule) && !module.Name.Equals(constantModule, StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    var doc = module.GetDocuments().OfType<IConstant>()
-                        .FirstOrDefault(c => c.Name.Equals(constantName, StringComparison.OrdinalIgnoreCase));
-                    if (doc != null) { constant = doc; break; }
-                }
-                if (constant == null)
-                    return JsonSerializer.Serialize(new { error = $"Constant '{constantName}' not found" });
-
-                // Check if there's an existing constant value override
-                var existingCV = config.GetConstantValues()
-                    .FirstOrDefault(cv => cv.Constant?.FullName == constant.QualifiedName?.FullName);
-
-                using var transaction = _model.StartTransaction($"Set constant value for '{constantName}' in '{configName}'");
-
-                if (existingCV != null)
-                {
-                    // Update existing
-                    if (existingCV.SharedOrPrivateValue is ISharedValue existingShared)
-                    {
-                        existingShared.Value = newValue;
-                    }
-                    else
-                    {
-                        // Replace with a shared value
-                        var sharedValue = _model.Create<ISharedValue>();
-                        sharedValue.Value = newValue;
-                        existingCV.SharedOrPrivateValue = sharedValue;
-                    }
-                }
-                else
-                {
-                    // Create new constant value
-                    var constantValue = _model.Create<IConstantValue>();
-                    constantValue.Constant = constant.QualifiedName;
-                    var sharedValue = _model.Create<ISharedValue>();
-                    sharedValue.Value = newValue;
-                    constantValue.SharedOrPrivateValue = sharedValue;
-                    config.AddConstantValue(constantValue);
-                }
-
-                transaction.Commit();
-
-                _logger.LogInformation($"Set constant '{constantName}' = '{newValue}' in configuration '{configName}'");
-                return JsonSerializer.Serialize(new
-                {
-                    success = true,
-                    configuration = configName,
-                    constant = constant.QualifiedName?.FullName ?? constantName,
-                    value = newValue,
-                    message = $"Set constant '{constantName}' = '{newValue}' in configuration '{configName}'"
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error configuring constant values");
-                return JsonSerializer.Serialize(new { error = ex.Message });
-            }
+                success = false,
+                escalation = "manual",
+                message = "ConfigureConstantValues requires direct mutation of IConfigurationSettings → IConstantValue → ISharedValue, which is not exposed on the typed Interop surface. Configure constants in Studio Pro's Project Settings > Configurations dialog."
+            }));
         }
 
         #endregion
@@ -4603,19 +4432,20 @@ namespace Terminal.Spmcp.Tools
                 var saveSkill = parameters["save_skill"]?.ToString()?.ToLowerInvariant() != "false";
                 var customSkillPath = parameters["skill_file_path"]?.ToString();
 
-                var project = _model.Root as Mendix.StudioPro.ExtensionsAPI.Model.Projects.IProject;
-                var projectName = project?.Name ?? System.IO.Path.GetFileName(_projectDirectory ?? "UnknownProject");
+                var projectInfo = HostServices.Model.GetProjectInfo();
+                var projectName = projectInfo.Name ?? System.IO.Path.GetFileName(_projectDirectory ?? "UnknownProject");
 
-                // Gather user modules to analyze
-                var allModules = _model.Root.GetModules()
-                    .Where(m => m != null && !m.FromAppStore)
-                    .ToList();
+                // Gather modules to analyze — all modules returned by IModelHost
+                // (AppStore filter not exposed on ModuleId; skip filtering for now)
+                var allModuleIds = HostServices.Model.ListModules();
 
                 if (!string.IsNullOrEmpty(scopeModuleName))
-                    allModules = allModules.Where(m => m.Name.Equals(scopeModuleName, StringComparison.OrdinalIgnoreCase)).ToList();
+                    allModuleIds = allModuleIds
+                        .Where(m => m.Name.Equals(scopeModuleName, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
 
-                if (allModules.Count == 0)
-                    return JsonSerializer.Serialize(new { error = $"No user modules found{(string.IsNullOrEmpty(scopeModuleName) ? "" : $" matching '{scopeModuleName}'")}. Available: {Utils.Utils.ListUserModules(_model)}" });
+                if (allModuleIds.Count == 0)
+                    return JsonSerializer.Serialize(new { error = $"No modules found{(string.IsNullOrEmpty(scopeModuleName) ? "" : $" matching '{scopeModuleName}'")}" });
 
                 // ── Accumulators ──────────────────────────────────────────────
                 var entityNames = new List<string>();
@@ -4624,7 +4454,6 @@ namespace Terminal.Spmcp.Tools
                 var baseEntityCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                 var commonAttrNames = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                 int assocOneToMany = 0, assocManyToMany = 0;
-                var deleteBehaviorCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                 int entitiesWithCreatedDate = 0, entitiesWithChangedDate = 0;
                 int totalEventHandlers = 0;
                 var eventHandlerTypes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -4643,95 +4472,84 @@ namespace Terminal.Spmcp.Tools
                 var moduleStats = new List<object>();
                 int totalEntities = 0, totalMicroflows = 0, totalPages = 0, totalAssociations = 0;
 
-                // Track which associations have already been counted (avoid double-count from both-direction traversal)
+                // Track associations already counted (avoid double-count from both incoming + outgoing)
                 var seenAssociations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 // ── Per-module analysis ───────────────────────────────────────
-                foreach (var module in allModules)
+                foreach (var modId in allModuleIds)
                 {
                     int modEntities = 0, modMicroflows = 0, modPages = 0, modAssociations = 0;
 
-                    // Entities + attributes + associations
-                    var entities = module.DomainModel?.GetEntities().ToList() ?? new List<Mendix.StudioPro.ExtensionsAPI.Model.DomainModels.IEntity>();
-                    modEntities = entities.Count;
+                    // ── Entities via IDomainModelHost ──────────────────────────
+                    var entityRefs = HostServices.DomainModel.ListEntities(modId);
+                    modEntities = entityRefs.Count;
                     totalEntities += modEntities;
 
-                    foreach (var entity in entities)
+                    foreach (var entityRef in entityRefs)
                     {
-                        entityNames.Add(entity.Name);
+                        var shape = HostServices.DomainModel.ReadEntity(entityRef);
+                        var simpleName = entityRef.QualifiedName.Contains('.')
+                            ? entityRef.QualifiedName.Split('.', 2)[1]
+                            : entityRef.QualifiedName;
+                        entityNames.Add(simpleName);
 
-                        // Base entity / generalization
-                        var genParent = (entity.Generalization as Mendix.StudioPro.ExtensionsAPI.Model.DomainModels.IGeneralization)?.Generalization?.FullName ?? "System.Object";
+                        // Generalization
+                        var genParent = shape.GeneralizationQualifiedName ?? "System.Object";
                         if (!baseEntityCounts.ContainsKey(genParent)) baseEntityCounts[genParent] = 0;
                         baseEntityCounts[genParent]++;
 
                         // Attributes
-                        var attrs = entity.GetAttributes().ToList();
                         bool hasCreatedDate = false, hasChangedDate = false;
-
-                        foreach (var attr in attrs)
+                        foreach (var attr in shape.Attributes)
                         {
                             attributeNames.Add(attr.Name);
 
-                            // Track common audit fields
                             var attrNameLower = attr.Name.ToLowerInvariant();
                             if (!commonAttrNames.ContainsKey(attr.Name)) commonAttrNames[attr.Name] = 0;
                             commonAttrNames[attr.Name]++;
                             if (attrNameLower == "createddate" || attrNameLower == "createdby") hasCreatedDate = true;
                             if (attrNameLower == "changeddate" || attrNameLower == "lastchanged" || attrNameLower == "modifieddate") hasChangedDate = true;
 
-                            // Attribute type distribution
-                            var typeName = SimplifyAttributeTypeName(attr.Type?.GetType().Name ?? "Unknown");
+                            var typeName = attr.Kind.ToString();
                             if (!attrTypeCounts.ContainsKey(typeName)) attrTypeCounts[typeName] = 0;
                             attrTypeCounts[typeName]++;
                         }
-
                         if (hasCreatedDate) entitiesWithCreatedDate++;
                         if (hasChangedDate) entitiesWithChangedDate++;
 
-                        // Associations (count each once)
-                        var associations = entity.GetAssociations(Mendix.StudioPro.ExtensionsAPI.Model.DomainModels.AssociationDirection.Both, null).ToList();
-                        foreach (var assocInfo in associations)
+                        // Outgoing associations (count each once by name+module)
+                        foreach (var assoc in shape.OutgoingAssociations)
                         {
-                            var assocKey = $"{module.Name}.{assocInfo.Association.Name}";
+                            var assocKey = $"{modId.Name}.{assoc.Name}";
                             if (seenAssociations.Contains(assocKey)) continue;
                             seenAssociations.Add(assocKey);
                             modAssociations++;
                             totalAssociations++;
-
-                            if (assocInfo.Association.Type == Mendix.StudioPro.ExtensionsAPI.Model.DomainModels.AssociationType.Reference)
+                            if (assoc.Type == AssociationType.Reference)
                                 assocOneToMany++;
                             else
                                 assocManyToMany++;
-
-                            // Delete behaviors
-                            var pb = assocInfo.Association.ParentDeleteBehavior.ToString();
-                            var cb = assocInfo.Association.ChildDeleteBehavior.ToString();
-                            if (!deleteBehaviorCounts.ContainsKey(pb)) deleteBehaviorCounts[pb] = 0;
-                            deleteBehaviorCounts[pb]++;
-                            if (!deleteBehaviorCounts.ContainsKey(cb)) deleteBehaviorCounts[cb] = 0;
-                            deleteBehaviorCounts[cb]++;
                         }
 
-                        // Event handlers
-                        var handlers = entity.GetEventHandlers().ToList();
-                        totalEventHandlers += handlers.Count;
-                        foreach (var h in handlers)
+                        // Event handlers — described via EventHandlerDescriptions strings
+                        totalEventHandlers += shape.EventHandlerDescriptions.Count;
+                        foreach (var desc in shape.EventHandlerDescriptions)
                         {
-                            var key = $"{h.Moment}_{h.Event}";
+                            var key = desc.Split(' ').FirstOrDefault() ?? desc;
                             if (!eventHandlerTypes.ContainsKey(key)) eventHandlerTypes[key] = 0;
                             eventHandlerTypes[key]++;
                         }
                     }
 
-                    // Microflows (names only — fast)
-                    var microflows = module.GetDocuments().OfType<Mendix.StudioPro.ExtensionsAPI.Model.Microflows.IMicroflow>().ToList();
-                    modMicroflows = microflows.Count;
+                    // ── Microflows (names via IModelHost document list) ─────────
+                    var mfDocs = HostServices.Model.ListModuleDocuments(modId, "Microflow");
+                    modMicroflows = mfDocs.Count;
                     totalMicroflows += modMicroflows;
-
-                    foreach (var mf in microflows)
+                    foreach (var doc in mfDocs)
                     {
-                        var name = mf.Name ?? "";
+                        var name = doc.QualifiedName.Contains('.')
+                            ? doc.QualifiedName.Split('.', 2)[1]
+                            : doc.QualifiedName;
                         var matched = false;
                         foreach (var prefix in new[] { "ACT_", "SUB_", "BCO_", "ACO_", "RUL_", "IVK_", "DS_" })
                         {
@@ -4745,16 +4563,15 @@ namespace Terminal.Spmcp.Tools
                         if (!matched) microflowPrefixCounts["none"]++;
                     }
 
-                    // Pages (names only — fast)
-                    var pages = module.GetDocuments()
-                        .OfType<Mendix.StudioPro.ExtensionsAPI.Model.Pages.IPage>()
-                        .ToList();
-                    modPages = pages.Count;
+                    // ── Pages (names via IModelHost document list) ──────────────
+                    var pageDocs = HostServices.Model.ListModuleDocuments(modId, "Page");
+                    modPages = pageDocs.Count;
                     totalPages += modPages;
-
-                    foreach (var page in pages)
+                    foreach (var doc in pageDocs)
                     {
-                        var name = page.Name ?? "";
+                        var name = doc.QualifiedName.Contains('.')
+                            ? doc.QualifiedName.Split('.', 2)[1]
+                            : doc.QualifiedName;
                         var matched = false;
                         foreach (var suffix in new[] { "_Overview", "_NewEdit", "_Detail", "_Edit", "_New", "_Select", "_Popup" })
                         {
@@ -4770,7 +4587,7 @@ namespace Terminal.Spmcp.Tools
 
                     moduleStats.Add(new
                     {
-                        name = module.Name,
+                        name = modId.Name,
                         entities = modEntities,
                         associations = modAssociations,
                         microflows = modMicroflows,
@@ -4785,7 +4602,7 @@ namespace Terminal.Spmcp.Tools
                 double attrPascalPct = attributeNames.Count > 0 ? attrPascalCount * 100.0 / attributeNames.Count : 0;
 
                 var topAttrTypes = attrTypeCounts.OrderByDescending(kv => kv.Value)
-                    .Select(kv => new { type = kv.Key, count = kv.Value, pct = totalEntities > 0 ? (int)(kv.Value * 100.0 / attributeNames.Count) : 0 })
+                    .Select(kv => new { type = kv.Key, count = kv.Value, pct = attributeNames.Count > 0 ? (int)(kv.Value * 100.0 / attributeNames.Count) : 0 })
                     .Take(8).ToList();
 
                 var topBaseEntities = baseEntityCounts.OrderByDescending(kv => kv.Value)
@@ -4799,10 +4616,6 @@ namespace Terminal.Spmcp.Tools
                     .Select(kv => kv.Key)
                     .Take(8)
                     .ToList();
-
-                var mostCommonDeleteBehavior = deleteBehaviorCounts.Count > 0
-                    ? deleteBehaviorCounts.OrderByDescending(kv => kv.Value).First().Key
-                    : "DeleteMeButKeepReferences";
 
                 // ── Build result ──────────────────────────────────────────────
                 var conventions = new
@@ -4837,8 +4650,6 @@ namespace Terminal.Spmcp.Tools
                         manyToMany = assocManyToMany,
                         oneToManyPct = totalAssociations > 0 ? $"{(int)(assocOneToMany * 100.0 / totalAssociations)}%" : "n/a"
                     },
-                    commonDeleteBehavior = mostCommonDeleteBehavior,
-                    deleteBehaviorDistribution = deleteBehaviorCounts,
                     eventHandlerDistribution = eventHandlerTypes,
                     entitiesWithCreatedDate = new { count = entitiesWithCreatedDate, pct = totalEntities > 0 ? $"{(int)(entitiesWithCreatedDate * 100.0 / totalEntities)}%" : "0%" },
                     entitiesWithChangedDate = new { count = entitiesWithChangedDate, pct = totalEntities > 0 ? $"{(int)(entitiesWithChangedDate * 100.0 / totalEntities)}%" : "0%" },
@@ -4877,7 +4688,7 @@ namespace Terminal.Spmcp.Tools
                     success = true,
                     projectName,
                     analyzedAt = DateTime.Now.ToString("o"),
-                    modulesAnalyzed = allModules.Select(m => m.Name).ToList(),
+                    modulesAnalyzed = allModuleIds.Select(m => m.Name).ToList(),
                     conventions,
                     statistics,
                     modules = moduleStats,
