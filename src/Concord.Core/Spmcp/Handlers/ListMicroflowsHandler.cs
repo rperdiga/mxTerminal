@@ -1,11 +1,10 @@
 using Microsoft.AspNetCore.Http;
-using System.Threading.Tasks;
-using Mendix.StudioPro.ExtensionsAPI.Model;
-using Mendix.StudioPro.ExtensionsAPI.Model.Microflows;
-using Mendix.StudioPro.ExtensionsAPI.Model.Projects;
-using Terminal.Spmcp.Core;
+using System;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
+using Terminal.Interop;
+using Terminal.Spmcp.Core;
 
 namespace Terminal.Spmcp.Handlers
 {
@@ -14,40 +13,39 @@ namespace Terminal.Spmcp.Handlers
         public override string Path => "/api/microflows/list";
         public override string Method => "POST";
 
-        public ListMicroflowsHandler(IModel currentApp) : base(currentApp) { }
+        public ListMicroflowsHandler() : base() { }
 
         public override async Task HandleAsync(HttpContext context)
         {
             try
             {
-                var requestBody = await JsonSerializer.DeserializeAsync<RequestBody>(
-                    context.Request.Body,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-                );
+                var requestBody = await ReadRequestAsync<ListMicroflowsRequest>(context);
                 if (requestBody == null || string.IsNullOrEmpty(requestBody.ModuleName))
                 {
                     context.Response.StatusCode = 400;
-                    await WriteJsonResponse(context, new { success = false, message = "Module name is required." });
+                    await WriteJsonResponseAsync(context, new { success = false, message = "Module name is required." });
                     return;
                 }
 
-                var module = CurrentApp.Root.GetModules().FirstOrDefault(m => m.Name == requestBody.ModuleName);
-                if (module == null)
+                var model = HostServices.Model;
+                var microflowAuthoring = HostServices.MicroflowAuthoring;
+
+                var moduleId = model.GetModuleByName(requestBody.ModuleName);
+                if (moduleId == null)
                 {
                     context.Response.StatusCode = 404;
-                    await WriteJsonResponse(context, new { success = false, message = "Module not found." });
+                    await WriteJsonResponseAsync(context, new { success = false, message = "Module not found." });
                     return;
                 }
 
-                var microflows = module.GetDocuments()
-                    .OfType<IMicroflow>()
+                var microflows = microflowAuthoring.ListMicroflows(moduleId)
                     .Select(mf => new
                     {
                         mf.Name,
-                        QualifiedName = mf.QualifiedName?.FullName
+                        QualifiedName = mf.QualifiedName
                     }).ToList();
 
-                await WriteJsonResponse(context, new
+                await WriteJsonResponseAsync(context, new
                 {
                     success = true,
                     message = "Microflows retrieved successfully.",
@@ -57,7 +55,7 @@ namespace Terminal.Spmcp.Handlers
             catch (Exception ex)
             {
                 context.Response.StatusCode = 500;
-                await WriteJsonResponse(context, new
+                await WriteJsonResponseAsync(context, new
                 {
                     success = false,
                     message = $"Error retrieving microflows: {ex.Message}"
@@ -65,19 +63,7 @@ namespace Terminal.Spmcp.Handlers
             }
         }
 
-        private async Task WriteJsonResponse(HttpContext context, object value)
-        {
-            var options = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                WriteIndented = true
-            };
-
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync(JsonSerializer.Serialize(value, options));
-        }
-
-        private class RequestBody
+        private class ListMicroflowsRequest
         {
             public string? ModuleName { get; set; }
         }

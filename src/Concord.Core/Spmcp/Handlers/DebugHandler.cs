@@ -4,37 +4,31 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using Mendix.StudioPro.ExtensionsAPI.Model;
-using Mendix.StudioPro.ExtensionsAPI.Model.DomainModels; // Add this for AssociationDirection
+using Terminal.Interop;
 using Terminal.Spmcp.Core;
 
 namespace Terminal.Spmcp.Handlers
 {
     public class DebugHandler : BaseApiHandler
     {
-        // Standardize path for MCP compatibility
         public override string Path => "/api/debug";
         public override string Method => "POST";
 
-        public DebugHandler(IModel currentApp) : base(currentApp) { }
+        public DebugHandler() : base() { }
 
         public override async Task HandleAsync(HttpContext context)
         {
-            // Set CORS headers safely
             context.Response.Headers.TryAdd("Access-Control-Allow-Origin", "*");
             context.Response.Headers.TryAdd("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
             context.Response.Headers.TryAdd("Access-Control-Allow-Headers", "Content-Type");
 
-            // Handle OPTIONS requests
             if (context.Request.Method == "OPTIONS")
             {
                 context.Response.StatusCode = 200;
                 return;
             }
 
-            // Read the request body
             string requestBody;
             using (var reader = new StreamReader(context.Request.Body))
             {
@@ -43,51 +37,61 @@ namespace Terminal.Spmcp.Handlers
 
             System.Diagnostics.Debug.WriteLine($"Debug API request: {requestBody}");
 
-            // Get module and entity information
-            var module = Utils.Utils.ResolveModule(CurrentApp, null);
+            var model = HostServices.Model;
+            var domainModel = HostServices.DomainModel;
             var response = new Dictionary<string, object>();
 
-            if (module?.DomainModel != null)
+            // Resolve the first user module
+            var modules = model.ListModules();
+            var module = modules.FirstOrDefault(m =>
+                !m.Name.StartsWith("System", StringComparison.OrdinalIgnoreCase) &&
+                !m.Name.StartsWith("AppStore", StringComparison.OrdinalIgnoreCase));
+
+            if (module != default)
             {
-                var entities = module.DomainModel.GetEntities().ToList();
+                var entities = domainModel.ListEntities(module);
+
                 response["module"] = module.Name;
                 response["entityCount"] = entities.Count;
-                response["entities"] = entities.Select(e => new
+                response["entities"] = entities.Select(e =>
                 {
-                    Name = e.Name,
-                    QualifiedName = $"{module.Name}.{e.Name}",
-                    AttributeCount = e.GetAttributes().Count(),
-                    Attributes = e.GetAttributes().Select(a => a.Name).ToList(),
-                    LocationX = e.Location != null ? e.Location.X : 0,
-                    LocationY = e.Location != null ? e.Location.Y : 0
+                    var shape = domainModel.ReadEntity(e);
+                    var simpleName = e.QualifiedName.Split('.').Last();
+                    return new
+                    {
+                        Name = simpleName,
+                        QualifiedName = e.QualifiedName,
+                        AttributeCount = shape.Attributes.Count,
+                        Attributes = shape.Attributes.Select(a => a.Name).ToList(),
+                        LocationX = shape.X,
+                        LocationY = shape.Y
+                    };
                 }).ToList();
 
-                // Collect association information with more details
+                // Collect association information
                 var allAssociations = new List<object>();
-                foreach (var entity in entities)
+                var associations = domainModel.QueryAssociations(moduleName: module.Name, direction: "both");
+                var seen = new HashSet<string>();
+                foreach (var assoc in associations)
                 {
-                    var associations = entity.GetAssociations(AssociationDirection.Both, null).ToList();
-                    foreach (var association in associations)
+                    if (!seen.Add(assoc.Name)) continue;
+                    allAssociations.Add(new
                     {
-                        allAssociations.Add(new
-                        {
-                            Name = association.Association.Name,
-                            Parent = association.Parent.Name,
-                            ParentQualifiedName = $"{module.Name}.{association.Parent.Name}",
-                            Child = association.Child.Name,
-                            ChildQualifiedName = $"{module.Name}.{association.Child.Name}",
-                            Type = association.Association.Type.ToString(),
-                            MappedType = association.Association.Type == AssociationType.Reference ? "one-to-many" : "many-to-many"
-                        });
-                    }
+                        Name = assoc.Name,
+                        Parent = assoc.ParentEntityQualifiedName.Split('.').Last(),
+                        ParentQualifiedName = assoc.ParentEntityQualifiedName,
+                        Child = assoc.ChildEntityQualifiedName.Split('.').Last(),
+                        ChildQualifiedName = assoc.ChildEntityQualifiedName,
+                        Type = assoc.Type.ToString(),
+                        MappedType = assoc.Type == AssociationType.Reference ? "one-to-many" : "many-to-many"
+                    });
                 }
                 response["associations"] = allAssociations;
                 response["associationCount"] = allAssociations.Count;
-                
-                // Add troubleshooting section
+
                 response["troubleshooting"] = new
                 {
-                    entityNamesList = entities.Select(e => e.Name).ToList(),
+                    entityNamesList = entities.Select(e => e.QualifiedName.Split('.').Last()).ToList(),
                     associationTips = new[] {
                         "Make sure both entities exist before creating an association",
                         "Use simple names without module prefixes in API calls",
@@ -100,7 +104,6 @@ namespace Terminal.Spmcp.Handlers
                 response["error"] = "No domain model found";
             }
 
-            // Add examples for entity and association creation
             response["examples"] = new
             {
                 entityCreation = new
@@ -151,16 +154,15 @@ namespace Terminal.Spmcp.Handlers
                 }
             };
 
-            // Return response
             context.Response.StatusCode = 200;
             context.Response.ContentType = "application/json";
-            
+
             var options = new JsonSerializerOptions
             {
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
-            
+
             await context.Response.WriteAsync(JsonSerializer.Serialize(new
             {
                 success = true,

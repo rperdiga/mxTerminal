@@ -1,12 +1,9 @@
 using Microsoft.AspNetCore.Http;
-using System.Threading.Tasks;
-using Mendix.StudioPro.ExtensionsAPI.Model;
-using Mendix.StudioPro.ExtensionsAPI.Model.DomainModels;
-using Terminal.Spmcp.Core;
-using System.Text.Json;
 using System;
-using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using Terminal.Interop;
+using Terminal.Spmcp.Core;
 
 namespace Terminal.Spmcp.Handlers
 {
@@ -20,18 +17,17 @@ namespace Terminal.Spmcp.Handlers
 
     public class DeleteModelHandler : BaseApiHandler
     {
-        // Standardize path for MCP compatibility
         public override string Path => "/api/model/delete";
-        public override string Method => "POST"; // Changed from DELETE to POST for MCP compatibility
+        public override string Method => "POST";
 
-        public DeleteModelHandler(IModel currentApp) : base(currentApp) { }
+        public DeleteModelHandler() : base() { }
 
         public override async Task HandleAsync(HttpContext context)
         {
             await ExecuteInTransactionAsync(
                 context,
                 "delete model element",
-                async (model) =>
+                async () =>
                 {
                     try
                     {
@@ -46,8 +42,15 @@ namespace Terminal.Spmcp.Handlers
                             );
                         }
 
-                        var module = Utils.Utils.ResolveModule(model, null);
-                        if (module?.DomainModel == null)
+                        var model = HostServices.Model;
+                        var domainModel = HostServices.DomainModel;
+
+                        // Resolve the first user module
+                        var module = model.ListModules().FirstOrDefault(m =>
+                            !m.Name.StartsWith("System", StringComparison.OrdinalIgnoreCase) &&
+                            !m.Name.StartsWith("AppStore", StringComparison.OrdinalIgnoreCase));
+
+                        if (module == default)
                         {
                             return (
                                 success: false,
@@ -59,14 +62,14 @@ namespace Terminal.Spmcp.Handlers
                         switch (request.Type.ToLower())
                         {
                             case "entity":
-                                return DeleteEntity(module.DomainModel, request.EntityName);
-                            
+                                return DeleteEntity(domainModel, module, request.EntityName);
+
                             case "attribute":
-                                return DeleteAttribute(module.DomainModel, request.EntityName, request.AttributeName);
-                            
+                                return DeleteAttribute(domainModel, module, request.EntityName, request.AttributeName);
+
                             case "association":
-                                return DeleteAssociation(module.DomainModel, request.EntityName, request.AssociationName);
-                            
+                                return DeleteAssociation(domainModel, module, request.EntityName, request.AssociationName);
+
                             default:
                                 return (
                                     success: false,
@@ -86,115 +89,74 @@ namespace Terminal.Spmcp.Handlers
                 });
         }
 
-        private (bool success, string message, object? data) DeleteEntity(IDomainModel domainModel, string entityName)
+        private (bool success, string message, object? data) DeleteEntity(
+            IDomainModelHost domainModel, ModuleId module, string entityName)
         {
-            using (var transaction = CurrentApp.StartTransaction("Delete Entity"))
+            var entities = domainModel.ListEntities(module);
+            var entity = entities.FirstOrDefault(e =>
+                e.QualifiedName.Split('.').Last().Equals(entityName, StringComparison.OrdinalIgnoreCase));
+
+            if (entity == default)
             {
-                var entity = domainModel.GetEntities().FirstOrDefault(e => e.Name == entityName);
-                if (entity == null)
-                {
-                    return (
-                        success: false,
-                        message: $"Entity '{entityName}' not found",
-                        data: null as object
-                    );
-                }
-
-                // Delete all associations first
-                var entityAssociations = entity.GetAssociations(AssociationDirection.Both, null).ToList();
-                foreach (var entityAssociation in entityAssociations)
-                {
-                    var association = entityAssociation.Association;
-                    entity.DeleteAssociation(association);
-                }
-
-                domainModel.RemoveEntity(entity);
-                transaction.Commit();
-
-                return (
-                    success: true,
-                    message: $"Entity '{entityName}' and its associations deleted successfully",
-                    data: null as object
-                );
+                return (false, $"Entity '{entityName}' not found", null);
             }
+
+            domainModel.DeleteEntity(entity);
+
+            return (true, $"Entity '{entityName}' and its associations deleted successfully", null);
         }
 
         private (bool success, string message, object? data) DeleteAttribute(
-            IDomainModel domainModel, 
-            string entityName, 
-            string attributeName)
+            IDomainModelHost domainModel, ModuleId module, string entityName, string attributeName)
         {
-            using (var transaction = CurrentApp.StartTransaction("Delete Attribute"))
+            var entities = domainModel.ListEntities(module);
+            var entity = entities.FirstOrDefault(e =>
+                e.QualifiedName.Split('.').Last().Equals(entityName, StringComparison.OrdinalIgnoreCase));
+
+            if (entity == default)
             {
-                var entity = domainModel.GetEntities().FirstOrDefault(e => e.Name == entityName);
-                if (entity == null)
-                {
-                    return (
-                        success: false,
-                        message: $"Entity '{entityName}' not found",
-                        data: null as object
-                    );
-                }
-
-                var attribute = entity.GetAttributes().FirstOrDefault(a => a.Name == attributeName);
-                if (attribute == null)
-                {
-                    return (
-                        success: false,
-                        message: $"Attribute '{attributeName}' not found in entity '{entityName}'",
-                        data: null as object
-                    );
-                }
-
-                entity.RemoveAttribute(attribute);
-                transaction.Commit();
-
-                return (
-                    success: true,
-                    message: $"Attribute '{attributeName}' deleted successfully from entity '{entityName}'",
-                    data: null as object
-                );
+                return (false, $"Entity '{entityName}' not found", null);
             }
+
+            var shape = domainModel.ReadEntity(entity);
+            var attribute = shape.Attributes.FirstOrDefault(a =>
+                a.Name.Equals(attributeName, StringComparison.OrdinalIgnoreCase));
+
+            if (attribute == default)
+            {
+                return (false, $"Attribute '{attributeName}' not found in entity '{entityName}'", null);
+            }
+
+            domainModel.DeleteAttribute(entity, attribute);
+
+            return (true, $"Attribute '{attributeName}' deleted successfully from entity '{entityName}'", null);
         }
 
         private (bool success, string message, object? data) DeleteAssociation(
-            IDomainModel domainModel, 
-            string entityName, 
-            string associationName)
+            IDomainModelHost domainModel, ModuleId module, string entityName, string associationName)
         {
-            using (var transaction = CurrentApp.StartTransaction("Delete Association"))
+            var entities = domainModel.ListEntities(module);
+            var entity = entities.FirstOrDefault(e =>
+                e.QualifiedName.Split('.').Last().Equals(entityName, StringComparison.OrdinalIgnoreCase));
+
+            if (entity == default)
             {
-                var entity = domainModel.GetEntities().FirstOrDefault(e => e.Name == entityName);
-                if (entity == null)
-                {
-                    return (
-                        success: false,
-                        message: $"Entity '{entityName}' not found",
-                        data: null as object
-                    );
-                }
-
-                var entityAssociation = entity.GetAssociations(AssociationDirection.Both, null)
-                    .FirstOrDefault(a => a.Association.Name == associationName);
-                if (entityAssociation == null)
-                {
-                    return (
-                        success: false,
-                        message: $"Association '{associationName}' not found",
-                        data: null as object
-                    );
-                }
-
-                var association = entityAssociation.Association;
-                entity.DeleteAssociation(association);
-                transaction.Commit();
-
-                return (
-                    success: true,
-                    message: $"Association '{associationName}' deleted successfully",
-                    data: null as object
-                );
+                return (false, $"Entity '{entityName}' not found", null);
             }
+
+            var shape = domainModel.ReadEntity(entity);
+            var association = shape.OutgoingAssociations
+                .Concat(shape.IncomingAssociations)
+                .FirstOrDefault(a => a.Name.Equals(associationName, StringComparison.OrdinalIgnoreCase));
+
+            if (association == default)
+            {
+                return (false, $"Association '{associationName}' not found", null);
+            }
+
+            domainModel.DeleteAssociation(association);
+
+            return (true, $"Association '{associationName}' deleted successfully", null);
         }
     }
 }

@@ -1,16 +1,10 @@
 using Microsoft.AspNetCore.Http;
-using System.Threading.Tasks;
-using Mendix.StudioPro.ExtensionsAPI.Model;
-using Mendix.StudioPro.ExtensionsAPI.Model.DomainModels;
-using Mendix.StudioPro.ExtensionsAPI.Model.Pages;
-using Mendix.StudioPro.ExtensionsAPI.Services;
-using Terminal.Spmcp.Core;
-using System.Text.Json;
-using System.IO;
-using System.Linq;
-using System.Collections.Generic;
 using System;
-using System.ComponentModel.Composition;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Terminal.Interop;
+using Terminal.Spmcp.Core;
 
 namespace Terminal.Spmcp.Handlers.Schema
 {
@@ -25,29 +19,17 @@ namespace Terminal.Spmcp.Handlers
 {
     public class GenerateOverviewHandler : BaseApiHandler
     {
-        private readonly IPageGenerationService pageGenerationService;
-        private readonly INavigationManagerService navigationManagerService;
-
-        // Standardize path for MCP compatibility
         public override string Path => "/api/pages/generate-overview";
         public override string Method => "POST";
 
-        [ImportingConstructor]
-        public GenerateOverviewHandler(
-            IModel currentApp,
-            IPageGenerationService pageGenerationService,
-            INavigationManagerService navigationManagerService) : base(currentApp)
-        {
-            this.pageGenerationService = pageGenerationService;
-            this.navigationManagerService = navigationManagerService;
-        }
+        public GenerateOverviewHandler() : base() { }
 
         public override async Task HandleAsync(HttpContext context)
         {
             await ExecuteInTransactionAsync(
                 context,
                 "generate overview pages",
-                async (model) =>
+                async () =>
                 {
                     try
                     {
@@ -62,8 +44,16 @@ namespace Terminal.Spmcp.Handlers
                             );
                         }
 
-                        var module = Utils.Utils.ResolveModule(model, null);
-                        if (module?.DomainModel == null)
+                        var model = HostServices.Model;
+                        var domainModel = HostServices.DomainModel;
+                        var pageGeneration = HostServices.PageGeneration;
+
+                        // Resolve the first user module
+                        var module = model.ListModules().FirstOrDefault(m =>
+                            !m.Name.StartsWith("System", StringComparison.OrdinalIgnoreCase) &&
+                            !m.Name.StartsWith("AppStore", StringComparison.OrdinalIgnoreCase));
+
+                        if (module == default)
                         {
                             return (
                                 success: false,
@@ -72,15 +62,15 @@ namespace Terminal.Spmcp.Handlers
                             );
                         }
 
-                        // Get all entities from the domain model
-                        var allEntities = module.DomainModel.GetEntities().ToList();
-                        
-                        // Filter entities based on the requested names
-                        var entitiesToGenerate = allEntities
-                            .Where(e => request.EntityNames.Contains(e.Name, StringComparer.OrdinalIgnoreCase))
+                        var allEntities = domainModel.ListEntities(module);
+
+                        // Filter entities to those requested
+                        var matchedEntityNames = request.EntityNames
+                            .Where(reqName => allEntities.Any(e =>
+                                e.QualifiedName.Split('.').Last().Equals(reqName, StringComparison.OrdinalIgnoreCase)))
                             .ToList();
 
-                        if (!entitiesToGenerate.Any())
+                        if (!matchedEntityNames.Any())
                         {
                             return (
                                 success: false,
@@ -89,31 +79,30 @@ namespace Terminal.Spmcp.Handlers
                             );
                         }
 
-                        // Generate overview pages using the injected service
-                        var generatedOverviewPages = pageGenerationService.GenerateOverviewPages(
-                            module,
-                            entitiesToGenerate,
-                            request.GenerateIndexSnippet
-                        );
+                        var pgRequest = new PageGenerationRequest(
+                            module.Name,
+                            matchedEntityNames,
+                            request.GenerateIndexSnippet);
 
-                        // Add pages to navigation using the injected service
-                        var overviewPages = generatedOverviewPages
-                            .Where(page => page.Name.Contains("overview", StringComparison.InvariantCultureIgnoreCase))
-                            .Select(page => (page.Name, page))
-                            .ToArray();
+                        var result = pageGeneration.GenerateOverviewPages(pgRequest);
 
-                        navigationManagerService.PopulateWebNavigationWith(
-                            model,
-                            overviewPages
-                        );
+                        if (!result.Success)
+                        {
+                            return (
+                                success: false,
+                                message: result.Error ?? "Page generation failed",
+                                data: null as object
+                            );
+                        }
 
                         return (
                             success: true,
-                            message: $"Successfully generated {overviewPages.Length} overview pages",
+                            message: $"Successfully generated {result.CreatedPageNames.Count} overview pages",
                             data: new
                             {
-                                GeneratedPages = overviewPages.Select(p => p.Name).ToList()
-                            }
+                                GeneratedPages = result.CreatedPageNames.ToList(),
+                                Warnings = result.Warnings.ToList()
+                            } as object
                         );
                     }
                     catch (Exception ex)
@@ -125,22 +114,6 @@ namespace Terminal.Spmcp.Handlers
                         );
                     }
                 });
-        }
-
-        private async Task<T?> DeserializeRequestBodyAsync<T>(HttpContext context) where T : class
-        {
-            string requestBody;
-            using (var reader = new StreamReader(context.Request.Body))
-            {
-                requestBody = await reader.ReadToEndAsync();
-            }
-
-            var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            };
-
-            return JsonSerializer.Deserialize<T>(requestBody, options);
         }
     }
 }

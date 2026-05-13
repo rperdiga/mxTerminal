@@ -1,77 +1,78 @@
 using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using Mendix.StudioPro.ExtensionsAPI.Model;
-using Mendix.StudioPro.ExtensionsAPI.Model.DomainModels;
+using Terminal.Interop;
 using Terminal.Spmcp.Core;
 
 namespace Terminal.Spmcp.Handlers
 {
     public class AssociationDiagnosticHandler : BaseApiHandler
     {
-        // Standardize path for MCP compatibility
         public override string Path => "/api/diagnostics/association";
         public override string Method => "POST";
 
-        public AssociationDiagnosticHandler(IModel currentApp) : base(currentApp) { }
+        public AssociationDiagnosticHandler() : base() { }
 
         public override async Task HandleAsync(HttpContext context)
         {
             try
             {
-                // Set CORS headers safely
                 context.Response.Headers.TryAdd("Access-Control-Allow-Origin", "*");
                 context.Response.Headers.TryAdd("Access-Control-Allow-Methods", "POST, OPTIONS");
                 context.Response.Headers.TryAdd("Access-Control-Allow-Headers", "Content-Type");
 
-                // Handle OPTIONS requests
                 if (context.Request.Method == "OPTIONS")
                 {
                     context.Response.StatusCode = 200;
                     return;
                 }
 
-                var module = Utils.Utils.ResolveModule(CurrentApp, null);
-                if (module?.DomainModel == null)
+                var model = HostServices.Model;
+                var domainModel = HostServices.DomainModel;
+
+                // Resolve the first user module
+                var module = model.ListModules().FirstOrDefault(m =>
+                    !m.Name.StartsWith("System", StringComparison.OrdinalIgnoreCase) &&
+                    !m.Name.StartsWith("AppStore", StringComparison.OrdinalIgnoreCase));
+
+                if (module == default)
                 {
                     context.Response.StatusCode = 404;
-                    await context.Response.WriteAsync(JsonSerializer.Serialize(new 
-                    { 
-                        success = false, 
-                        message = "No domain model found" 
-                    }));
+                    await WriteJsonResponseAsync(context, new
+                    {
+                        success = false,
+                        message = "No domain model found"
+                    });
                     return;
                 }
 
-                var entities = module.DomainModel.GetEntities().ToList();
+                var entities = domainModel.ListEntities(module);
+                var entityNames = entities.Select(e => e.QualifiedName.Split('.').Last()).ToList();
                 var allAssociations = new List<object>();
 
-                // Get all entity names for easier debugging
-                var entityNames = entities.Select(e => e.Name).ToList();
-
-                // Collect associations data
-                foreach (var entity in entities)
+                // Query associations for all entities
+                var associations = domainModel.QueryAssociations(moduleName: module.Name, direction: "both");
+                foreach (var assoc in associations)
                 {
-                    var associations = entity.GetAssociations(AssociationDirection.Both, null).ToList();
-                    foreach (var association in associations)
+                    allAssociations.Add(new
                     {
-                        allAssociations.Add(new
-                        {
-                            Name = association.Association.Name,
-                            Parent = association.Parent.Name, 
-                            Child = association.Child.Name,
-                            Type = association.Association.Type.ToString(),
-                            MappedType = association.Association.Type == AssociationType.Reference ? "one-to-many" : "many-to-many"
-                        });
-                    }
+                        Name = assoc.Name,
+                        Parent = assoc.ParentEntityQualifiedName.Split('.').Last(),
+                        Child = assoc.ChildEntityQualifiedName.Split('.').Last(),
+                        Type = assoc.Type.ToString(),
+                        MappedType = assoc.Type == AssociationType.Reference ? "one-to-many" : "many-to-many"
+                    });
                 }
 
-                // Add association creation guidance
+                // Deduplicate associations (QueryAssociations may return each twice when direction=both)
+                var uniqueAssociations = allAssociations
+                    .GroupBy(a => ((dynamic)a).Name)
+                    .Select(g => g.First())
+                    .ToList();
+
                 var associationGuidance = new
                 {
                     CommonIssues = new[]
@@ -94,23 +95,23 @@ namespace Terminal.Spmcp.Handlers
 
                 context.Response.StatusCode = 200;
                 context.Response.ContentType = "application/json";
-                
+
                 var responseOptions = new JsonSerializerOptions
                 {
                     WriteIndented = true,
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase
                 };
-                
+
                 await context.Response.WriteAsync(JsonSerializer.Serialize(new
                 {
                     success = true,
                     message = "Association diagnostic information retrieved",
-                    data = new 
+                    data = new
                     {
                         Entities = entityNames,
                         EntityCount = entityNames.Count,
-                        Associations = allAssociations,
-                        AssociationCount = allAssociations.Count,
+                        Associations = uniqueAssociations,
+                        AssociationCount = uniqueAssociations.Count,
                         Guidance = associationGuidance
                     }
                 }, responseOptions));
@@ -118,11 +119,11 @@ namespace Terminal.Spmcp.Handlers
             catch (Exception ex)
             {
                 context.Response.StatusCode = 500;
-                await context.Response.WriteAsync(JsonSerializer.Serialize(new
+                await WriteJsonResponseAsync(context, new
                 {
                     success = false,
                     message = $"Error in association diagnostic: {ex.Message}"
-                }));
+                });
             }
         }
     }

@@ -1,40 +1,33 @@
-﻿using Microsoft.AspNetCore.Http;
-using System.Threading.Tasks;
-using Mendix.StudioPro.ExtensionsAPI.Model;
-using Mendix.StudioPro.ExtensionsAPI.Model.DomainModels;
-using Terminal.Spmcp.Core;
-using System.Linq;
-using System.Collections.Generic;
-using Mendix.StudioPro.ExtensionsAPI.Model.Projects;
-using Mendix.StudioPro.ExtensionsAPI.Model.Enumerations;
-using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using System;
-using System.IO;
-using System.Text;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Terminal.Interop;
+using Terminal.Spmcp.Core;
 
 namespace Terminal.Spmcp.Handlers
 {
     public class ReadModelHandler : BaseApiHandler
     {
-        // Standardize path for MCP compatibility
         public override string Path => "/api/model/read";
-        public override string Method => "POST"; // Explicitly set to POST
+        public override string Method => "POST";
 
-        public ReadModelHandler(IModel currentApp) : base(currentApp) { }
+        public ReadModelHandler() : base() { }
 
         public override async Task HandleAsync(HttpContext context)
         {
             try
             {
-                // Log the request details to help debugging
                 System.Diagnostics.Debug.WriteLine($"Received {context.Request.Method} request to {context.Request.Path}");
 
                 if (context.Request.Method != "POST")
                 {
                     context.Response.StatusCode = 405;
-                    await WriteJsonResponse(context, new { 
-                        success = false, 
-                        message = "Method not allowed. Use POST." 
+                    await WriteJsonResponseAsync(context, new
+                    {
+                        success = false,
+                        message = "Method not allowed. Use POST."
                     });
                     return;
                 }
@@ -42,10 +35,16 @@ namespace Terminal.Spmcp.Handlers
                 await ExecuteInTransactionAsync(
                     context,
                     "read domain model",
-                    async (model) =>
+                    async () =>
                     {
-                        var module = Utils.Utils.ResolveModule(model, null);
-                        if (module?.DomainModel == null)
+                        var model = HostServices.Model;
+                        var domainModel = HostServices.DomainModel;
+
+                        var module = model.ListModules().FirstOrDefault(m =>
+                            !m.Name.StartsWith("System", StringComparison.OrdinalIgnoreCase) &&
+                            !m.Name.StartsWith("AppStore", StringComparison.OrdinalIgnoreCase));
+
+                        if (module == default)
                         {
                             return (
                                 success: false,
@@ -54,18 +53,22 @@ namespace Terminal.Spmcp.Handlers
                             );
                         }
 
-                        var domainModel = module.DomainModel;
-                        var entities = domainModel.GetEntities().ToList();
+                        var entities = domainModel.ListEntities(module);
 
                         var modelData = new
                         {
                             ModuleName = module.Name,
-                            Entities = entities.Select(entity => new
+                            Entities = entities.Select(entity =>
                             {
-                                Name = entity.Name,
-                                QualifiedName = $"{module.Name}.{entity.Name}",
-                                Attributes = GetEntityAttributes(entity),
-                                Associations = GetEntityAssociations(entity, module)
+                                var shape = domainModel.ReadEntity(entity);
+                                var simpleName = entity.QualifiedName.Split('.').Last();
+                                return new
+                                {
+                                    Name = simpleName,
+                                    QualifiedName = entity.QualifiedName,
+                                    Attributes = GetEntityAttributes(shape),
+                                    Associations = GetEntityAssociations(shape)
+                                };
                             }).ToList()
                         };
 
@@ -80,9 +83,10 @@ namespace Terminal.Spmcp.Handlers
             {
                 System.Diagnostics.Debug.WriteLine($"Exception in ReadModelHandler: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
-                
+
                 context.Response.StatusCode = 500;
-                await WriteJsonResponse(context, new {
+                await WriteJsonResponseAsync(context, new
+                {
                     success = false,
                     message = $"Error reading domain model: {ex.Message}",
                     error = "InternalServerError"
@@ -90,82 +94,49 @@ namespace Terminal.Spmcp.Handlers
             }
         }
 
-        private async Task WriteJsonResponse(HttpContext context, object value)
+        private Dictionary<string, string> GetEntityAttributes(EntityShape shape)
         {
-            var options = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                WriteIndented = true
-            };
-            
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync(JsonSerializer.Serialize(value, options));
-        }
-
-        private Dictionary<string, string> GetEntityAttributes(IEntity entity)
-        {
-            return entity.GetAttributes()
-                .Where(attr => attr != null)
+            return shape.Attributes
+                .Where(attr => attr.Name != null)
                 .ToDictionary(
                     attr => attr.Name,
-                    attr => {
-                        var typeName = attr.Type?.GetType().Name ?? "Unknown";
-                        
-                        // Remove "AttributeTypeProxy" suffix
-                        typeName = typeName.Replace("AttributeTypeProxy", "");
-                        
-                        // Handle Enumerations specially
-                        if (attr.Type is IEnumerationAttributeType enumType)
-                        {
-                            var enumeration = enumType.Enumeration.Resolve();
-                            var enumValues = enumeration.GetValues()
-                                .Select(v => v.Name)
-                                .ToList();
-                            return $"Enumeration ({string.Join("/", enumValues)})";
-                        }
-                        
-                        return typeName;
+                    attr =>
+                    {
+                        if (attr.Kind == AttributeKind.Enumeration)
+                            return "Enumeration";
+                        return attr.Kind.ToString();
                     }
                 );
         }
 
-        private List<Association> GetEntityAssociations(IEntity entity, IModule module)
+        private List<AssociationInfo> GetEntityAssociations(EntityShape shape)
         {
-            var entityAssociations = new List<Association>();
-            var associations = entity.GetAssociations(AssociationDirection.Both, null);
+            var results = new List<AssociationInfo>();
+            var seen = new HashSet<string>();
 
-            foreach (var association in associations)
+            foreach (var assoc in shape.OutgoingAssociations.Concat(shape.IncomingAssociations))
             {
-                var associationType = association.Association.Type.ToString();
-                var mappedType = associationType switch
-                {
-                    "Reference" => "one-to-many",
-                    "ReferenceSet" => "many-to-many",
-                    _ => "one-to-many"
-                };
+                if (!seen.Add(assoc.Name)) continue;
 
-                var associationModel = new Association
+                var mappedType = assoc.Type == AssociationType.Reference ? "one-to-many" : "many-to-many";
+                results.Add(new AssociationInfo
                 {
-                    Name = association.Association.Name,
-                    Parent = association.Parent.Name,
-                    Child = association.Child.Name,
+                    Name = assoc.Name,
+                    Parent = assoc.ParentEntityQualifiedName.Split('.').Last(),
+                    Child = assoc.ChildEntityQualifiedName.Split('.').Last(),
                     Type = mappedType
-                };
-
-                entityAssociations.Add(associationModel);
+                });
             }
 
-            return entityAssociations;
+            return results;
         }
-
     }
 
-    public class Association
+    public class AssociationInfo
     {
-        public string Name { get; set; }
-        public string Parent { get; set; }
-        public string Child { get; set; }
-        public string Type { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Parent { get; set; } = string.Empty;
+        public string Child { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
     }
-
 }
