@@ -4,7 +4,7 @@ using Mendix.StudioPro.ExtensionsAPI.Model.DomainModels;
 using Mendix.StudioPro.ExtensionsAPI.Model.DataTypes;
 using System.Collections.Generic;
 
-namespace MCPExtension.Utils;
+namespace Terminal.Spmcp.Utils;
 
 public class Utils
 {

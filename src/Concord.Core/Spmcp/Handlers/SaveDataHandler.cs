@@ -8,10 +8,10 @@ using System.IO;
 using System.Reflection;
 using Mendix.StudioPro.ExtensionsAPI.Model;
 using Mendix.StudioPro.ExtensionsAPI.Model.DomainModels;
-using MCPExtension.Core;
+using Terminal.Spmcp.Core;
 using Eto.Forms;
 
-namespace MCPExtension.Handlers
+namespace Terminal.Spmcp.Handlers
 {
     public class SaveDataHandler : BaseApiHandler
     {

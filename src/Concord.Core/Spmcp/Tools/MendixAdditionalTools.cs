@@ -21,9 +21,9 @@ using Mendix.StudioPro.ExtensionsAPI.Services;
 using Mendix.StudioPro.ExtensionsAPI.UI.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
-using MCPExtension.Utils;
+using Terminal.Spmcp.Utils;
 
-namespace MCPExtension.Tools
+namespace Terminal.Spmcp.Tools
 {
     public class MendixAdditionalTools
     {

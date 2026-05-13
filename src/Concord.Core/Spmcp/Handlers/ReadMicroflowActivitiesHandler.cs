@@ -10,9 +10,9 @@ using Mendix.StudioPro.ExtensionsAPI.Model.Microflows;
 using Mendix.StudioPro.ExtensionsAPI.Model.Projects;
 using Mendix.StudioPro.ExtensionsAPI.Services;
 using Mendix.StudioPro.ExtensionsAPI.Model.Texts;
-using MCPExtension.Core;
+using Terminal.Spmcp.Core;
 
-namespace MCPExtension.Handlers
+namespace Terminal.Spmcp.Handlers
 {
     public class ReadMicroflowActivitiesHandler : BaseApiHandler
     {

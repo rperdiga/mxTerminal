@@ -4,7 +4,7 @@ using Mendix.StudioPro.ExtensionsAPI.Model;
 using Mendix.StudioPro.ExtensionsAPI.Model.DomainModels;
 using Mendix.StudioPro.ExtensionsAPI.Model.Pages;
 using Mendix.StudioPro.ExtensionsAPI.Services;
-using MCPExtension.Core;
+using Terminal.Spmcp.Core;
 using System.Text.Json;
 using System.IO;
 using System.Linq;
@@ -12,7 +12,7 @@ using System.Collections.Generic;
 using System;
 using System.ComponentModel.Composition;
 
-namespace MCPExtension.Handlers.Schema
+namespace Terminal.Spmcp.Handlers.Schema
 {
     public class OverviewPagesRequest
     {
@@ -21,7 +21,7 @@ namespace MCPExtension.Handlers.Schema
     }
 }
 
-namespace MCPExtension.Handlers
+namespace Terminal.Spmcp.Handlers
 {
     public class GenerateOverviewHandler : BaseApiHandler
     {

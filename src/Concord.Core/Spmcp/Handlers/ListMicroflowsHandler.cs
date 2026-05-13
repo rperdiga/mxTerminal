@@ -3,11 +3,11 @@ using System.Threading.Tasks;
 using Mendix.StudioPro.ExtensionsAPI.Model;
 using Mendix.StudioPro.ExtensionsAPI.Model.Microflows;
 using Mendix.StudioPro.ExtensionsAPI.Model.Projects;
-using MCPExtension.Core;
+using Terminal.Spmcp.Core;
 using System.Linq;
 using System.Text.Json;
 
-namespace MCPExtension.Handlers
+namespace Terminal.Spmcp.Handlers
 {
     public class ListMicroflowsHandler : BaseApiHandler
     {

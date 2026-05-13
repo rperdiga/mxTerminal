@@ -8,9 +8,9 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Mendix.StudioPro.ExtensionsAPI.Model;
 using Mendix.StudioPro.ExtensionsAPI.Model.DomainModels; // Add this for AssociationDirection
-using MCPExtension.Core;
+using Terminal.Spmcp.Core;
 
-namespace MCPExtension.Handlers
+namespace Terminal.Spmcp.Handlers
 {
     public class DebugHandler : BaseApiHandler
     {

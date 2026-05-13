@@ -2,13 +2,13 @@ using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
 using Mendix.StudioPro.ExtensionsAPI.Model;
 using Mendix.StudioPro.ExtensionsAPI.Model.DomainModels;
-using MCPExtension.Core;
+using Terminal.Spmcp.Core;
 using System.Text.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace MCPExtension.Handlers
+namespace Terminal.Spmcp.Handlers
 {
     public class DeleteRequest
     {

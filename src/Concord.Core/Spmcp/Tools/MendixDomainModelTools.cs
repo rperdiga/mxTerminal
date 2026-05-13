@@ -14,9 +14,9 @@ using Mendix.StudioPro.ExtensionsAPI.Model.Microflows;
 using Mendix.StudioPro.ExtensionsAPI.Model.Settings;
 using Mendix.StudioPro.ExtensionsAPI.Model.Texts;
 using Microsoft.Extensions.Logging;
-using MCPExtension.Utils;
+using Terminal.Spmcp.Utils;
 
-namespace MCPExtension.Tools
+namespace Terminal.Spmcp.Tools
 {
     public class MendixDomainModelTools
     {

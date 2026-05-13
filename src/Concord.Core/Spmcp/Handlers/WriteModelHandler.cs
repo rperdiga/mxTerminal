@@ -2,21 +2,21 @@
 using System.Threading.Tasks;
 using Mendix.StudioPro.ExtensionsAPI.Model;
 using Mendix.StudioPro.ExtensionsAPI.Model.DomainModels;
-using MCPExtension.Core;
+using Terminal.Spmcp.Core;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
-using MCPExtension.Utils;
+using Terminal.Spmcp.Utils;
 using System;
 using Mendix.StudioPro.ExtensionsAPI.Model.Enumerations;
 using Mendix.StudioPro.ExtensionsAPI.Model.Projects;
 using Mendix.StudioPro.ExtensionsAPI.Model.Texts;
-using MCPExtension.Tools;
+using Terminal.Spmcp.Tools;
 using Microsoft.Extensions.Logging;
 
-namespace MCPExtension.Handlers.Schema
+namespace Terminal.Spmcp.Handlers.Schema
 {
     public class DomainModelSchema
     {
@@ -55,7 +55,7 @@ namespace MCPExtension.Handlers.Schema
     }
 }
 
-namespace MCPExtension.Handlers
+namespace Terminal.Spmcp.Handlers
 {
     public class WriteModelHandler : BaseApiHandler
     {
@@ -374,7 +374,7 @@ namespace MCPExtension.Handlers
             return mxEntity;
         }
 
-        private IEntity? CreateEntityWithType(IModel model, string name, string entityType, List<MCPExtension.Handlers.Schema.AttributeSchema>? attributes, IModule module)
+        private IEntity? CreateEntityWithType(IModel model, string name, string entityType, List<Terminal.Spmcp.Handlers.Schema.AttributeSchema>? attributes, IModule module)
         {
             IEntity? entity = null;
             
