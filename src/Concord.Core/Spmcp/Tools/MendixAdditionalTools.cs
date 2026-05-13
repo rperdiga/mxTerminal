@@ -772,10 +772,10 @@ namespace Terminal.Spmcp.Tools
                 // Try project directory path first
                 try
                 {
-                    var project = _model?.Root as Mendix.StudioPro.ExtensionsAPI.Model.Projects.IProject;
-                    if (project?.DirectoryPath != null)
+                    var projectDir = HostServices.Model.GetProjectInfo().DirectoryPath;
+                    if (!string.IsNullOrEmpty(projectDir))
                     {
-                        mcpLogPath = System.IO.Path.Combine(project.DirectoryPath, "resources", "mcp_debug.log");
+                        mcpLogPath = System.IO.Path.Combine(projectDir, "resources", "mcp_debug.log");
                     }
                 }
                 catch { /* ignore */ }
@@ -838,225 +838,19 @@ namespace Terminal.Spmcp.Tools
         }
 
         /// <summary>
-        /// Runs mx.exe check against the project MPR file to get real Studio Pro consistency errors.
-        /// This provides structured error/warning output with error codes and locations.
+        /// Returns an escalation response indicating that project consistency checks are not
+        /// exposed via the Core Interop surface. Deferred until IConsistencyHost is introduced
+        /// (Phase 3 spike notes). Use 'Project > Check All Errors' in Studio Pro directly.
         /// </summary>
         public async Task<object> CheckProjectErrors(JsonObject arguments)
         {
-            try
+            await Task.CompletedTask;
+            return JsonSerializer.Serialize(new
             {
-                var studioProVersion = arguments?["studio_pro_version"]?.ToString();
-
-                // Find the MPR file path
-                string? mprPath = null;
-                if (!string.IsNullOrEmpty(_projectDirectory))
-                {
-                    // Search for .mpr files in the project directory
-                    var mprFiles = Directory.GetFiles(_projectDirectory, "*.mpr", SearchOption.TopDirectoryOnly);
-                    if (mprFiles.Length > 0)
-                    {
-                        mprPath = mprFiles[0];
-                    }
-                }
-
-                if (string.IsNullOrEmpty(mprPath))
-                {
-                    return new { success = false, message = "Could not find .mpr file in project directory" };
-                }
-
-                if (!File.Exists(mprPath))
-                {
-                    return new { success = false, message = $"MPR file not found: {mprPath}" };
-                }
-
-                // Find mx.exe
-                string? mxPath = null;
-                string mendixDir = @"C:\Program Files\Mendix";
-
-                if (!string.IsNullOrEmpty(studioProVersion))
-                {
-                    mxPath = Path.Combine(mendixDir, studioProVersion, "modeler", "mx.exe");
-                    if (!File.Exists(mxPath))
-                    {
-                        return new { success = false, message = $"mx.exe not found for version {studioProVersion} at {mxPath}" };
-                    }
-                }
-                else
-                {
-                    // Auto-detect: first try to match the running Studio Pro process version
-                    try
-                    {
-                        var studioProProcesses = System.Diagnostics.Process.GetProcessesByName("studiopro");
-                        foreach (var proc in studioProProcesses)
-                        {
-                            try
-                            {
-                                var procPath = proc.MainModule?.FileName;
-                                if (!string.IsNullOrEmpty(procPath))
-                                {
-                                    // Extract version from path like C:\Program Files\Mendix\11.5.0\modeler\studiopro.exe
-                                    var modelerDir = Path.GetDirectoryName(procPath);
-                                    var versionDir = Path.GetDirectoryName(modelerDir);
-                                    var version = Path.GetFileName(versionDir);
-                                    if (!string.IsNullOrEmpty(version) && System.Text.RegularExpressions.Regex.IsMatch(version, @"^\d+\.\d+"))
-                                    {
-                                        var candidate = Path.Combine(mendixDir, version, "modeler", "mx.exe");
-                                        if (File.Exists(candidate))
-                                        {
-                                            mxPath = candidate;
-                                            _logger.LogInformation($"Auto-detected mx.exe from running Studio Pro process: {version}");
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                            catch { /* ignore per-process errors */ }
-                        }
-                    }
-                    catch { /* ignore process enumeration errors */ }
-
-                    // Fallback: find latest installed version
-                    if (string.IsNullOrEmpty(mxPath))
-                    {
-                        try
-                        {
-                            if (Directory.Exists(mendixDir))
-                            {
-                                var dirs = Directory.GetDirectories(mendixDir)
-                                    .Select(d => Path.GetFileName(d))
-                                    .Where(d => System.Text.RegularExpressions.Regex.IsMatch(d, @"^\d+\.\d+"))
-                                    .OrderByDescending(d =>
-                                    {
-                                        var parts = d.Split('.').Select(p => { int.TryParse(p, out int v); return v; }).ToArray();
-                                        long val = 0;
-                                        if (parts.Length >= 1) val += parts[0] * 10000000L;
-                                        if (parts.Length >= 2) val += parts[1] * 100000L;
-                                        if (parts.Length >= 3) val += parts[2] * 1000L;
-                                        if (parts.Length >= 4) val += parts[3];
-                                        return val;
-                                    })
-                                    .ToList();
-
-                                foreach (var dir in dirs)
-                                {
-                                    var candidate = Path.Combine(mendixDir, dir, "modeler", "mx.exe");
-                                    if (File.Exists(candidate))
-                                    {
-                                        mxPath = candidate;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        catch { /* ignore directory access errors */ }
-                    }
-
-                    if (string.IsNullOrEmpty(mxPath))
-                    {
-                        return new { success = false, message = "Could not find mx.exe. Please specify studio_pro_version (e.g., '11.5.0')." };
-                    }
-                }
-
-                _logger.LogInformation($"Running mx check: {mxPath} check \"{mprPath}\"");
-
-                // Run mx.exe check
-                string output;
-                try
-                {
-                    var processInfo = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = mxPath,
-                        Arguments = $"check \"{mprPath}\"",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    };
-
-                    using var process = System.Diagnostics.Process.Start(processInfo);
-                    if (process == null)
-                    {
-                        return new { success = false, message = "Failed to start mx.exe process" };
-                    }
-
-                    var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                    var stderrTask = process.StandardError.ReadToEndAsync();
-
-                    // Wait up to 120 seconds
-                    var completed = process.WaitForExit(120000);
-                    if (!completed)
-                    {
-                        process.Kill();
-                        return new { success = false, message = "mx.exe check timed out after 120 seconds" };
-                    }
-
-                    output = await stdoutTask + await stderrTask;
-                }
-                catch (Exception ex)
-                {
-                    return new { success = false, message = $"Failed to run mx.exe check: {ex.Message}" };
-                }
-
-                // Parse the output
-                var lines = output.Split('\n').Select(l => l.Trim()).Where(l => !string.IsNullOrEmpty(l)).ToList();
-                var errors = new List<object>();
-                var warnings = new List<object>();
-                string? mprVersion = null;
-
-                var errorPattern = new System.Text.RegularExpressions.Regex(
-                    @"^\[(error|warning)\]\s*\[([^\]]+)\]\s*""([^""]+)""(?:\s*at\s*(.+))?$",
-                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-
-                var versionPattern = new System.Text.RegularExpressions.Regex(
-                    @"The mpr file version is '([^']+)'");
-
-                foreach (var line in lines)
-                {
-                    var versionMatch = versionPattern.Match(line);
-                    if (versionMatch.Success)
-                    {
-                        mprVersion = versionMatch.Groups[1].Value;
-                        continue;
-                    }
-
-                    var errorMatch = errorPattern.Match(line);
-                    if (errorMatch.Success)
-                    {
-                        var entry = new
-                        {
-                            type = errorMatch.Groups[1].Value.ToLowerInvariant(),
-                            code = errorMatch.Groups[2].Value,
-                            message = errorMatch.Groups[3].Value,
-                            location = errorMatch.Groups[4].Success ? errorMatch.Groups[4].Value : "Unknown"
-                        };
-
-                        if (entry.type == "error")
-                            errors.Add(entry);
-                        else
-                            warnings.Add(entry);
-                    }
-                }
-
-                _logger.LogInformation($"mx check completed: {errors.Count} errors, {warnings.Count} warnings");
-
-                return new
-                {
-                    success = errors.Count == 0,
-                    mprPath,
-                    mprVersion,
-                    mxVersion = mxPath != null ? Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(mxPath))) : null,
-                    errorCount = errors.Count,
-                    warningCount = warnings.Count,
-                    errors,
-                    warnings,
-                    rawOutput = output.Length > 5000 ? output.Substring(0, 5000) + "... (truncated)" : output
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to check project errors");
-                return new { success = false, message = $"Error checking project: {ex.Message}" };
-            }
+                success = false,
+                escalation = "manual",
+                message = "Project consistency check is not exposed via the Core Interop surface. Run 'Project > Check All Errors' in Studio Pro."
+            });
         }
 
         public async Task<object> ListAvailableTools(JsonObject arguments)
@@ -1161,200 +955,81 @@ namespace Terminal.Spmcp.Tools
 
     public async Task<object> DebugInfo(JsonObject arguments)
     {
+        await Task.CompletedTask;
         try
         {
-            if (_model == null)
+            // Helper: probe a HostServices accessor; returns true if it resolves, false if not registered.
+            bool TryAccess(Func<object?> f)
             {
-                var error = "IModel instance is null in DebugInfo.";
-                _logger.LogError(error);
-                SetLastError(error);
-                return JsonSerializer.Serialize(new { error });
+                try { _ = f(); return true; }
+                catch (InvalidOperationException) { return false; }
             }
 
-            var debugModuleName = arguments?["module_name"]?.ToString();
-            var module = Utils.Utils.ResolveModule(_model, debugModuleName);
-            if (module == null)
+            // Service availability map
+            var services = new Dictionary<string, bool>
             {
-                var error = string.IsNullOrWhiteSpace(debugModuleName) ? "No module found in DebugInfo." : $"Module '{debugModuleName}' not found.";
-                _logger.LogError(error);
-                SetLastError(error);
-                return JsonSerializer.Serialize(new { error });
-            }
-                var response = new Dictionary<string, object>();
+                ["App"]                 = TryAccess(() => HostServices.App),
+                ["RunConfigurations"]   = TryAccess(() => HostServices.RunConfigurations),
+                ["RunState"]            = TryAccess(() => HostServices.RunState),
+                ["ModuleImport"]        = TryAccess(() => HostServices.ModuleImport),
+                ["Model"]               = TryAccess(() => HostServices.Model),
+                ["DomainModel"]         = TryAccess(() => HostServices.DomainModel),
+                ["PageGeneration"]      = TryAccess(() => HostServices.PageGeneration),
+                ["Navigation"]          = TryAccess(() => HostServices.Navigation),
+                ["VersionControl"]      = TryAccess(() => HostServices.VersionControl),
+                ["UntypedModel"]        = TryAccess(() => HostServices.UntypedModel),
+                ["MicroflowAuthoring"]  = TryAccess(() => HostServices.MicroflowAuthoring),
+            };
 
-                if (module?.DomainModel != null)
+            // Project info (only if Model is available)
+            object? projectInfo = null;
+            int? moduleCount = null;
+            int? documentCount = null;
+
+            if (services["Model"])
+            {
+                try
                 {
-                    var entities = module.DomainModel.GetEntities().ToList();
-                    response["module"] = module.Name;
-                    response["entityCount"] = entities.Count;
-                    response["entities"] = entities.Select(e => new
+                    var info = HostServices.Model.GetProjectInfo();
+                    projectInfo = new
                     {
-                        Name = e.Name,
-                        QualifiedName = $"{module.Name}.{e.Name}",
-                        AttributeCount = e.GetAttributes().Count(),
-                        Attributes = e.GetAttributes().Select(a => new
-                        {
-                            Name = a.Name,
-                            Type = a.Type?.GetType().Name ?? "Unknown",
-                            TypeDetails = a.Type?.ToString() ?? "Unknown"
-                        }).ToList(),
-                        LocationX = e.Location.X,
-                        LocationY = e.Location.Y
-                    }).ToList();
-
-                    // Collect association information with detailed mapping
-                    var allAssociations = new List<object>();
-                    foreach (var entity in entities)
-                    {
-                        var associations = entity.GetAssociations(AssociationDirection.Both, null).ToList();
-                        foreach (var association in associations)
-                        {
-                            allAssociations.Add(new
-                            {
-                                Name = association.Association.Name,
-                                Parent = association.Parent.Name,
-                                ParentQualifiedName = $"{module.Name}.{association.Parent.Name}",
-                                Child = association.Child.Name,
-                                ChildQualifiedName = $"{module.Name}.{association.Child.Name}",
-                                Type = association.Association.Type.ToString(),
-                                MappedType = association.Association.Type == AssociationType.Reference ? "one-to-many" : "many-to-many"
-                            });
-                        }
-                    }
-                    response["associations"] = allAssociations;
-                    response["associationCount"] = allAssociations.Count;
-
-                    // Add microflow, constant, and enumeration counts
-                    var microflows = module.GetDocuments().OfType<IMicroflow>().ToList();
-                    response["microflowCount"] = microflows.Count;
-                    response["microflows"] = microflows.Select(mf => mf.Name).ToList();
-
-                    try
-                    {
-                        var constants = _model.Root.GetModuleDocuments<Mendix.StudioPro.ExtensionsAPI.Model.Constants.IConstant>(module);
-                        response["constantCount"] = constants.Count;
-                        response["constants"] = constants.Select(c => new { name = c.Name, defaultValue = c.DefaultValue }).ToList();
-                    }
-                    catch { response["constantCount"] = "N/A"; }
-
-                    try
-                    {
-                        var enumerations = _model.Root.GetModuleDocuments<Mendix.StudioPro.ExtensionsAPI.Model.Enumerations.IEnumeration>(module);
-                        response["enumerationCount"] = enumerations.Count;
-                        response["enumerations"] = enumerations.Select(e => new
-                        {
-                            name = e.Name,
-                            values = e.GetValues().Select(v => v.Name).ToList()
-                        }).ToList();
-                    }
-                    catch { response["enumerationCount"] = "N/A"; }
-
-                    // Add comprehensive examples
-                    response["examples"] = new
-                    {
-                        entityCreation = new
-                        {
-                            simple = new
-                            {
-                                entity_name = "Customer",
-                                attributes = new[]
-                                {
-                                    new { name = "firstName", type = "String" },
-                                    new { name = "lastName", type = "String" },
-                                    new { name = "birthDate", type = "DateTime" },
-                                    new { name = "isActive", type = "Boolean" }
-                                }
-                            },
-                            withEnumeration = new
-                            {
-                                entity_name = "Product",
-                                attributes = new object[]
-                                {
-                                    new { name = "productName", type = "String" },
-                                    new { name = "price", type = "Decimal" },
-                                    new
-                                    {
-                                        name = "status",
-                                        type = "Enumeration",
-                                        enumerationValues = new[] { "Available", "OutOfStock", "Discontinued" }
-                                    }
-                                }
-                            }
-                        },
-                        associationCreation = new
-                        {
-                            oneToMany = new
-                            {
-                                name = "Customer_Orders",
-                                parent = "Customer",
-                                child = "Order",
-                                type = "one-to-many"
-                            },
-                            manyToMany = new
-                            {
-                                name = "Product_Category",
-                                parent = "Product",
-                                child = "Category",
-                                type = "many-to-many"
-                            }
-                        },
-                        dataFormat = new
-                        {
-                            data = new
-                            {
-                                MyFirstModule_Customer = new[]
-                                {
-                                    new
-                                    {
-                                        VirtualId = "CUST001",
-                                        firstName = "John",
-                                        lastName = "Doe",
-                                        birthDate = "1990-01-01T00:00:00Z",
-                                        isActive = true
-                                    }
-                                }
-                            }
-                        }
+                        name = info.Name,
+                        directoryPath = info.DirectoryPath,
+                        mendixVersion = info.MendixVersion,
+                        appId = info.AppId
                     };
 
-                    // Add troubleshooting tips
-                    response["troubleshooting"] = new
-                    {
-                        entityNamesList = entities.Select(e => e.Name).ToList(),
-                        associationTips = new[] {
-                            "Make sure both entities exist before creating an association",
-                            "Use simple names without module prefixes in API calls",
-                            "Check that association names are unique",
-                            "For data operations, use VirtualId for relationship references"
-                        },
-                        commonIssues = new[] {
-                            "Entity names are case sensitive",
-                            "Enumeration attributes must have values defined",
-                            "Associations require both parent and child entities to exist",
-                            "Data validation requires proper JSON structure"
-                        }
-                    };
+                    var modules = HostServices.Model.ListModules();
+                    moduleCount = modules.Count;
+                    documentCount = HostServices.Model.ListAllDocuments().Count;
                 }
-                else
+                catch (Exception ex)
                 {
-                    response["error"] = "No domain model found";
+                    projectInfo = new { error = ex.Message };
                 }
+            }
 
-                return JsonSerializer.Serialize(new
-                {
-                    success = true,
-                    message = "Debug information retrieved successfully",
-                    data = response,
-                    timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC")
-                });
-            }
-            catch (Exception ex)
+            return JsonSerializer.Serialize(new
             {
-                _logger.LogError(ex, "Error retrieving debug info");
-                SetLastError("Error retrieving debug info", ex);
-                return JsonSerializer.Serialize(new { error = ex.Message });
-            }
+                success = true,
+                message = "Debug information retrieved successfully",
+                data = new
+                {
+                    hostServices = services,
+                    projectInfo,
+                    moduleCount,
+                    documentCount
+                },
+                timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC")
+            });
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving debug info");
+            SetLastError("Error retrieving debug info", ex);
+            return JsonSerializer.Serialize(new { error = ex.Message });
+        }
+    }
 
 
         // ...existing code...
