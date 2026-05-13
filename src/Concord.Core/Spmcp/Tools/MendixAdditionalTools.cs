@@ -7,53 +7,23 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
-using Mendix.StudioPro.ExtensionsAPI.Model;
-using Mendix.StudioPro.ExtensionsAPI.Model.Projects;
-using Mendix.StudioPro.ExtensionsAPI.Model.Microflows;
-using Mendix.StudioPro.ExtensionsAPI.Model.Microflows.Actions;
-using Mendix.StudioPro.ExtensionsAPI.Model.DomainModels;
-using Mendix.StudioPro.ExtensionsAPI.Model.JavaActions;
-using Mendix.StudioPro.ExtensionsAPI.Model.Settings;
-using Mendix.StudioPro.ExtensionsAPI.Model.Constants;
-using Mendix.StudioPro.ExtensionsAPI.Model.DataTypes;
-using Mendix.StudioPro.ExtensionsAPI.Model.UntypedModel;
-using Mendix.StudioPro.ExtensionsAPI.Services;
-using Mendix.StudioPro.ExtensionsAPI.UI.Services;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.DependencyInjection;
+using Terminal.Interop;
 using Terminal.Spmcp.Utils;
 
 namespace Terminal.Spmcp.Tools
 {
     public class MendixAdditionalTools
     {
-        private readonly IModel _model;
         private readonly ILogger<MendixAdditionalTools> _logger;
-        private readonly IPageGenerationService _pageGenerationService;
-        private readonly INavigationManagerService _navigationManagerService;
-        private readonly IServiceProvider _serviceProvider;
         private readonly string? _projectDirectory;
-        private readonly IVersionControlService? _versionControlService;
-        private readonly IUntypedModelAccessService? _untypedModelService;
         private static string? _lastError;
         private static Exception? _lastException;
 
-        public MendixAdditionalTools(
-            IModel model,
-            ILogger<MendixAdditionalTools> logger,
-            IPageGenerationService pageGenerationService,
-            INavigationManagerService navigationManagerService,
-            IServiceProvider serviceProvider,
-            string? projectDirectory = null)
+        public MendixAdditionalTools(ILogger<MendixAdditionalTools> logger, string? projectDirectory = null)
         {
-            _model = model;
             _logger = logger;
-            _pageGenerationService = pageGenerationService;
-            _navigationManagerService = navigationManagerService;
-            _serviceProvider = serviceProvider;
             _projectDirectory = projectDirectory;
-            _versionControlService = serviceProvider.GetService<IVersionControlService>();
-            _untypedModelService = serviceProvider.GetService<IUntypedModelAccessService>();
         }
 
         private string GetDebugLogPath()
@@ -120,27 +90,21 @@ namespace Terminal.Spmcp.Tools
     {
         try
         {
-            if (_model == null)
-            {
-                var error = "IModel instance is null in SaveData.";
-                _logger.LogError(error);
-                SetLastError(error);
-                return JsonSerializer.Serialize(new { error, success = false });
-            }
-
             var dataProperty = arguments["data"]?.AsObject();
             if (dataProperty == null)
             {
                 var requestedModuleName = arguments["module_name"]?.ToString();
-                var currentModule = Utils.Utils.ResolveModule(_model, requestedModuleName);
-                if (currentModule == null)
+                ModuleId? currentModuleId = string.IsNullOrWhiteSpace(requestedModuleName)
+                    ? HostServices.Model.ListModules().FirstOrDefault(m => !string.IsNullOrEmpty(m.Name))
+                    : HostServices.Model.GetModuleByName(requestedModuleName);
+                if (currentModuleId == null)
                 {
                     var error = string.IsNullOrWhiteSpace(requestedModuleName) ? "No module found in SaveData." : $"Module '{requestedModuleName}' not found.";
                     _logger.LogError(error);
                     SetLastError(error);
                     return JsonSerializer.Serialize(new { error, success = false });
                 }
-                var moduleName = currentModule?.Name ?? "MyFirstModule";
+                var moduleName = currentModuleId?.Name ?? "MyFirstModule";
                     
                 var emptyDataError = "Invalid request format or empty data. The save_data tool is used to generate sample data for Mendix domain models.";
                 SetLastError(emptyDataError);
@@ -181,26 +145,19 @@ namespace Terminal.Spmcp.Tools
                 }
 
                 var saveModuleName = arguments["module_name"]?.ToString();
-                var module = Utils.Utils.ResolveModule(_model, saveModuleName);
-                if (module == null)
+                ModuleId? moduleId = string.IsNullOrWhiteSpace(saveModuleName)
+                    ? HostServices.Model.ListModules().FirstOrDefault(m => !string.IsNullOrEmpty(m.Name))
+                    : HostServices.Model.GetModuleByName(saveModuleName);
+                if (moduleId == null)
                 {
                     var error = string.IsNullOrWhiteSpace(saveModuleName) ? "No module found in SaveData." : $"Module '{saveModuleName}' not found.";
                     _logger.LogError(error);
                     SetLastError(error);
                     return JsonSerializer.Serialize(new { error, success = false });
                 }
-                if (module?.DomainModel == null)
-                {
-                    var error = "No domain model found.";
-                    SetLastError(error);
-                    return JsonSerializer.Serialize(new { 
-                        error = error,
-                        success = false
-                    });
-                }
 
                 // Validate the data structure
-                var validationResult = ValidateDataStructure(dataProperty, module);
+                var validationResult = ValidateDataStructure(dataProperty, moduleId.Value);
                 if (!validationResult.IsValid)
                 {
                     SetLastError(validationResult.Message);
@@ -2804,13 +2761,16 @@ namespace Terminal.Spmcp.Tools
 
         #region Helper Methods
 
-        private (bool IsValid, string Message, string? Details, int EntitiesProcessed, List<string> Warnings) ValidateDataStructure(JsonObject data, IModule module)
+        private (bool IsValid, string Message, string? Details, int EntitiesProcessed, List<string> Warnings) ValidateDataStructure(JsonObject data, ModuleId moduleId)
         {
             try
             {
                 int entitiesProcessed = 0;
                 var validationIssues = new List<string>();
                 var warnings = new List<string>();
+
+                // Load entity refs for this module via IDomainModelHost
+                var entityRefs = HostServices.DomainModel.ListEntities(moduleId);
 
                 foreach (var entityData in data)
                 {
@@ -2819,10 +2779,11 @@ namespace Terminal.Spmcp.Tools
                     var entityName = entityKey.Contains(".") ? entityKey.Split('.').Last() :
                                     entityKey.Contains("_") ? entityKey.Split('_').Last() : entityKey;
 
-                    var entity = module.DomainModel.GetEntities()
-                        .FirstOrDefault(e => e.Name.Equals(entityName, StringComparison.OrdinalIgnoreCase));
+                    var entityRef = entityRefs
+                        .FirstOrDefault(e => e.QualifiedName.Split('.').Last()
+                            .Equals(entityName, StringComparison.OrdinalIgnoreCase));
 
-                    if (entity == null)
+                    if (entityRef.Equals(default(EntityRef)))
                     {
                         validationIssues.Add($"Entity '{entityName}' not found in domain model");
                         continue;
@@ -2837,13 +2798,17 @@ namespace Terminal.Spmcp.Tools
                     var records = entityData.Value.AsArray();
                     var recordIndex = 0;
 
-                    // Precompute known names for unrecognized attribute detection
-                    var associations = entity.GetAssociations(AssociationDirection.Both, null);
-                    var knownAttrNames = entity.GetAttributes().Select(a => a.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                    var knownAssocNames = associations.Select(a => a.Association.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                    var knownRelatedEntityNames = associations.Select(a =>
-                        a.Parent.Name == entity.Name ? a.Child.Name : a.Parent.Name
-                    ).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    // Read full entity shape for attribute and association metadata
+                    var entityShape = HostServices.DomainModel.ReadEntity(entityRef);
+                    var allAssociations = entityShape.OutgoingAssociations.Concat(entityShape.IncomingAssociations).ToList();
+                    var knownAttrNames = entityShape.Attributes.Select(a => a.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var knownAssocNames = allAssociations.Select(a => a.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var knownRelatedEntityNames = allAssociations.Select(a =>
+                    {
+                        var parentName = a.ParentEntityQualifiedName.Split('.').Last();
+                        var childName = a.ChildEntityQualifiedName.Split('.').Last();
+                        return parentName.Equals(entityName, StringComparison.OrdinalIgnoreCase) ? childName : parentName;
+                    }).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
                     foreach (var recordNode in records)
                     {
@@ -2857,7 +2822,7 @@ namespace Terminal.Spmcp.Tools
                         var record = recordNode.AsObject();
 
                         // Check for required VirtualId if entity has associations
-                        if (associations.Any())
+                        if (allAssociations.Any())
                         {
                             if (!record.ContainsKey("VirtualId") || record["VirtualId"]?.GetValueKind() != JsonValueKind.String)
                             {
@@ -2867,11 +2832,12 @@ namespace Terminal.Spmcp.Tools
                         }
 
                         // Validate association references - look for both association names and entity names as relationship attributes
-                        foreach (var association in associations)
+                        foreach (var association in allAssociations)
                         {
-                            var assocName = association.Association.Name;
-                            var relatedEntityName = association.Parent.Name == entity.Name ?
-                                association.Child.Name : association.Parent.Name;
+                            var assocName = association.Name;
+                            var parentName = association.ParentEntityQualifiedName.Split('.').Last();
+                            var childName = association.ChildEntityQualifiedName.Split('.').Last();
+                            var relatedEntityName = parentName.Equals(entityName, StringComparison.OrdinalIgnoreCase) ? childName : parentName;
 
                             var relationshipKey = record.ContainsKey(relatedEntityName) ? relatedEntityName :
                                                  record.ContainsKey(assocName) ? assocName : null;
@@ -2895,7 +2861,10 @@ namespace Terminal.Spmcp.Tools
                         }
 
                         // Attribute type validation (warnings — non-blocking)
-                        foreach (var attr in entity.GetAttributes())
+                        // Note: string max-length and enum-value checks are deferred pending
+                        // IDomainModelHost extension for MaxLength and enumeration value lists
+                        // (Task 14+ API gap: AttributeRef lacks MaxLength; enum values need separate IDomainModelHost query).
+                        foreach (var attr in entityShape.Attributes)
                         {
                             if (!record.ContainsKey(attr.Name)) continue;
                             var value = record[attr.Name];
@@ -2903,26 +2872,7 @@ namespace Terminal.Spmcp.Tools
 
                             try
                             {
-                                if (attr.Type is IStringAttributeType stringType && stringType.Length > 0)
-                                {
-                                    if (value.GetValueKind() == JsonValueKind.String && value.GetValue<string>().Length > stringType.Length)
-                                        warnings.Add($"String value for '{attr.Name}' in '{entityName}' record {recordIndex} exceeds max length {stringType.Length}");
-                                }
-                                else if (attr.Type is IEnumerationAttributeType enumType)
-                                {
-                                    if (value.GetValueKind() == JsonValueKind.String)
-                                    {
-                                        var enumeration = enumType.Enumeration?.Resolve();
-                                        if (enumeration != null)
-                                        {
-                                            var validValues = enumeration.GetValues().Select(v => v.Name).ToList();
-                                            var strVal = value.GetValue<string>();
-                                            if (!validValues.Any(v => v.Equals(strVal, StringComparison.OrdinalIgnoreCase)))
-                                                warnings.Add($"Enum value '{strVal}' for '{attr.Name}' in '{entityName}' record {recordIndex} not valid. Valid: {string.Join(", ", validValues)}");
-                                        }
-                                    }
-                                }
-                                else if (attr.Type is IDateTimeAttributeType)
+                                if (attr.Kind == AttributeKind.DateTime)
                                 {
                                     if (value.GetValueKind() == JsonValueKind.String)
                                     {
@@ -2930,17 +2880,17 @@ namespace Terminal.Spmcp.Tools
                                             warnings.Add($"DateTime value for '{attr.Name}' in '{entityName}' record {recordIndex} is not valid ISO 8601");
                                     }
                                 }
-                                else if (attr.Type is IIntegerAttributeType || attr.Type is ILongAttributeType)
+                                else if (attr.Kind == AttributeKind.Integer || attr.Kind == AttributeKind.LongType || attr.Kind == AttributeKind.AutoNumber)
                                 {
                                     if (value.GetValueKind() != JsonValueKind.Number)
                                         warnings.Add($"Value for integer attribute '{attr.Name}' in '{entityName}' record {recordIndex} is not a number");
                                 }
-                                else if (attr.Type is IDecimalAttributeType)
+                                else if (attr.Kind == AttributeKind.Decimal)
                                 {
                                     if (value.GetValueKind() != JsonValueKind.Number)
                                         warnings.Add($"Value for decimal attribute '{attr.Name}' in '{entityName}' record {recordIndex} is not a number");
                                 }
-                                else if (attr.Type is IBooleanAttributeType)
+                                else if (attr.Kind == AttributeKind.Boolean)
                                 {
                                     if (value.GetValueKind() != JsonValueKind.True && value.GetValueKind() != JsonValueKind.False)
                                         warnings.Add($"Value for boolean attribute '{attr.Name}' in '{entityName}' record {recordIndex} is not a boolean");
