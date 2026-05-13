@@ -328,8 +328,6 @@ namespace Terminal.Spmcp.Tools
             var saveResult = await SaveRootJsonToFile(rootObject);
             var filePath = saveResult.Success ? saveResult.FilePath : null;
 
-            // Auto-setup is deferred to Task 14 slice 10 (SetupDataImport refactor).
-            // For now, generate data only and report that auto-setup is unavailable.
             object? importSetup = null;
             var autoSetup = true;
             if (arguments.ContainsKey("auto_setup") && arguments["auto_setup"]?.GetValue<bool>() == false)
@@ -337,12 +335,16 @@ namespace Terminal.Spmcp.Tools
 
             if (autoSetup)
             {
-                importSetup = new
+                try
                 {
-                    success = false,
-                    deferred = true,
-                    message = "Auto-setup deferred until SetupDataImport is refactored to use HostServices.MicroflowAuthoring (Task 14)."
-                };
+                    var targetModuleName = modules.First().Name;
+                    importSetup = SetupDataImportInternal(targetModuleName, "ASu_LoadSampleData", false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[generate_sample_data] Auto-setup failed (data was still generated successfully)");
+                    importSetup = new { success = false, error = $"Auto-setup failed: {ex.Message}" };
+                }
             }
 
             return JsonSerializer.Serialize(new
@@ -1203,22 +1205,17 @@ namespace Terminal.Spmcp.Tools
 
         public async Task<object> CreateMicroflowActivity(JsonObject arguments)
         {
+            await Task.CompletedTask;
             try
             {
-                // Add detailed logging to debug parameter reception
-                _logger.LogInformation("=== CreateMicroflowActivity Debug ===");
-                _logger.LogInformation($"Raw arguments received: {arguments?.ToJsonString()}");
-                _logger.LogInformation($"Arguments type: {arguments?.GetType().FullName}");
-                _logger.LogInformation($"Arguments count: {arguments?.Count ?? 0}");
-                
-                // Log each key-value pair
-                if (arguments != null)
+                if (!HostServices.MicroflowAuthoring.IsAvailable)
                 {
-                    foreach (var kvp in arguments)
-                    {
-                        _logger.LogInformation($"Key: '{kvp.Key}', Value: '{kvp.Value}', Value Type: {kvp.Value?.GetType().FullName}");
-                    }
+                    var error = "MicroflowAuthoring host is not available in the current environment.";
+                    SetLastError(error);
+                    return JsonSerializer.Serialize(new { error });
                 }
+
+                _logger.LogInformation("=== CreateMicroflowActivity (HostServices) ===");
 
                 var microflowName = arguments["microflow_name"]?.ToString();
                 var activityType = arguments["activity_type"]?.ToString();
@@ -1244,29 +1241,20 @@ namespace Terminal.Spmcp.Tools
                 if (arguments.TryGetPropertyValue("insert_position", out var positionValue))
                 {
                     if (positionValue != null && int.TryParse(positionValue.ToString(), out int pos))
-                    {
                         insertPosition = pos;
-                    }
                 }
-                
                 // Alternative parameter name for backward compatibility
                 if (!insertPosition.HasValue && arguments.TryGetPropertyValue("insert_after_activity_index", out var indexValue))
                 {
                     if (indexValue != null && int.TryParse(indexValue.ToString(), out int idx))
-                    {
                         insertPosition = idx + 1; // Convert from "after index" to position
-                    }
                 }
 
-                _logger.LogInformation($"Extracted microflowName: '{microflowName}'");
-                _logger.LogInformation($"Extracted activityType: '{activityType}'");
-                _logger.LogInformation($"Extracted activityData: {activityData?.ToJsonString()}");
-                _logger.LogInformation($"Extracted insertPosition: {insertPosition?.ToString() ?? "null (insert at start)"}");
+                _logger.LogInformation($"microflowName='{microflowName}', activityType='{activityType}', insertPosition={insertPosition}");
 
                 if (string.IsNullOrWhiteSpace(microflowName))
                 {
                     var error = "Microflow name is required.";
-                    _logger.LogError($"ERROR: {error} - microflowName was null/empty/whitespace");
                     SetLastError(error);
                     return JsonSerializer.Serialize(new { error });
                 }
@@ -1278,385 +1266,143 @@ namespace Terminal.Spmcp.Tools
                     var error = !string.IsNullOrWhiteSpace(possibleType)
                         ? $"Activity type is required. Did you mean 'activity_type' instead of 'type'? Found type='{possibleType}'. Use 'activity_type' as the field name."
                         : "Activity type is required. Use the 'activity_type' field to specify the type (e.g., 'create_object', 'retrieve_from_database', 'microflow_call').";
-                    _logger.LogError($"ERROR: {error} - activityType was null/empty/whitespace");
                     SetLastError(error);
                     return JsonSerializer.Serialize(new { error });
                 }
 
+                // Resolve the fully-qualified microflow name (Module.MicroflowName)
                 var actModuleName = arguments["module_name"]?.ToString();
-                var module = Utils.Utils.ResolveModule(_model, actModuleName);
-                if (module == null)
+                string qualifiedMfName;
+                if (!string.IsNullOrWhiteSpace(actModuleName))
                 {
-                    var error = string.IsNullOrWhiteSpace(actModuleName) ? "No module found." : $"Module '{actModuleName}' not found.";
-                    SetLastError(error);
-                    return JsonSerializer.Serialize(new { error });
+                    qualifiedMfName = $"{actModuleName}.{microflowName}";
                 }
-
-                // Find the microflow
-                var microflow = module.GetDocuments().OfType<IMicroflow>()
-                    .FirstOrDefault(mf => mf.Name.Equals(microflowName, StringComparison.OrdinalIgnoreCase));
-
-                if (microflow == null)
+                else if (microflowName.Contains('.'))
                 {
-                    var error = $"Microflow '{microflowName}' not found in module '{module.Name}'.";
-                    SetLastError(error);
-                    return JsonSerializer.Serialize(new { error });
+                    qualifiedMfName = microflowName;
+                    actModuleName = microflowName.Split('.')[0];
                 }
-
-                // Create activity based on type
-                IActionActivity? activity = null;
-                using (var transaction = _model.StartTransaction("Create microflow activity"))
+                else
                 {
-                    switch (activityType.ToLowerInvariant())
+                    // Try to find in any module
+                    var allMfs = HostServices.MicroflowAuthoring.ListMicroflows(null);
+                    var found = allMfs.FirstOrDefault(m => m.Name.Equals(microflowName, StringComparison.OrdinalIgnoreCase));
+                    if (found == null)
                     {
-                        case "log":
-                        case "log_message":
-                            activity = CreateLogActivity(activityData);
-                            break;
-
-                        case "change_variable":
-                        case "change_value":
-                            activity = CreateChangeVariableActivity(activityData);
-                            break;
-
-                        case "create_variable":
-                        case "create_object":
-                        case "create":
-                            activity = CreateCreateVariableActivity(activityData);
-                            break;
-
-                        case "microflow_call":
-                        case "call_microflow":
-                            activity = CreateMicroflowCallActivity(activityData);
-                            break;
-
-                        // Database Operations
-                        case "retrieve":
-                        case "retrieve_from_database":
-                        case "retrieve_database":
-                        case "database_retrieve":
-                            activity = CreateDatabaseRetrieveActivity(activityData);
-                            break;
-
-                        case "retrieve_by_association":
-                        case "association_retrieve":
-                            activity = CreateAssociationRetrieveActivity(activityData);
-                            break;
-
-                        case "commit_object":
-                        case "commit_objects":
-                        case "commit":
-                            activity = CreateCommitActivity(activityData);
-                            break;
-
-                        case "rollback_object":
-                        case "rollback":
-                            activity = CreateRollbackActivity(activityData);
-                            break;
-
-                        case "delete_object":
-                        case "delete":
-                            activity = CreateDeleteActivity(activityData);
-                            break;
-
-                        // List Operations
-                        case "create_list":
-                        case "new_list":
-                            activity = CreateListActivity(activityData);
-                            break;
-
-                        case "change_list":
-                        case "modify_list":
-                            activity = CreateChangeListActivity(activityData);
-                            break;
-
-                        case "sort_list":
-                            activity = CreateSortListActivity(activityData);
-                            break;
-
-                        case "filter_list":
-                            activity = CreateFilterListActivity(activityData);
-                            break;
-
-                        case "find_in_list":
-                        case "find_list_item":
-                            activity = CreateFindInListActivity(activityData);
-                            break;
-
-                        // Advanced Operations
-                        case "aggregate_list":
-                        case "list_aggregate":
-                            activity = CreateAggregateListActivity(activityData);
-                            break;
-
-                        case "java_action_call":
-                        case "call_java_action":
-                            activity = CreateJavaActionCallActivity(activityData);
-                            break;
-
-                        case "change_attribute":
-                            activity = CreateChangeAttributeActivity(activityData);
-                            break;
-
-                        case "change_association":
-                            activity = CreateChangeAssociationActivity(activityData);
-                            break;
-
-                        case "change_object":
-                            activity = CreateChangeObjectActivity(activityData);
-                            break;
-
-                        // Phase 11: Advanced list operations
-                        case "union_lists":
-                        case "union":
-                            activity = CreateBinaryListOperationActivity<IUnion>(activityData);
-                            break;
-
-                        case "subtract_lists":
-                        case "subtract":
-                            activity = CreateBinaryListOperationActivity<ISubtract>(activityData);
-                            break;
-
-                        case "intersect_lists":
-                        case "intersect":
-                            activity = CreateBinaryListOperationActivity<IIntersect>(activityData);
-                            break;
-
-                        case "contains_in_list":
-                        case "contains":
-                            activity = CreateBinaryListOperationActivity<IContains>(activityData);
-                            break;
-
-                        case "head_of_list":
-                        case "head":
-                            activity = CreateUnaryListOperationActivity<IHead>(activityData);
-                            break;
-
-                        case "tail_of_list":
-                        case "tail":
-                            activity = CreateUnaryListOperationActivity<ITail>(activityData);
-                            break;
-
-                        case "reduce_list":
-                        case "reduce":
-                            activity = CreateReduceListActivity(activityData);
-                            break;
-
-                        default:
-                            var supportedTypes = new[]
-                            {
-                                "create_object/create_variable", "microflow_call/call_microflow", "change_variable/change_value",
-                                "retrieve/retrieve_from_database", "retrieve_by_association", "commit_object/commit_objects/commit", "rollback_object/rollback",
-                                "delete_object/delete", "create_list/new_list", "change_list/modify_list", "sort_list", "filter_list",
-                                "find_in_list", "aggregate_list", "java_action_call", "change_attribute", "change_association", "change_object",
-                                "union_lists/union", "subtract_lists/subtract", "intersect_lists/intersect",
-                                "contains_in_list/contains", "head_of_list/head", "tail_of_list/tail", "reduce_list/reduce"
-                            };
-                            
-                            var error = $"Unsupported activity type: '{activityType}'. " +
-                                       $"Supported types: {string.Join(", ", supportedTypes)}. " +
-                                       $"Note: For object changes, use 'change_object' (auto-detects), 'change_attribute' (for attributes), or 'change_association' (for references).";
-                            
-                            SetLastError(error);
-                            return JsonSerializer.Serialize(new { error, supportedTypes });
-                    }
-
-                    if (activity == null)
-                    {
-                        // BUG-008 fix: Preserve specific error from the activity handler
-                        var specificError = _lastError;
-                        var availableParams = activityData?.AsObject()?.Select(kv => $"{kv.Key}={kv.Value}") ?? new string[0];
-                        var paramsString = availableParams.Any() ? $" Available parameters: {string.Join(", ", availableParams)}" : " No parameters provided.";
-
-                        var error = $"Failed to create activity of type '{activityType}'.";
-                        if (!string.IsNullOrEmpty(specificError))
-                        {
-                            error += $" Detail: {specificError}";
-                        }
-                        else
-                        {
-                            error += paramsString;
-                            if (activityType == "log" || activityType == "log_message")
-                            {
-                                error += " Log activities are not supported by the current Mendix Extensions API. Consider using change_variable or create_variable instead.";
-                            }
-                            else if (activityType == "delete" || activityType == "delete_object")
-                            {
-                                error += " For delete activities, ensure you specify the object variable using one of: variable_name, variableName, variable, objectVariable, object_variable, or object.";
-                            }
-                            else
-                            {
-                                error += " Please check the activity configuration and try again.";
-                            }
-                        }
+                        var error = $"Microflow '{microflowName}' not found. Specify module_name to disambiguate.";
                         SetLastError(error);
                         return JsonSerializer.Serialize(new { error });
                     }
+                    qualifiedMfName = found.QualifiedName;
+                    actModuleName = found.Module;
+                }
 
-                    // Insert the activity into the microflow
-                    // Using a generic approach to insert at the start
-                    try
+                // Validate microflow exists
+                var mfSummary = HostServices.MicroflowAuthoring.ReadMicroflow(qualifiedMfName);
+                if (mfSummary == null)
+                {
+                    var error = $"Microflow '{qualifiedMfName}' not found.";
+                    SetLastError(error);
+                    return JsonSerializer.Serialize(new { error });
+                }
+
+                // Validate activity type (preserve supported-types vocabulary)
+                var normalizedType = activityType.ToLowerInvariant();
+                var supportedTypes = new[]
+                {
+                    "create_object", "create_variable", "create",
+                    "microflow_call", "call_microflow",
+                    "change_variable", "change_value",
+                    "retrieve", "retrieve_from_database", "retrieve_database", "database_retrieve",
+                    "retrieve_by_association", "association_retrieve",
+                    "commit_object", "commit_objects", "commit",
+                    "rollback_object", "rollback",
+                    "delete_object", "delete",
+                    "create_list", "new_list",
+                    "change_list", "modify_list",
+                    "sort_list", "filter_list",
+                    "find_in_list", "find_list_item",
+                    "aggregate_list", "list_aggregate",
+                    "java_action_call", "call_java_action",
+                    "change_attribute", "change_association", "change_object",
+                    "union_lists", "union",
+                    "subtract_lists", "subtract",
+                    "intersect_lists", "intersect",
+                    "contains_in_list", "contains",
+                    "head_of_list", "head",
+                    "tail_of_list", "tail",
+                    "reduce_list", "reduce",
+                    "log", "log_message"
+                };
+
+                if (!supportedTypes.Contains(normalizedType))
+                {
+                    var error = $"Unsupported activity type: '{activityType}'. " +
+                               $"Supported types: {string.Join(", ", supportedTypes.Distinct())}. " +
+                               $"Note: For object changes, use 'change_object' (auto-detects), 'change_attribute' (for attributes), or 'change_association' (for references).";
+                    SetLastError(error);
+                    return JsonSerializer.Serialize(new { error, supportedTypes });
+                }
+
+                // Build the parameters dictionary from activityData
+                var parameters = new Dictionary<string, string>();
+                if (activityData != null)
+                {
+                    foreach (var kv in activityData)
                     {
-                        // Get the IMicroflowService from service provider
-                        var microflowService = _serviceProvider?.GetService<IMicroflowService>();
-                        if (microflowService == null)
-                        {
-                            var error = "IMicroflowService not available.";
-                            SetLastError(error);
-                            return JsonSerializer.Serialize(new { error });
-                        }
-
-                        bool insertResult = false;
-                        string insertMessage = "";
-
-                        // Handle activity positioning
-                        if (insertPosition.HasValue && insertPosition.Value > 1)
-                        {
-                            // Try to find existing activities to understand the current state
-                            var orderedActivities = GetOrderedMicroflowActivities(microflow, microflowService);
-                            
-                            _logger.LogDebug($"Attempting to insert at position {insertPosition.Value}, found {orderedActivities.Count} existing activities");
-                            
-                            // Check if we have any existing activities to work with
-                            if (orderedActivities.Count > 0)
-                            {
-                                // Position semantics:
-                                // Position 1 = after start (before 1st activity)
-                                // Position 2 = after 1st activity (before 2nd activity, or at end if only 1 activity exists)
-                                // Position 3 = after 2nd activity (before 3rd activity, or at end if only 2 activities exist)
-                                // etc.
-                                
-                                int targetActivityIndex = insertPosition.Value - 2; // Position 2 targets activity at index 0
-                                
-                                if (targetActivityIndex >= 0 && targetActivityIndex < orderedActivities.Count - 1)
-                                {
-                                    // We want to insert before a specific existing activity (not the last one)
-                                    int insertBeforeIndex = targetActivityIndex + 1; // Insert before the next activity
-                                    var targetActivity = orderedActivities[insertBeforeIndex];
-                                    
-                                    _logger.LogDebug($"Attempting to insert before activity at index {insertBeforeIndex}: {targetActivity.GetType().Name}");
-                                    
-                                    insertResult = microflowService.TryInsertBeforeActivity(targetActivity, activity);
-                                    
-                                    if (insertResult)
-                                    {
-                                        insertMessage = $"Activity inserted at position {insertPosition.Value} (before activity at index {insertBeforeIndex})";
-                                        _logger.LogDebug($"Successfully inserted before activity: {targetActivity.GetType().Name}");
-                                    }
-                                    else
-                                    {
-                                        // Fallback: Insert after start
-                                        _logger.LogWarning($"TryInsertBeforeActivity failed, falling back to inserting after start");
-                                        insertResult = microflowService.TryInsertAfterStart(microflow, activity);
-                                        insertMessage = insertResult 
-                                            ? $"Activity inserted after start (fallback from position {insertPosition.Value})"
-                                            : "Failed to insert activity at specified position";
-                                    }
-                                }
-                                else
-                                {
-                                    // Position points to after the last activity, or beyond existing activities
-                                    // API Limitation: We cannot insert "after" an activity, only "before" an activity or "after start"
-                                    // The best we can do is insert after start, which will put it at the beginning
-                                    
-                                    _logger.LogWarning($"Position {insertPosition.Value} would place activity after the last existing activity. " +
-                                                      $"API limitation: Cannot insert after activities, only before them or after start. " +
-                                                      $"Inserting after start instead (will appear at beginning of microflow).");
-                                    
-                                    insertResult = microflowService.TryInsertAfterStart(microflow, activity);
-                                    insertMessage = insertResult 
-                                        ? $"Activity inserted after start (API limitation: position {insertPosition.Value} would be after last activity, which is not supported)"
-                                        : "Failed to insert activity";
-                                    
-                                    // Add additional context to help user understand the limitation
-                                    if (insertResult)
-                                    {
-                                        insertMessage += $". Note: The Mendix Extensions API only supports inserting activities 'after start' or 'before existing activities'. " +
-                                                        $"To achieve the desired position, you may need to manually rearrange activities in Studio Pro after creation.";
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                // No existing activities, position > 1 doesn't make sense
-                                _logger.LogInformation($"No existing activities found, inserting at start regardless of requested position {insertPosition.Value}");
-                                insertResult = microflowService.TryInsertAfterStart(microflow, activity);
-                                insertMessage = $"Activity inserted after start (first activity in microflow)";
-                            }
-                        }
-                        else
-                        {
-                            // Position 1 or default: insert after start
-                            insertResult = microflowService.TryInsertAfterStart(microflow, activity);
-                            insertMessage = insertPosition.HasValue && insertPosition.Value == 1 
-                                ? "Activity inserted at position 1 (after start)"
-                                : "Activity inserted after start (default position)";
-                        }
-
-                        if (!insertResult)
-                        {
-                            var error = "Failed to insert activity into microflow.";
-                            SetLastError(error);
-                            return JsonSerializer.Serialize(new { error });
-                        }
-
-                        transaction.Commit();
-
-                        // BUG-022 fix: Post-commit second-pass to set Commit/RefreshInClient on create_object activities.
-                        // The Extensions API service method ignores these params during creation, but setting them
-                        // in a separate transaction after the activity is fully committed to the model works.
-                        if (activityType is "create_object" or "create_variable" or "create")
-                        {
-                            try
-                            {
-                                var commitStr = activityData?["commit"]?.ToString()?.ToLowerInvariant() ?? "no";
-                                var refreshStr = activityData?["refresh_in_client"]?.ToString() ?? "false";
-                                var wantCommit = commitStr switch
-                                {
-                                    "yes" => Mendix.StudioPro.ExtensionsAPI.Model.Microflows.Actions.CommitEnum.Yes,
-                                    "yes_without_events" or "yeswithoutevents" => Mendix.StudioPro.ExtensionsAPI.Model.Microflows.Actions.CommitEnum.YesWithoutEvents,
-                                    _ => Mendix.StudioPro.ExtensionsAPI.Model.Microflows.Actions.CommitEnum.No
-                                };
-                                var wantRefresh = bool.TryParse(refreshStr, out var r) && r;
-
-                                if (wantCommit != Mendix.StudioPro.ExtensionsAPI.Model.Microflows.Actions.CommitEnum.No || wantRefresh)
-                                {
-                                    using var fixTx = _model.StartTransaction("Fix create_object commit/refresh");
-                                    if (activity?.Action is ICreateObjectAction fixAction)
-                                    {
-                                        fixAction.Commit = wantCommit;
-                                        fixAction.RefreshInClient = wantRefresh;
-                                        _logger.LogInformation($"BUG-022 post-commit fix: set Commit={wantCommit}, RefreshInClient={wantRefresh}");
-                                    }
-                                    fixTx.Commit();
-                                }
-                            }
-                            catch (Exception fixEx)
-                            {
-                                _logger.LogWarning(fixEx, "BUG-022 post-commit fix failed (non-fatal)");
-                            }
-                        }
-
-                        return JsonSerializer.Serialize(new {
-                            success = true,
-                            message = $"Activity of type '{activityType}' added to microflow '{microflowName}' successfully. {insertMessage}",
-                            activity = new {
-                                type = activityType,
-                                microflow = microflowName,
-                                module = module.Name,
-                                insertPosition = insertPosition,
-                                insertMethod = insertPosition.HasValue && insertPosition.Value > 0 ? "TryInsertBeforeActivity" : "TryInsertAfterStart"
-                            }
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, $"Error inserting activity into microflow: {ex.Message}");
-                        var error = $"Error inserting activity: {ex.Message}";
-                        SetLastError(error, ex);
-                        return JsonSerializer.Serialize(new { error });
+                        if (kv.Value != null)
+                            parameters[kv.Key] = kv.Value.ToString() ?? "";
                     }
                 }
+
+                // Extract well-known summary fields from parameters
+                var caption = activityData?["caption"]?.ToString();
+                var outputVariable = activityData?["output_variable"]?.ToString()
+                    ?? activityData?["outputVariable"]?.ToString()
+                    ?? activityData?["variable_name"]?.ToString()
+                    ?? activityData?["variableName"]?.ToString();
+                var targetEntity = activityData?["entity"]?.ToString()
+                    ?? activityData?["entity_name"]?.ToString()
+                    ?? activityData?["entityName"]?.ToString();
+                var targetMicroflow = activityData?["microflow"]?.ToString()
+                    ?? activityData?["microflow_name"]?.ToString()
+                    ?? activityData?["calledMicroflow"]?.ToString();
+                var targetJavaAction = activityData?["java_action"]?.ToString()
+                    ?? activityData?["javaAction"]?.ToString();
+
+                var activitySummary = new MicroflowActivitySummary(
+                    Position: insertPosition ?? 1,
+                    ActivityType: normalizedType,
+                    Caption: caption,
+                    OutputVariable: outputVariable,
+                    TargetEntity: targetEntity,
+                    TargetMicroflow: targetMicroflow,
+                    TargetJavaAction: targetJavaAction,
+                    Parameters: parameters);
+
+                var insertion = new ActivityInsertion(
+                    MicroflowQualifiedName: qualifiedMfName,
+                    InsertPosition: insertPosition,
+                    Activity: activitySummary);
+
+                _logger.LogInformation($"[create_microflow_activity] Calling HostServices.MicroflowAuthoring.AddActivity: mf={qualifiedMfName}, type={normalizedType}, position={insertPosition}");
+
+                int actualPosition = HostServices.MicroflowAuthoring.AddActivity(insertion);
+
+                _logger.LogInformation($"[create_microflow_activity] Inserted at position {actualPosition}");
+
+                return JsonSerializer.Serialize(new {
+                    success = true,
+                    message = $"Activity of type '{activityType}' added to microflow '{microflowName}' successfully.",
+                    position = actualPosition,
+                    microflow = qualifiedMfName,
+                    activity = new {
+                        type = activityType,
+                        microflow = microflowName,
+                        module = actModuleName,
+                        insertPosition = actualPosition
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -2240,15 +1986,16 @@ namespace Terminal.Spmcp.Tools
         /// <summary>
         /// Standalone tool: wire up the sample data import pipeline (microflow + After Startup).
         /// </summary>
-        public async Task<string> SetupDataImport(JsonObject arguments, IMicroflowService microflowService, IServiceProvider serviceProvider)
+        public async Task<string> SetupDataImport(JsonObject arguments)
         {
+            await Task.CompletedTask;
             try
             {
                 var moduleName = arguments["module_name"]?.ToString();
                 var microflowName = arguments["microflow_name"]?.ToString() ?? "ASu_LoadSampleData";
                 var forceAfterStartup = arguments.ContainsKey("force_after_startup") && arguments["force_after_startup"]?.GetValue<bool>() == true;
 
-                var result = SetupDataImportInternal(moduleName, microflowName, forceAfterStartup, microflowService, serviceProvider);
+                var result = SetupDataImportInternal(moduleName, microflowName, forceAfterStartup);
                 return JsonSerializer.Serialize(result);
             }
             catch (Exception ex)
@@ -2263,51 +2010,45 @@ namespace Terminal.Spmcp.Tools
         /// Used by both setup_data_import (standalone) and generate_sample_data (auto-setup).
         /// Returns a structured object (not serialized) so callers can embed it.
         /// </summary>
-        private object SetupDataImportInternal(string? moduleName, string microflowName, bool forceAfterStartup, IMicroflowService microflowService, IServiceProvider serviceProvider)
+        private object SetupDataImportInternal(string? moduleName, string microflowName, bool forceAfterStartup)
         {
             var stepsCompleted = new List<string>();
 
-            // --- STEP 1: Resolve target module ---
-            var module = Utils.Utils.ResolveModule(_model, moduleName);
-            if (module == null)
+            // --- STEP 1: Resolve target module name ---
+            string resolvedModuleName;
+            if (!string.IsNullOrWhiteSpace(moduleName))
             {
-                return new { success = false, error = "No module found. Specify module_name.", steps_completed = stepsCompleted };
+                resolvedModuleName = moduleName;
             }
-            var qualifiedMfName = $"{module.Name}.{microflowName}";
+            else
+            {
+                var firstModule = HostServices.Model.ListModules().FirstOrDefault(m => !string.IsNullOrEmpty(m.Name));
+                if (firstModule == null)
+                    return new { success = false, error = "No module found. Specify module_name.", steps_completed = stepsCompleted };
+                resolvedModuleName = firstModule.Name;
+            }
+            var qualifiedMfName = $"{resolvedModuleName}.{microflowName}";
 
-            // --- STEP 2: Check Java action existence ---
-            // Must search ALL modules including marketplace (SPMCP is a marketplace module)
+            // --- STEP 2: Check Java action existence via HostServices.MicroflowAuthoring.ListJavaActions ---
             string? javaActionQualifiedName = null;
             try
             {
-                var allModules = (_model.Root as IProject)?.GetModules();
-                if (allModules != null)
+                // Search all modules via the Interop boundary
+                var allJavaActions = HostServices.MicroflowAuthoring.ListJavaActions(null);
+                foreach (var ja in allJavaActions)
                 {
-                    foreach (var mod in allModules)
+                    // DocumentId.QualifiedName carries "Module.ActionName"
+                    if (ja.Document.QualifiedName?.EndsWith(".InsertDataFromJSON", StringComparison.OrdinalIgnoreCase) == true
+                        || ja.Document.QualifiedName == "InsertDataFromJSON")
                     {
-                        try
-                        {
-                            var javaActions = _model.Root.GetModuleDocuments<IJavaAction>(mod);
-                            foreach (var ja in javaActions)
-                            {
-                                if (ja.Name == "InsertDataFromJSON")
-                                {
-                                    javaActionQualifiedName = ja.QualifiedName?.ToString();
-                                    break;
-                                }
-                            }
-                            if (javaActionQualifiedName != null) break;
-                        }
-                        catch (Exception)
-                        {
-                            // Some marketplace modules may throw — skip them
-                        }
+                        javaActionQualifiedName = ja.Document.QualifiedName;
+                        break;
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "[setup_data_import] Error searching for Java action via typed API");
+                _logger.LogWarning(ex, "[setup_data_import] Error searching for Java action via HostServices");
             }
 
             // Fallback: try untyped model query
@@ -2351,38 +2092,26 @@ namespace Terminal.Spmcp.Tools
             }
             stepsCompleted.Add($"Found Java action: {javaActionQualifiedName}");
 
-            // --- STEP 3: Check/create the After Startup microflow ---
+            // --- STEP 3: Check/create the After Startup microflow via HostServices.MicroflowAuthoring ---
             bool microflowCreated = false;
-            IMicroflow? existingMf = null;
-            try
-            {
-                var docs = module.GetDocuments();
-                existingMf = docs.OfType<IMicroflow>().FirstOrDefault(mf => mf.Name == microflowName);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "[setup_data_import] Error checking for existing microflow");
-            }
+            var existingMfSummary = HostServices.MicroflowAuthoring.ReadMicroflow(qualifiedMfName);
 
-            if (existingMf == null)
+            if (existingMfSummary == null)
             {
                 try
                 {
-                    var microflowExpressionService = serviceProvider.GetRequiredService<IMicroflowExpressionService>();
-                    var expression = microflowExpressionService.CreateFromString("true");
-                    var returnValue = new Mendix.StudioPro.ExtensionsAPI.Model.Microflows.MicroflowReturnValue(
-                        Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType.Boolean, expression);
+                    var createRequest = new CreateMicroflowRequest(
+                        ModuleName: resolvedModuleName,
+                        Name: microflowName,
+                        Parameters: Array.Empty<MicroflowParameter>(),
+                        ReturnTypeQualifiedName: "Boolean",
+                        ReturnIsList: false,
+                        AccessLevel: MicroflowAccessLevel.AllowAll,
+                        Documentation: "Loads sample data from JSON file at application startup.",
+                        FolderPath: null);
 
-                    using (var transaction = _model.StartTransaction("Create data import microflow"))
-                    {
-                        var folderBase = (Mendix.StudioPro.ExtensionsAPI.Model.Projects.IFolderBase)module;
-                        existingMf = microflowService.CreateMicroflow(_model, folderBase, microflowName, returnValue);
-                        if (existingMf == null)
-                        {
-                            return new { success = false, error = "Failed to create microflow — CreateMicroflow returned null", steps_completed = stepsCompleted };
-                        }
-                        transaction.Commit();
-                    }
+                    _logger.LogInformation($"[setup_data_import] Creating microflow '{qualifiedMfName}' via HostServices.MicroflowAuthoring.Create");
+                    HostServices.MicroflowAuthoring.Create(createRequest);
                     microflowCreated = true;
                     stepsCompleted.Add($"Created microflow: {qualifiedMfName} (Boolean, returns true)");
                 }
@@ -2402,17 +2131,15 @@ namespace Terminal.Spmcp.Tools
             bool activityCreated = false;
             try
             {
-                var activities = microflowService.GetAllMicroflowActivities(existingMf);
-                for (int i = 0; i < activities.Count; i++)
+                var activities = HostServices.MicroflowAuthoring.ReadActivities(qualifiedMfName);
+                foreach (var act in activities)
                 {
-                    if (activities[i] is IActionActivity actionActivity && actionActivity.Action is IJavaActionCallAction javaCall)
+                    if (act.ActivityType == "java_action_call"
+                        && (act.TargetJavaAction?.Contains("InsertDataFromJSON", StringComparison.OrdinalIgnoreCase) == true
+                            || act.Parameters.TryGetValue("java_action", out var jaParam) && jaParam.Contains("InsertDataFromJSON", StringComparison.OrdinalIgnoreCase)))
                     {
-                        var jaName = javaCall.JavaAction?.FullName ?? "";
-                        if (jaName.Contains("InsertDataFromJSON", StringComparison.OrdinalIgnoreCase))
-                        {
-                            activityAlreadyExists = true;
-                            break;
-                        }
+                        activityAlreadyExists = true;
+                        break;
                     }
                 }
             }
@@ -2425,23 +2152,24 @@ namespace Terminal.Spmcp.Tools
             {
                 try
                 {
-                    using (var transaction = _model.StartTransaction("Add InsertDataFromJSON call"))
+                    var javaCallParams = new Dictionary<string, string>
                     {
-                        var javaActionCall = _model.Create<IJavaActionCallAction>();
-                        javaActionCall.JavaAction = _model.ToQualifiedName<IJavaAction>(javaActionQualifiedName);
-                        javaActionCall.UseReturnVariable = false;
+                        ["java_action"] = javaActionQualifiedName,
+                        ["use_return_variable"] = "false"
+                    };
+                    var javaCallActivity = new MicroflowActivitySummary(
+                        Position: 1,
+                        ActivityType: "java_action_call",
+                        Caption: "Insert data from JSON",
+                        OutputVariable: null,
+                        TargetEntity: null,
+                        TargetMicroflow: null,
+                        TargetJavaAction: javaActionQualifiedName,
+                        Parameters: javaCallParams);
+                    var insertion = new ActivityInsertion(qualifiedMfName, 1, javaCallActivity);
 
-                        var actionActivity = _model.Create<IActionActivity>();
-                        actionActivity.Action = javaActionCall;
-
-                        var insertResult = microflowService.TryInsertAfterStart(existingMf, actionActivity);
-                        if (!insertResult)
-                        {
-                            transaction.Rollback();
-                            return new { success = false, error = "Failed to insert Java action call activity into microflow", steps_completed = stepsCompleted };
-                        }
-                        transaction.Commit();
-                    }
+                    _logger.LogInformation($"[setup_data_import] Adding java_action_call activity to '{qualifiedMfName}'");
+                    HostServices.MicroflowAuthoring.AddActivity(insertion);
                     activityCreated = true;
                     stepsCompleted.Add($"Added Java action call: {javaActionQualifiedName}");
                 }
@@ -2456,79 +2184,30 @@ namespace Terminal.Spmcp.Tools
                 stepsCompleted.Add("Java action call already exists in microflow");
             }
 
-            // --- STEP 5: Check/set After Startup ---
-            bool afterStartupSet = false;
-            string? afterStartupWarning = null;
-            string? currentAfterStartup = null;
+            // --- STEP 5: After Startup configuration ---
+            // TODO(W2): No Interop equivalent for IRuntimeSettings.AfterStartupMicroflow yet.
+            // GetSettingsPart<IRuntimeSettings>() requires _model.Root (IModel) which is absorbed at the host boundary.
+            // After Startup wiring must be completed manually in Studio Pro or via the set_runtime_settings tool.
+            string? afterStartupWarning =
+                $"After Startup configuration requires manual action: set the After Startup microflow to '{qualifiedMfName}' " +
+                $"in Studio Pro (App Settings → Runtime) or call the set_runtime_settings tool with after_startup_microflow='{qualifiedMfName}'.";
+            stepsCompleted.Add("After Startup: escalation:manual (no Interop equivalent for IRuntimeSettings yet)");
 
-            try
-            {
-                var runtimeSettings = GetSettingsPart<IRuntimeSettings>();
-                if (runtimeSettings != null)
-                {
-                    currentAfterStartup = runtimeSettings.AfterStartupMicroflow?.ToString();
-
-                    if (string.IsNullOrEmpty(currentAfterStartup))
-                    {
-                        // Safe to set
-                        using (var transaction = _model.StartTransaction("Set After Startup"))
-                        {
-                            runtimeSettings.AfterStartupMicroflow = _model.ToQualifiedName<IMicroflow>(qualifiedMfName);
-                            transaction.Commit();
-                        }
-                        afterStartupSet = true;
-                        stepsCompleted.Add($"Set After Startup to: {qualifiedMfName}");
-                    }
-                    else if (currentAfterStartup.Equals(qualifiedMfName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Already correctly configured
-                        stepsCompleted.Add($"After Startup already set to: {qualifiedMfName}");
-                    }
-                    else if (forceAfterStartup)
-                    {
-                        // Force overwrite
-                        using (var transaction = _model.StartTransaction("Override After Startup"))
-                        {
-                            runtimeSettings.AfterStartupMicroflow = _model.ToQualifiedName<IMicroflow>(qualifiedMfName);
-                            transaction.Commit();
-                        }
-                        afterStartupSet = true;
-                        stepsCompleted.Add($"Overrode After Startup from '{currentAfterStartup}' to: {qualifiedMfName}");
-                    }
-                    else
-                    {
-                        // Conflict — don't overwrite
-                        afterStartupWarning = $"After Startup is already set to '{currentAfterStartup}'. " +
-                            $"Options: (a) Add a call to '{qualifiedMfName}' from '{currentAfterStartup}', " +
-                            $"(b) Add a call to '{currentAfterStartup}' from '{qualifiedMfName}', " +
-                            $"(c) Use set_runtime_settings to manually change After Startup, " +
-                            $"(d) Use setup_data_import with force_after_startup=true to overwrite.";
-                        stepsCompleted.Add($"After Startup conflict: currently '{currentAfterStartup}'");
-                    }
-                }
-                else
-                {
-                    afterStartupWarning = "Could not access runtime settings to configure After Startup.";
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "[setup_data_import] Error configuring After Startup");
-                afterStartupWarning = $"Error configuring After Startup: {ex.Message}";
-            }
+            _logger.LogWarning("[setup_data_import] After Startup step skipped — escalation:manual (Task 14 gap: IRuntimeSettings not yet exposed via HostServices)");
 
             return new
             {
                 success = true,
-                message = "Sample data import pipeline configured",
+                message = "Sample data import pipeline configured (After Startup requires manual step — see warning)",
                 java_action = new { found = true, qualified_name = javaActionQualifiedName },
                 microflow = new { name = qualifiedMfName, created = microflowCreated, already_existed = !microflowCreated },
                 java_action_call = new { added = activityCreated, already_existed = activityAlreadyExists },
                 after_startup = new
                 {
-                    set_to = afterStartupSet ? qualifiedMfName : currentAfterStartup,
-                    changed = afterStartupSet,
-                    warning = afterStartupWarning
+                    set_to = (string?)null,
+                    changed = false,
+                    warning = afterStartupWarning,
+                    escalation = "manual"
                 },
                 steps_completed = stepsCompleted
             };
@@ -4566,7 +4245,14 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                _logger.LogInformation("=== CreateMicroflowActivitiesSequence Debug ===");
+                if (!HostServices.MicroflowAuthoring.IsAvailable)
+                {
+                    var error = "MicroflowAuthoring host is not available in the current environment.";
+                    SetLastError(error);
+                    return JsonSerializer.Serialize(new { error });
+                }
+
+                _logger.LogInformation("=== CreateMicroflowActivitiesSequence (HostServices) ===");
                 _logger.LogInformation($"Raw arguments received: {arguments?.ToJsonString()}");
 
                 var microflowName = arguments["microflow_name"]?.ToString();
@@ -4591,265 +4277,199 @@ namespace Terminal.Spmcp.Tools
                     return JsonSerializer.Serialize(new { error });
                 }
 
+                // Resolve qualified microflow name
                 var seqModuleName = arguments["module_name"]?.ToString();
-                var module = Utils.Utils.ResolveModule(_model, seqModuleName);
-                if (module == null)
+                string qualifiedMfName;
+                if (!string.IsNullOrWhiteSpace(seqModuleName))
                 {
-                    var error = string.IsNullOrWhiteSpace(seqModuleName) ? "No module found." : $"Module '{seqModuleName}' not found.";
+                    qualifiedMfName = $"{seqModuleName}.{microflowName}";
+                }
+                else if (microflowName.Contains('.'))
+                {
+                    qualifiedMfName = microflowName;
+                    seqModuleName = microflowName.Split('.')[0];
+                }
+                else
+                {
+                    var allMfs = HostServices.MicroflowAuthoring.ListMicroflows(null);
+                    var found = allMfs.FirstOrDefault(m => m.Name.Equals(microflowName, StringComparison.OrdinalIgnoreCase));
+                    if (found == null)
+                    {
+                        var error = $"Microflow '{microflowName}' not found. Specify module_name to disambiguate.";
+                        SetLastError(error);
+                        return JsonSerializer.Serialize(new { error });
+                    }
+                    qualifiedMfName = found.QualifiedName;
+                    seqModuleName = found.Module;
+                }
+
+                // Validate microflow exists
+                var mfSummary = HostServices.MicroflowAuthoring.ReadMicroflow(qualifiedMfName);
+                if (mfSummary == null)
+                {
+                    var error = $"Microflow '{qualifiedMfName}' not found.";
                     SetLastError(error);
                     return JsonSerializer.Serialize(new { error });
                 }
 
-                // Find the microflow
-                var microflow = module.GetDocuments().OfType<IMicroflow>()
-                    .FirstOrDefault(mf => mf.Name.Equals(microflowName, StringComparison.OrdinalIgnoreCase));
-
-                if (microflow == null)
-                {
-                    var error = $"Microflow '{microflowName}' not found in module '{module.Name}'.";
-                    SetLastError(error);
-                    return JsonSerializer.Serialize(new { error });
-                }
-
-                // Get the microflow service
-                var microflowService = _serviceProvider?.GetService<IMicroflowService>();
-                if (microflowService == null)
-                {
-                    var error = "IMicroflowService not available.";
-                    SetLastError(error);
-                    return JsonSerializer.Serialize(new { error });
-                }
-
-                // Create all activities first
-                var createdActivities = new List<IActionActivity>();
                 var activityResults = new List<object>();
-
-                // BUG-022 fix: Track pending commit/refresh fixes for create_object activities
-                var pendingCommitFixes = new List<(IActionActivity activity, string commitStr, string refreshStr)>();
-                
                 // Variable name tracking for propagation across activities
-                Dictionary<string, string> variableNameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                
+                var variableNameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
                 // Debug logging to file
                 var debugLogPath = GetDebugLogPath();
                 await File.AppendAllTextAsync(debugLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] VARIABLE TRACKING: Starting variable tracking for {activitiesArray.Count} activities\n");
 
-                using (var transaction = _model.StartTransaction("Create microflow activities sequence"))
+                // Collect insertions in order; insert them in reverse so the first activity ends up first
+                // (each insertion uses position=1 / "after start", so reverse order achieves correct sequence)
+                var insertions = new List<(int index, string activityType, ActivityInsertion insertion)>();
+
+                for (int i = 0; i < activitiesArray.Count; i++)
                 {
+                    var activityDef = activitiesArray[i]?.AsObject();
+                    if (activityDef == null)
+                    {
+                        _logger.LogWarning($"Skipping null activity at index {i}");
+                        continue;
+                    }
+
+                    var activityType = activityDef["activity_type"]?.ToString();
+                    var activityConfig = activityDef["activity_config"]?.AsObject();
+
+                    // BUG-005 fix: If no nested activity_config, use the activity definition itself as config
+                    if (activityConfig == null && activityType != null)
+                    {
+                        activityConfig = new JsonObject();
+                        foreach (var prop in activityDef)
+                        {
+                            if (prop.Key != "activity_type")
+                                activityConfig[prop.Key] = prop.Value?.DeepClone();
+                        }
+                    }
+
+                    _logger.LogInformation($"Processing activity {i + 1}: type='{activityType}'");
+                    await File.AppendAllTextAsync(debugLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] VARIABLE TRACKING: Processing activity {i + 1}: type='{activityType}'\n");
+
+                    if (string.IsNullOrWhiteSpace(activityType))
+                    {
+                        // BUG-004 fix: Check for common misname 'type' instead of 'activity_type'
+                        var possibleType = activityDef["type"]?.ToString();
+                        if (!string.IsNullOrWhiteSpace(possibleType))
+                        {
+                            _logger.LogWarning($"Activity at index {i} uses 'type' instead of 'activity_type'. Auto-correcting to '{possibleType}'.");
+                            activityType = possibleType;
+                        }
+                        else
+                        {
+                            _logger.LogWarning($"Skipping activity at index {i} - no activity type specified.");
+                            activityResults.Add(new { index = i + 1, type = (string?)null, status = "skipped", error = "No 'activity_type' field found. Use 'activity_type' (not 'type') to specify the activity." });
+                            continue;
+                        }
+                    }
+
+                    // BUG-019 fix: rebuild activityConfig if it was null when type was also null
+                    if (activityConfig == null && activityType != null)
+                    {
+                        activityConfig = new JsonObject();
+                        foreach (var prop in activityDef)
+                        {
+                            if (prop.Key != "activity_type" && prop.Key != "type")
+                                activityConfig[prop.Key] = prop.Value?.DeepClone();
+                        }
+                    }
+
+                    // Apply variable name substitutions
+                    await File.AppendAllTextAsync(debugLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] VARIABLE TRACKING: Applying substitutions with {variableNameMap.Count} mappings\n");
+                    var processedConfig = ApplyVariableNameSubstitutions(activityConfig, variableNameMap);
+                    await File.AppendAllTextAsync(debugLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] VARIABLE TRACKING: Processed config: {processedConfig?.ToJsonString()}\n");
+
+                    // Build MicroflowActivitySummary from the config
+                    var normalizedType = activityType.ToLowerInvariant();
+                    var parameters = new Dictionary<string, string>();
+                    if (processedConfig != null)
+                    {
+                        foreach (var kv in processedConfig)
+                        {
+                            if (kv.Value != null)
+                                parameters[kv.Key] = kv.Value.ToString() ?? "";
+                        }
+                    }
+
+                    var caption = processedConfig?["caption"]?.ToString();
+                    var outputVariable = processedConfig?["output_variable"]?.ToString()
+                        ?? processedConfig?["outputVariable"]?.ToString()
+                        ?? processedConfig?["variable_name"]?.ToString()
+                        ?? processedConfig?["variableName"]?.ToString();
+                    var targetEntity = processedConfig?["entity"]?.ToString()
+                        ?? processedConfig?["entity_name"]?.ToString()
+                        ?? processedConfig?["entityName"]?.ToString();
+                    var targetMicroflow = processedConfig?["microflow"]?.ToString()
+                        ?? processedConfig?["microflow_name"]?.ToString()
+                        ?? processedConfig?["calledMicroflow"]?.ToString();
+                    var targetJavaAction = processedConfig?["java_action"]?.ToString()
+                        ?? processedConfig?["javaAction"]?.ToString();
+
+                    var activitySummary = new MicroflowActivitySummary(
+                        Position: 1,
+                        ActivityType: normalizedType,
+                        Caption: caption,
+                        OutputVariable: outputVariable,
+                        TargetEntity: targetEntity,
+                        TargetMicroflow: targetMicroflow,
+                        TargetJavaAction: targetJavaAction,
+                        Parameters: parameters);
+
+                    insertions.Add((i, activityType, new ActivityInsertion(qualifiedMfName, 1, activitySummary)));
+
+                    // Track variable names for subsequent activities
+                    TrackVariableNames(activityType, processedConfig, variableNameMap);
+                    await File.AppendAllTextAsync(debugLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] VARIABLE TRACKING: Variable map now has {variableNameMap.Count} entries\n");
+                }
+
+                if (insertions.Count == 0)
+                {
+                    var specificError = _lastError;
+                    var error = !string.IsNullOrEmpty(specificError)
+                        ? $"No activities were successfully prepared. Last error: {specificError}"
+                        : "No activities were successfully prepared.";
+                    if (string.IsNullOrEmpty(specificError))
+                        SetLastError(error);
+                    return JsonSerializer.Serialize(new { error, activityResults });
+                }
+
+                // Insert in reverse order so first activity ends up at position 1
+                _logger.LogInformation($"Inserting {insertions.Count} activities via HostServices.MicroflowAuthoring.AddActivity (reverse order)");
+                for (int j = insertions.Count - 1; j >= 0; j--)
+                {
+                    var (origIndex, actType, insertion) = insertions[j];
                     try
                     {
-                        // Process each activity definition
-                        for (int i = 0; i < activitiesArray.Count; i++)
-                        {
-                            var activityDef = activitiesArray[i]?.AsObject();
-                            if (activityDef == null)
-                            {
-                                _logger.LogWarning($"Skipping null activity at index {i}");
-                                continue;
-                            }
-
-                            var activityType = activityDef["activity_type"]?.ToString();
-                            var activityConfig = activityDef["activity_config"]?.AsObject();
-
-                            // BUG-005 fix: If no nested activity_config, use the activity definition itself as config
-                            // (support flat format where properties are at the same level as activity_type)
-                            if (activityConfig == null && activityType != null)
-                            {
-                                // Clone the definition and remove the activity_type key to use as config
-                                activityConfig = new JsonObject();
-                                foreach (var prop in activityDef)
-                                {
-                                    if (prop.Key != "activity_type")
-                                    {
-                                        activityConfig[prop.Key] = prop.Value?.DeepClone();
-                                    }
-                                }
-                            }
-
-                            _logger.LogInformation($"Processing activity {i + 1}: type='{activityType}'");
-                            await File.AppendAllTextAsync(debugLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] VARIABLE TRACKING: Processing activity {i + 1}: type='{activityType}'\n");
-                            await File.AppendAllTextAsync(debugLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] VARIABLE TRACKING: Original config: {activityConfig?.ToJsonString()}\n");
-
-                            if (string.IsNullOrWhiteSpace(activityType))
-                            {
-                                // BUG-004 fix: Check for common misname 'type' instead of 'activity_type'
-                                var possibleType = activityDef["type"]?.ToString();
-                                if (!string.IsNullOrWhiteSpace(possibleType))
-                                {
-                                    _logger.LogWarning($"Activity at index {i} uses 'type' instead of 'activity_type'. Auto-correcting to '{possibleType}'.");
-                                    activityType = possibleType;
-                                }
-                                else
-                                {
-                                    _logger.LogWarning($"Skipping activity at index {i} - no activity type specified. Use 'activity_type' field.");
-                                    activityResults.Add(new { index = i + 1, type = (string?)null, status = "skipped", error = "No 'activity_type' field found. Use 'activity_type' (not 'type') to specify the activity." });
-                                    continue;
-                                }
-                            }
-
-                            // BUG-019 fix: If activityConfig is still null after type auto-correction
-                            // (happens when user passes 'type' instead of 'activity_type' — the flat-format
-                            // construction above was skipped because activityType was null at that point)
-                            if (activityConfig == null && activityType != null)
-                            {
-                                activityConfig = new JsonObject();
-                                foreach (var prop in activityDef)
-                                {
-                                    if (prop.Key != "activity_type" && prop.Key != "type")
-                                    {
-                                        activityConfig[prop.Key] = prop.Value?.DeepClone();
-                                    }
-                                }
-                            }
-
-                            // Apply variable name substitutions to activity config
-                            await File.AppendAllTextAsync(debugLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] VARIABLE TRACKING: Applying substitutions with {variableNameMap.Count} mappings\n");
-                            var processedConfig = ApplyVariableNameSubstitutions(activityConfig, variableNameMap);
-                            await File.AppendAllTextAsync(debugLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] VARIABLE TRACKING: Processed config: {processedConfig?.ToJsonString()}\n");
-
-                            // Create the activity (reuse existing logic)
-                            IActionActivity? activity = CreateActivityByType(activityType, processedConfig);
-
-                            if (activity != null)
-                            {
-                                createdActivities.Add(activity);
-
-                                // BUG-022: Collect commit/refresh fix info alongside the actual activity object
-                                if (activityType.ToLowerInvariant() is "create_object" or "create_variable" or "create")
-                                {
-                                    var commitVal = processedConfig?["commit"]?.ToString() ?? "no";
-                                    var refreshVal = processedConfig?["refresh_in_client"]?.ToString() ?? "false";
-                                    if (!commitVal.Equals("no", StringComparison.OrdinalIgnoreCase) ||
-                                        (bool.TryParse(refreshVal, out var rv) && rv))
-                                    {
-                                        pendingCommitFixes.Add((activity, commitVal, refreshVal));
-                                    }
-                                }
-
-                                // Track variable names for future activities
-                                await File.AppendAllTextAsync(debugLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] VARIABLE TRACKING: Tracking variables for activity type '{activityType}'\n");
-                                TrackVariableNames(activityType, processedConfig, variableNameMap);
-                                await File.AppendAllTextAsync(debugLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] VARIABLE TRACKING: Variable map now has {variableNameMap.Count} entries: {string.Join(", ", variableNameMap.Select(kvp => $"{kvp.Key}→{kvp.Value}"))}\n");
-                                
-                                activityResults.Add(new
-                                {
-                                    index = i + 1,
-                                    type = activityType,
-                                    status = "created"
-                                });
-                                _logger.LogInformation($"Successfully created activity {i + 1} of type '{activityType}'");
-                            }
-                            else
-                            {
-                                var errorMsg = $"Failed to create activity {i + 1} of type '{activityType}'";
-                                _logger.LogError(errorMsg);
-                                activityResults.Add(new
-                                {
-                                    index = i + 1,
-                                    type = activityType,
-                                    status = "failed",
-                                    error = errorMsg
-                                });
-                            }
-                        }
-
-                        if (createdActivities.Count == 0)
-                        {
-                            // BUG-008 fix: Don't overwrite specific error from individual activity handlers
-                            var specificError = _lastError;
-                            var error = !string.IsNullOrEmpty(specificError)
-                                ? $"No activities were successfully created. Last error: {specificError}"
-                                : "No activities were successfully created.";
-                            // Only set if no specific error already exists
-                            if (string.IsNullOrEmpty(specificError))
-                                SetLastError(error);
-                            return JsonSerializer.Serialize(new { error, activityResults });
-                        }
-
-                        // Insert activities in reverse order (like TeamcenterExtension does)
-                        // This ensures they appear in the correct sequence in the microflow
-                        _logger.LogInformation($"Inserting {createdActivities.Count} activities in reverse order");
-                        
-                        var reversedActivities = new List<IActionActivity>(createdActivities);
-                        reversedActivities.Reverse();
-
-                        foreach (var activity in reversedActivities)
-                        {
-                            var insertResult = microflowService.TryInsertAfterStart(microflow, activity);
-                            if (!insertResult)
-                            {
-                                var error = $"Failed to insert activity of type {activity.GetType().Name} into microflow.";
-                                _logger.LogError(error);
-                                SetLastError(error);
-                                return JsonSerializer.Serialize(new { error, activityResults });
-                            }
-                        }
-
-                        transaction.Commit();
-
-                        // BUG-022 fix: Post-commit second-pass to set Commit/RefreshInClient on create_object activities.
-                        // The Extensions API ignores these params during creation; they must be set in a separate transaction.
-                        // Uses pendingCommitFixes collected during the creation loop (properly aligned with activity objects).
-                        if (pendingCommitFixes.Count > 0)
-                        {
-                            try
-                            {
-                                using var fixTx = _model.StartTransaction("Fix create_object commit/refresh (batch)");
-                                foreach (var (fixActivity, commitVal, refreshVal) in pendingCommitFixes)
-                                {
-                                    if (fixActivity?.Action is ICreateObjectAction fixAction)
-                                    {
-                                        var wantCommit = commitVal.ToLowerInvariant() switch
-                                        {
-                                            "yes" => Mendix.StudioPro.ExtensionsAPI.Model.Microflows.Actions.CommitEnum.Yes,
-                                            "yes_without_events" or "yeswithoutevents" => Mendix.StudioPro.ExtensionsAPI.Model.Microflows.Actions.CommitEnum.YesWithoutEvents,
-                                            _ => Mendix.StudioPro.ExtensionsAPI.Model.Microflows.Actions.CommitEnum.No
-                                        };
-                                        var wantRefresh = bool.TryParse(refreshVal, out var r) && r;
-                                        fixAction.Commit = wantCommit;
-                                        fixAction.RefreshInClient = wantRefresh;
-                                        _logger.LogInformation($"BUG-022 batch fix: set Commit={wantCommit}, RefreshInClient={wantRefresh} on activity");
-                                    }
-                                }
-                                fixTx.Commit();
-                            }
-                            catch (Exception fixEx)
-                            {
-                                _logger.LogWarning(fixEx, "BUG-022 batch post-commit fix failed (non-fatal)");
-                            }
-                        }
-
-                        // Warn if any activity requested output_variable — the API ignores it during creation.
-                        // The caller must use modify_microflow_activity afterwards to rename the output variable.
-                        var outputVarWarnings = new List<string>();
-                        for (int wi = 0; wi < activitiesArray.Count; wi++)
-                        {
-                            var wDef = activitiesArray[wi]?.AsObject();
-                            var wCfg = wDef?["activity_config"]?.AsObject() ?? wDef;
-                            var ov = wCfg?["output_variable"]?.ToString() ?? wCfg?["outputVariable"]?.ToString();
-                            if (!string.IsNullOrEmpty(ov))
-                                outputVarWarnings.Add($"Activity {wi + 1}: output_variable='{ov}' was ignored — use modify_microflow_activity to rename the output variable after creation.");
-                        }
-
-                        return JsonSerializer.Serialize(new
-                        {
-                            success = true,
-                            message = $"Successfully created and inserted {createdActivities.Count} activities in sequence to microflow '{microflowName}'",
-                            microflow = microflowName,
-                            module = module.Name,
-                            activitiesCreated = createdActivities.Count,
-                            activities = activityResults,
-                            warnings = outputVarWarnings.Count > 0 ? outputVarWarnings : null
-                        });
+                        int actualPos = HostServices.MicroflowAuthoring.AddActivity(insertion);
+                        activityResults.Add(new { index = origIndex + 1, type = actType, status = "inserted", position = actualPos });
+                        _logger.LogInformation($"Inserted activity {origIndex + 1} (type='{actType}') at position {actualPos}");
                     }
-                    catch (Exception ex)
+                    catch (Exception insertEx)
                     {
-                        _logger.LogError(ex, $"Error during sequential activity creation: {ex.Message}");
-                        var error = $"Error during sequential activity creation: {ex.Message}";
-                        SetLastError(error, ex);
-                        return JsonSerializer.Serialize(new { error, activityResults });
+                        _logger.LogError(insertEx, $"Failed to insert activity {origIndex + 1} (type='{actType}')");
+                        activityResults.Add(new { index = origIndex + 1, type = actType, status = "failed", error = insertEx.Message });
                     }
                 }
+
+                int insertedCount = activityResults.Count(r =>
+                {
+                    var rObj = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(System.Text.Json.JsonSerializer.Serialize(r));
+                    return rObj.TryGetProperty("status", out var s) && s.GetString() == "inserted";
+                });
+
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    message = $"Successfully inserted {insertedCount} of {insertions.Count} activities into microflow '{microflowName}'",
+                    microflow = qualifiedMfName,
+                    module = seqModuleName,
+                    activitiesCreated = insertedCount,
+                    activities = activityResults
+                });
             }
             catch (Exception ex)
             {
