@@ -6,7 +6,7 @@ public sealed class FakeDomainModelHost : IDomainModelHost
 {
     public ModuleId CreateModule(string moduleName) => throw new NotImplementedException();
     public void RenameModule(ModuleId moduleId, string newName) => throw new NotImplementedException();
-    public IReadOnlyList<EntityRef> ListEntities(ModuleId moduleId) => throw new NotImplementedException();
+    public IReadOnlyList<EntityRef> ListEntities(ModuleId moduleId) => Array.Empty<EntityRef>();
     public EntityShape ReadEntity(EntityRef entity) => throw new NotImplementedException();
     public EntityRef CreateEntity(CreateEntityRequest request) => throw new NotImplementedException();
     public IReadOnlyList<EntityRef> CreateMultipleEntities(IReadOnlyList<CreateEntityRequest> requests) => throw new NotImplementedException();
@@ -28,7 +28,7 @@ public sealed class FakeDomainModelHost : IDomainModelHost
     public void SetGeneralization(EntityRef entity, EntityRef parent) => throw new NotImplementedException();
     public void RemoveGeneralization(EntityRef entity) => throw new NotImplementedException();
     public void AddEventHandler(EntityRef entity, EventHandlerSpec handler) => throw new NotImplementedException();
-    public IReadOnlyList<EnumerationRef> ListEnumerations(ModuleId moduleId) => throw new NotImplementedException();
+    public IReadOnlyList<EnumerationRef> ListEnumerations(ModuleId moduleId) => Array.Empty<EnumerationRef>();
     public EnumerationRef CreateEnumeration(string moduleName, string name, IReadOnlyList<EnumerationValueSpec> values) => throw new NotImplementedException();
     public void RenameEnumerationValue(string enumerationQualifiedName, string oldValueName, string newValueName) => throw new NotImplementedException();
     public void UpdateEnumeration(EnumerationRef enumeration, IReadOnlyList<EnumerationValueSpec>? addValues = null, IReadOnlyList<string>? removeValues = null, IReadOnlyDictionary<string, string>? renameValues = null) => throw new NotImplementedException();

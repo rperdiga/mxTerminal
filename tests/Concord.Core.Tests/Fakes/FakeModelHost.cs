@@ -6,11 +6,11 @@ using Terminal.Interop;
 
 public sealed class FakeModelHost : IModelHost
 {
-    public ProjectInfo GetProjectInfo() => throw new NotImplementedException();
-    public IReadOnlyList<ModuleId> ListModules() => throw new NotImplementedException();
-    public ModuleId? GetModuleByName(string moduleName) => throw new NotImplementedException();
-    public IReadOnlyList<DocumentId> ListModuleDocuments(ModuleId moduleId, string? documentTypeFilter = null) => throw new NotImplementedException();
-    public IReadOnlyList<DocumentId> ListAllDocuments(string? documentTypeFilter = null) => throw new NotImplementedException();
+    public ProjectInfo GetProjectInfo() => new ProjectInfo("TestProject", "/test/path", "11.10.0", null);
+    public IReadOnlyList<ModuleId> ListModules() => new[] { new ModuleId(Guid.Empty, "TestModule") };
+    public ModuleId? GetModuleByName(string moduleName) => moduleName == "TestModule" ? new ModuleId(Guid.Empty, "TestModule") : null;
+    public IReadOnlyList<DocumentId> ListModuleDocuments(ModuleId moduleId, string? documentTypeFilter = null) => Array.Empty<DocumentId>();
+    public IReadOnlyList<DocumentId> ListAllDocuments(string? documentTypeFilter = null) => Array.Empty<DocumentId>();
     public DocumentId? GetDocumentByQualifiedName(string qualifiedName) => throw new NotImplementedException();
     public IReadOnlyList<FolderId> ListFolders(ModuleId moduleId) => throw new NotImplementedException();
     public FolderId? CreateFolder(ModuleId moduleId, string parentFolderPath, string folderName) => throw new NotImplementedException();
