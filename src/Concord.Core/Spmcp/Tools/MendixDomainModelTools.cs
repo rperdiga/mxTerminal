@@ -14,46 +14,46 @@ using Mendix.StudioPro.ExtensionsAPI.Model.Microflows;
 using Mendix.StudioPro.ExtensionsAPI.Model.Settings;
 using Mendix.StudioPro.ExtensionsAPI.Model.Texts;
 using Microsoft.Extensions.Logging;
+using Terminal.Interop;
 using Terminal.Spmcp.Utils;
 
 namespace Terminal.Spmcp.Tools
 {
     public class MendixDomainModelTools
     {
-        private readonly IModel _model;
         private readonly ILogger<MendixDomainModelTools> _logger;
-        private readonly Mendix.StudioPro.ExtensionsAPI.Services.INameValidationService? _nameValidationService;
 
-        public MendixDomainModelTools(IModel model, ILogger<MendixDomainModelTools> logger, Mendix.StudioPro.ExtensionsAPI.Services.INameValidationService? nameValidationService = null)
+        public MendixDomainModelTools(ILogger<MendixDomainModelTools> logger)
         {
-            _model = model;
             _logger = logger;
-            _nameValidationService = nameValidationService;
         }
 
         public async Task<string> ListModules(JsonObject parameters)
         {
             try
             {
-                var allModules = _model.Root.GetModules();
-                var moduleList = allModules
-                    .Where(m => m != null)
-                    .Select(m => new
+                var allModuleIds = HostServices.Model.ListModules();
+                var moduleList = allModuleIds
+                    .Select(m =>
                     {
-                        name = m.Name,
-                        fromAppStore = m.FromAppStore,
-                        entityCount = m.DomainModel?.GetEntities().Count() ?? 0
+                        var entityCount = HostServices.DomainModel.ListEntities(m).Count;
+                        return new
+                        {
+                            name = m.Name,
+                            fromAppStore = false, // note: ModuleId does not expose FromAppStore; gap surfaced here
+                            entityCount
+                        };
                     })
-                    .OrderBy(m => m.fromAppStore)
-                    .ThenBy(m => m.name)
+                    .OrderBy(m => m.name)
                     .ToList();
 
                 var result = new
                 {
                     success = true,
-                    message = $"Found {moduleList.Count} modules ({moduleList.Count(m => !m.fromAppStore)} user modules, {moduleList.Count(m => m.fromAppStore)} Marketplace modules)",
+                    message = $"Found {moduleList.Count} modules",
+                    note = "fromAppStore filter not available via IModelHost — all modules shown",
                     modules = moduleList,
-                    userModules = moduleList.Where(m => !m.fromAppStore).Select(m => m.name).ToList()
+                    userModules = moduleList.Select(m => m.name).ToList()
                 };
 
                 return JsonSerializer.Serialize(result, new JsonSerializerOptions
@@ -752,26 +752,49 @@ namespace Terminal.Spmcp.Tools
             {
                 var moduleName = parameters?["module_name"]?.ToString();
 
-                var modules = string.IsNullOrEmpty(moduleName)
-                    ? Utils.Utils.GetAllNonAppStoreModules(_model).ToList()
-                    : new List<IModule> { Utils.Utils.ResolveModule(_model, moduleName) }.Where(m => m != null).ToList();
+                // Use UntypedModel to get Constants with their properties — single API call
+                if (!HostServices.UntypedModel.IsAvailable)
+                {
+                    return JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        error = "IUntypedModelHost is not available on this Studio Pro version (10.x). Constant listing requires Studio Pro 11+."
+                    });
+                }
+
+                var allConstants = HostServices.UntypedModel.GetUnitsOfType("Constants$Constant");
 
                 var result = new List<object>();
-                foreach (var module in modules)
+                foreach (var c in allConstants)
                 {
-                    var constants = _model.Root.GetModuleDocuments<IConstant>(module);
-                    foreach (var c in constants)
+                    var qn = c.QualifiedName ?? "";
+                    // Filter by module if specified: QualifiedName = "ModuleName.ConstantName"
+                    if (!string.IsNullOrEmpty(moduleName))
                     {
-                        result.Add(new
-                        {
-                            name = c.Name,
-                            qualifiedName = c.QualifiedName?.ToString(),
-                            module = module.Name,
-                            defaultValue = c.DefaultValue,
-                            exposedToClient = c.ExposedToClient,
-                            dataType = c.DataType?.ToString()
-                        });
+                        var dotIdx = qn.IndexOf('.');
+                        var cModule = dotIdx >= 0 ? qn.Substring(0, dotIdx) : qn;
+                        if (!cModule.Equals(moduleName, StringComparison.OrdinalIgnoreCase))
+                            continue;
                     }
+
+                    var defaultValue = HostServices.UntypedModel.ReadUnitProperty(qn, "defaultValue")
+                                   ?? HostServices.UntypedModel.ReadUnitProperty(qn, "DefaultValue")
+                                   ?? "<not exposed>";
+                    var dataType = HostServices.UntypedModel.ReadUnitProperty(qn, "type")
+                               ?? HostServices.UntypedModel.ReadUnitProperty(qn, "dataType")
+                               ?? "<not exposed>";
+
+                    var dotIdx2 = qn.IndexOf('.');
+                    var modName = dotIdx2 >= 0 ? qn.Substring(0, dotIdx2) : "";
+
+                    result.Add(new
+                    {
+                        name = c.Name,
+                        qualifiedName = qn,
+                        module = modName,
+                        defaultValue,
+                        dataType
+                    });
                 }
 
                 return JsonSerializer.Serialize(new
@@ -877,29 +900,31 @@ namespace Terminal.Spmcp.Tools
             {
                 var moduleName = parameters?["module_name"]?.ToString();
 
-                var modules = string.IsNullOrEmpty(moduleName)
-                    ? Utils.Utils.GetAllNonAppStoreModules(_model).ToList()
-                    : new List<IModule> { Utils.Utils.ResolveModule(_model, moduleName) }.Where(m => m != null).ToList();
+                var allModuleIds = HostServices.Model.ListModules();
+                if (!string.IsNullOrEmpty(moduleName))
+                {
+                    var filtered = HostServices.Model.GetModuleByName(moduleName);
+                    if (filtered == null)
+                        return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" });
+                    allModuleIds = new[] { filtered.Value };
+                }
 
                 var result = new List<object>();
-                foreach (var module in modules)
+                foreach (var moduleId in allModuleIds)
                 {
-                    var enumerations = _model.Root.GetModuleDocuments<IEnumeration>(module);
-                    foreach (var e in enumerations)
+                    var enumerations = HostServices.DomainModel.ListEnumerations(moduleId);
+                    foreach (var enumRef in enumerations)
                     {
-                        var values = e.GetValues().Select(v => new
-                        {
-                            name = v.Name,
-                            caption = v.Caption?.GetTranslations()?.FirstOrDefault()?.Text ?? v.Name
-                        }).ToList();
+                        var dotIdx = enumRef.QualifiedName.IndexOf('.');
+                        var simpleName = dotIdx >= 0 ? enumRef.QualifiedName.Substring(dotIdx + 1) : enumRef.QualifiedName;
 
+                        // Enumeration values not exposed by IDomainModelHost — gap documented
                         result.Add(new
                         {
-                            name = e.Name,
-                            qualifiedName = e.QualifiedName?.ToString(),
-                            module = module.Name,
-                            valueCount = values.Count,
-                            values
+                            name = simpleName,
+                            qualifiedName = enumRef.QualifiedName,
+                            module = moduleId.Name,
+                            note = "Enumeration values not surfaced by IDomainModelHost; use read_domain_model for value detail"
                         });
                     }
                 }
@@ -924,41 +949,47 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                var allModules = Utils.Utils.GetAllNonAppStoreModules(_model).ToList();
-                if (!allModules.Any())
+                var projectInfo = HostServices.Model.GetProjectInfo();
+                var allModuleIds = HostServices.Model.ListModules();
+
+                if (!allModuleIds.Any())
                 {
                     return JsonSerializer.Serialize(new { error = "No modules found in the project" });
                 }
 
-                var moduleInfos = allModules.Select(mod =>
+                var moduleInfos = allModuleIds.Select(moduleId =>
                 {
-                    var entities = mod.DomainModel?.GetEntities()?.ToList() ?? new List<IEntity>();
-                    var microflows = mod.GetDocuments().OfType<IMicroflow>().Count();
-                    var constants = _model.Root.GetModuleDocuments<IConstant>(mod).Count;
-                    var enumerations = _model.Root.GetModuleDocuments<IEnumeration>(mod).Count;
+                    var entityRefs = HostServices.DomainModel.ListEntities(moduleId);
+                    var enumerationRefs = HostServices.DomainModel.ListEnumerations(moduleId);
+                    var microflowDocs = HostServices.Model.ListModuleDocuments(moduleId, "Microflow");
+                    var constantDocs = HostServices.Model.ListModuleDocuments(moduleId, "Constant");
 
-                    // Count associations (deduplicated)
-                    var assocNames = new HashSet<string>();
-                    foreach (var entity in entities)
+                    // Count associations by reading entity shapes
+                    var seenAssocNames = new HashSet<string>();
+                    foreach (var entityRef in entityRefs)
                     {
                         try
                         {
-                            foreach (var ea in entity.GetAssociations(AssociationDirection.Both, null))
-                                assocNames.Add(ea.Association.Name);
+                            var shape = HostServices.DomainModel.ReadEntity(entityRef);
+                            foreach (var assoc in shape.OutgoingAssociations)
+                                seenAssocNames.Add(assoc.Name);
                         }
                         catch { }
                     }
 
                     return new
                     {
-                        name = mod.Name,
-                        fromAppStore = mod.FromAppStore,
-                        entityCount = entities.Count,
-                        associationCount = assocNames.Count,
-                        microflowCount = microflows,
-                        constantCount = constants,
-                        enumerationCount = enumerations,
-                        entities = entities.Select(e => e.Name).ToList()
+                        name = moduleId.Name,
+                        entityCount = entityRefs.Count,
+                        associationCount = seenAssocNames.Count,
+                        microflowCount = microflowDocs.Count,
+                        constantCount = constantDocs.Count,
+                        enumerationCount = enumerationRefs.Count,
+                        entities = entityRefs.Select(e =>
+                        {
+                            var dotIdx = e.QualifiedName.IndexOf('.');
+                            return dotIdx >= 0 ? e.QualifiedName.Substring(dotIdx + 1) : e.QualifiedName;
+                        }).ToList()
                     };
                 }).ToList();
 
@@ -975,8 +1006,11 @@ namespace Terminal.Spmcp.Tools
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    projectDirectory = _model.Root?.GetModules()?.FirstOrDefault()?.Name != null ? "Available" : "Unknown",
-                    totals = totals,
+                    projectName = projectInfo.Name,
+                    projectDirectory = projectInfo.DirectoryPath,
+                    mendixVersion = projectInfo.MendixVersion,
+                    appId = projectInfo.AppId,
+                    totals,
                     modules = moduleInfos
                 }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true });
             }
@@ -1001,25 +1035,21 @@ namespace Terminal.Spmcp.Tools
 
                 if (string.IsNullOrWhiteSpace(moduleName))
                 {
-                    // Return domain models from ALL non-AppStore modules
-                    var allModules = Utils.Utils.GetAllNonAppStoreModules(_model).ToList();
-                    if (!allModules.Any())
+                    // Return domain models from ALL modules
+                    var allModuleIds = HostServices.Model.ListModules();
+                    if (!allModuleIds.Any())
                     {
                         return JsonSerializer.Serialize(new { error = "No modules found" });
                     }
 
-                    var allModuleData = allModules.Select(mod => new
+                    var allModuleData = allModuleIds.Select(moduleId =>
                     {
-                        ModuleName = mod.Name,
-                        Entities = mod.DomainModel?.GetEntities().Select(entity => new
+                        var entityRefs = HostServices.DomainModel.ListEntities(moduleId);
+                        return new
                         {
-                            Name = entity.Name,
-                            QualifiedName = $"{mod.Name}.{entity.Name}",
-                            Generalization = GetGeneralizationInfo(entity),
-                            Attributes = GetEntityAttributes(entity),
-                            Associations = GetEntityAssociations(entity, mod),
-                            EventHandlers = GetEventHandlerInfo(entity)
-                        }).ToList()
+                            ModuleName = moduleId.Name,
+                            Entities = entityRefs.Select(entityRef => BuildEntitySummary(entityRef)).ToList()
+                        };
                     }).ToList();
 
                     return JsonSerializer.Serialize(new
@@ -1031,27 +1061,19 @@ namespace Terminal.Spmcp.Tools
                     }, options);
                 }
 
-                var module = Utils.Utils.GetModuleByName(_model, moduleName);
-                if (module == null)
+                var moduleIdOpt = HostServices.Model.GetModuleByName(moduleName);
+                if (moduleIdOpt == null)
                 {
                     return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" });
                 }
 
-                var domainModel = module.DomainModel;
-                var entities = domainModel.GetEntities().ToList();
+                var targetModuleId = moduleIdOpt.Value;
+                var entities = HostServices.DomainModel.ListEntities(targetModuleId);
 
                 var modelData = new
                 {
-                    ModuleName = module.Name,
-                    Entities = entities.Select(entity => new
-                    {
-                        Name = entity.Name,
-                        QualifiedName = $"{module.Name}.{entity.Name}",
-                        Generalization = GetGeneralizationInfo(entity),
-                        Attributes = GetEntityAttributes(entity),
-                        Associations = GetEntityAssociations(entity, module),
-                        EventHandlers = GetEventHandlerInfo(entity)
-                    }).ToList()
+                    ModuleName = targetModuleId.Name,
+                    Entities = entities.Select(entityRef => BuildEntitySummary(entityRef)).ToList()
                 };
 
                 var result = new
@@ -1069,6 +1091,45 @@ namespace Terminal.Spmcp.Tools
                 _logger.LogError(ex, "Error reading domain model");
                 return JsonSerializer.Serialize(new { error = "Failed to read domain model", details = ex.Message });
             }
+        }
+
+        /// <summary>
+        /// Reads an EntityRef via HostServices.DomainModel.ReadEntity and projects it to
+        /// the anonymous summary shape used by ReadDomainModel.
+        /// </summary>
+        private object BuildEntitySummary(EntityRef entityRef)
+        {
+            var shape = HostServices.DomainModel.ReadEntity(entityRef);
+            var dotIdx = entityRef.QualifiedName.IndexOf('.');
+            var simpleName = dotIdx >= 0 ? entityRef.QualifiedName.Substring(dotIdx + 1) : entityRef.QualifiedName;
+
+            return new
+            {
+                Name = simpleName,
+                QualifiedName = entityRef.QualifiedName,
+                Kind = shape.Kind.ToString(),
+                Generalization = shape.GeneralizationQualifiedName != null
+                    ? (object)new { hasGeneralization = true, parent = shape.GeneralizationQualifiedName }
+                    : null,
+                Documentation = shape.Documentation,
+                Attributes = shape.Attributes.Select(a => new
+                {
+                    name = a.Name,
+                    type = a.Kind.ToString(),
+                    note = "MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef"
+                }).ToList(),
+                Associations = shape.OutgoingAssociations.Concat(shape.IncomingAssociations)
+                    .Select(a => new
+                    {
+                        name = a.Name,
+                        parent = a.ParentEntityQualifiedName,
+                        child = a.ChildEntityQualifiedName,
+                        type = a.Type == AssociationType.ReferenceSet ? "many-to-many" : "one-to-many"
+                    }).ToList(),
+                EventHandlers = shape.EventHandlerDescriptions.Count > 0
+                    ? shape.EventHandlerDescriptions
+                    : null
+            };
         }
 
         public async Task<string> CreateEntity(JsonObject parameters)
@@ -2030,7 +2091,8 @@ namespace Terminal.Spmcp.Tools
         }
 
         /// <summary>
-        /// Get dynamically available entity types based on template availability
+        /// Get dynamically available entity types based on template availability.
+        /// Checks for template entities in the AIExtension module via HostServices.DomainModel.
         /// </summary>
         /// <returns>List of supported entity types in current project</returns>
         public List<string> GetAvailableEntityTypes()
@@ -2042,45 +2104,39 @@ namespace Terminal.Spmcp.Tools
 
             try
             {
-                // Check for each template and add to available types if found
-                if (FindNonPersistentTemplate() != null)
+                var aiExtensionModuleId = HostServices.Model.GetModuleByName("AIExtension");
+                if (aiExtensionModuleId != null)
                 {
+                    var entityRefs = HostServices.DomainModel.ListEntities(aiExtensionModuleId.Value);
+                    var entityNames = new HashSet<string>(
+                        entityRefs.Select(e =>
+                        {
+                            var dotIdx = e.QualifiedName.IndexOf('.');
+                            return dotIdx >= 0 ? e.QualifiedName.Substring(dotIdx + 1) : e.QualifiedName;
+                        }),
+                        StringComparer.OrdinalIgnoreCase);
+
+                    if (entityNames.Contains("NPE") || entityNames.Contains("non-persistent"))
+                        availableTypes.Add("non-persistent");
+                    if (entityNames.Contains("FileDocument"))
+                        availableTypes.Add("filedocument");
+                    if (entityNames.Contains("Image"))
+                        availableTypes.Add("image");
+                    if (entityNames.Contains("StoreCreatedDate"))
+                        availableTypes.Add("storecreateddate");
+                    if (entityNames.Contains("StoreChangeDate"))
+                        availableTypes.Add("storechangedate");
+                    if (entityNames.Contains("StoreCreatedChangeDate"))
+                        availableTypes.Add("storecreatedchangedate");
+                    if (entityNames.Contains("StoreOwner"))
+                        availableTypes.Add("storeowner");
+                    if (entityNames.Contains("StoreChangeBy"))
+                        availableTypes.Add("storechangeby");
+                }
+                else
+                {
+                    // AIExtension module absent — non-persistent entities are generally always available
                     availableTypes.Add("non-persistent");
-                }
-
-                if (FindFileDocumentTemplate() != null)
-                {
-                    availableTypes.Add("filedocument");
-                }
-
-                if (FindImageTemplate() != null)
-                {
-                    availableTypes.Add("image");
-                }
-
-                if (FindStoreCreatedDateTemplate() != null)
-                {
-                    availableTypes.Add("storecreateddate");
-                }
-
-                if (FindStoreChangeDateTemplate() != null)
-                {
-                    availableTypes.Add("storechangedate");
-                }
-
-                if (FindStoreCreatedChangeDateTemplate() != null)
-                {
-                    availableTypes.Add("storecreatedchangedate");
-                }
-
-                if (FindStoreOwnerTemplate() != null)
-                {
-                    availableTypes.Add("storeowner");
-                }
-
-                if (FindStoreChangeByTemplate() != null)
-                {
-                    availableTypes.Add("storechangeby");
                 }
 
                 _logger.LogInformation($"Available entity types: {string.Join(", ", availableTypes)}");
@@ -2088,11 +2144,8 @@ namespace Terminal.Spmcp.Tools
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error checking template availability, falling back to basic types");
-                // If there's an error checking templates, provide basic types
                 if (!availableTypes.Contains("non-persistent"))
-                {
-                    availableTypes.Add("non-persistent"); // Usually available
-                }
+                    availableTypes.Add("non-persistent");
             }
 
             return availableTypes;
@@ -4740,109 +4793,43 @@ namespace Terminal.Spmcp.Tools
                 var moduleName = parameters["module_name"]?.ToString();
                 var direction = parameters["direction"]?.ToString()?.ToLowerInvariant() ?? "both";
 
-                // Build entity-to-module lookup and collect all associations using entity-level API
-                var entityModuleMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                var seenAssociations = new HashSet<string>(); // Deduplicate by association name
-                var allAssociations = new List<(IAssociation assoc, string parentEntity, string parentModule, string childEntity, string childModule)>();
-
-                var modules = _model.Root.GetModules();
-                foreach (var mod in modules)
+                // Resolve qualified names for the entity filter arguments
+                string? entityQn = null;
+                if (!string.IsNullOrEmpty(entityName))
                 {
-                    foreach (var entity in mod.DomainModel.GetEntities())
-                        entityModuleMap[entity.Name] = mod.Name;
-                }
-
-                // Collect all associations via entity.GetAssociations(Both)
-                foreach (var mod in modules)
-                {
-                    foreach (var entity in mod.DomainModel.GetEntities())
-                    {
-                        foreach (var ea in entity.GetAssociations(AssociationDirection.Both))
-                        {
-                            var assocName = ea.Association.Name;
-                            if (seenAssociations.Contains(assocName)) continue;
-                            seenAssociations.Add(assocName);
-
-                            allAssociations.Add((
-                                ea.Association,
-                                ea.Parent?.Name ?? "",
-                                entityModuleMap.GetValueOrDefault(ea.Parent?.Name ?? "", ""),
-                                ea.Child?.Name ?? "",
-                                entityModuleMap.GetValueOrDefault(ea.Child?.Name ?? "", "")
-                            ));
-                        }
-                    }
-                }
-
-                // Apply filters
-                IEnumerable<(IAssociation assoc, string parentEntity, string parentModule, string childEntity, string childModule)> filtered = allAssociations;
-
-                if (!string.IsNullOrEmpty(entityName) && !string.IsNullOrEmpty(secondEntity))
-                {
-                    // Find associations between two specific entities
-                    var (e1, _) = Utils.Utils.FindEntityAcrossModules(_model, entityName, moduleName);
-                    if (e1 == null)
+                    entityQn = ResolveEntityQualifiedName(entityName, moduleName);
+                    if (entityQn == null)
                         return JsonSerializer.Serialize(new { error = $"Entity '{entityName}' not found" });
-                    var (e2, _) = Utils.Utils.FindEntityAcrossModules(_model, secondEntity, null);
-                    if (e2 == null)
+                }
+
+                string? secondEntityQn = null;
+                if (!string.IsNullOrEmpty(secondEntity))
+                {
+                    secondEntityQn = ResolveEntityQualifiedName(secondEntity, null);
+                    if (secondEntityQn == null)
                         return JsonSerializer.Serialize(new { error = $"Entity '{secondEntity}' not found" });
-
-                    filtered = filtered.Where(a =>
-                        (a.parentEntity.Equals(entityName, StringComparison.OrdinalIgnoreCase) && a.childEntity.Equals(secondEntity, StringComparison.OrdinalIgnoreCase)) ||
-                        (a.parentEntity.Equals(secondEntity, StringComparison.OrdinalIgnoreCase) && a.childEntity.Equals(entityName, StringComparison.OrdinalIgnoreCase)));
-                }
-                else if (!string.IsNullOrEmpty(entityName))
-                {
-                    // Find associations of a specific entity
-                    var (e, _) = Utils.Utils.FindEntityAcrossModules(_model, entityName, moduleName);
-                    if (e == null)
-                        return JsonSerializer.Serialize(new { error = $"Entity '{entityName}' not found" });
-
-                    filtered = direction switch
-                    {
-                        "parent" => filtered.Where(a => a.parentEntity.Equals(entityName, StringComparison.OrdinalIgnoreCase)),
-                        "child" => filtered.Where(a => a.childEntity.Equals(entityName, StringComparison.OrdinalIgnoreCase)),
-                        _ => filtered.Where(a =>
-                            a.parentEntity.Equals(entityName, StringComparison.OrdinalIgnoreCase) ||
-                            a.childEntity.Equals(entityName, StringComparison.OrdinalIgnoreCase))
-                    };
-                }
-                else if (!string.IsNullOrEmpty(moduleName))
-                {
-                    // Filter by module
-                    var module = modules.FirstOrDefault(m => m.Name.Equals(moduleName, StringComparison.OrdinalIgnoreCase));
-                    if (module == null)
-                        return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" });
-
-                    filtered = filtered.Where(a =>
-                        a.parentModule.Equals(moduleName, StringComparison.OrdinalIgnoreCase) ||
-                        a.childModule.Equals(moduleName, StringComparison.OrdinalIgnoreCase));
                 }
 
-                var associations = filtered.Select(a => new
+                // Delegate to IDomainModelHost.QueryAssociations — it handles all filter combinations
+                var items = HostServices.DomainModel.QueryAssociations(
+                    entityQualifiedName: entityQn,
+                    secondEntityQualifiedName: secondEntityQn,
+                    moduleName: moduleName,
+                    direction: direction);
+
+                var associations = items.Select(a => new
                 {
-                    name = a.assoc.Name,
-                    parent = a.parentEntity,
-                    parentModule = a.parentModule,
-                    child = a.childEntity,
-                    childModule = a.childModule,
-                    type = a.assoc.Type.ToString(),
-                    owner = a.assoc.Owner.ToString(),
-                    parentDeleteBehavior = FormatDeletingBehavior(a.assoc.ParentDeleteBehavior),
-                    childDeleteBehavior = FormatDeletingBehavior(a.assoc.ChildDeleteBehavior)
+                    name = a.Name,
+                    parent = a.ParentEntityQualifiedName,
+                    child = a.ChildEntityQualifiedName,
+                    type = a.Type == AssociationType.ReferenceSet ? "many-to-many" : "one-to-many"
                 }).ToList();
 
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
                     count = associations.Count,
-                    query = new
-                    {
-                        entityName,
-                        secondEntity,
-                        moduleName,
-                        direction
-                    },
+                    query = new { entityName, secondEntity, moduleName, direction },
                     associations
                 });
             }
@@ -4851,6 +4838,41 @@ namespace Terminal.Spmcp.Tools
                 _logger.LogError(ex, "Error querying associations");
                 return JsonSerializer.Serialize(new { error = ex.Message });
             }
+        }
+
+        /// <summary>
+        /// Resolves a simple entity name (or already-qualified name) to its fully qualified name
+        /// by searching across all modules (optionally scoped to a specific module).
+        /// Returns null if not found.
+        /// </summary>
+        private string? ResolveEntityQualifiedName(string entityName, string? preferredModule)
+        {
+            // Already qualified?
+            if (entityName.Contains('.'))
+                return entityName;
+
+            var allModuleIds = HostServices.Model.ListModules();
+            if (!string.IsNullOrEmpty(preferredModule))
+            {
+                var preferred = HostServices.Model.GetModuleByName(preferredModule);
+                if (preferred != null)
+                {
+                    var hit = HostServices.DomainModel.ListEntities(preferred.Value)
+                        .FirstOrDefault(e => e.QualifiedName.EndsWith("." + entityName, StringComparison.OrdinalIgnoreCase));
+                    if (hit.QualifiedName != null)
+                        return hit.QualifiedName;
+                }
+            }
+
+            foreach (var moduleId in allModuleIds)
+            {
+                var hit = HostServices.DomainModel.ListEntities(moduleId)
+                    .FirstOrDefault(e => e.QualifiedName.EndsWith("." + entityName, StringComparison.OrdinalIgnoreCase));
+                if (hit.QualifiedName != null)
+                    return hit.QualifiedName;
+            }
+
+            return null;
         }
 
         #endregion
