@@ -113,3 +113,54 @@ Checked both `mendix.studiopro.extensionsapi/10.21.1` and `11.6.2` XML docs.
 - `IPageGenerationService.GenerateOverviewPages` — returns `IEnumerable<IPage>` (not `IReadOnlyList`); `.ToList()` required.
 - Navigation read-back (`ListProfiles`, `ReadProfile`) — `INavigationManagerService` exposes only `PopulateWebNavigationWith`. No read API for profiles or existing items. `ListProfiles()` returns empty; `ReadProfile()` returns null. `RemoveItem`/`SetItemIcon` are no-ops. `SetItemTarget` re-adds via PopulateWebNavigationWith (appends, does not replace).
 - `IMicroflow.SetAccessLevel` / `AllowedModuleRoles` — not accessible via typed API. `SetAccessLevel()` is a no-op; security lives in a separate `IModuleSecurity` untyped model unit.
+
+## W2 smoke results
+
+Date: 2026-05-13 (Task 35; pre-tag state at HEAD `f1858c0`).
+
+### Step 1 + 2 — Clean build + tests (controller-executed)
+
+| Step | Command | Result |
+|---|---|---|
+| Clean build | `git clean -fdx -- src/*/bin src/*/obj tests/*/bin tests/*/obj` + `dotnet build Terminal.sln` | 0 errors, 20 warnings (all pre-existing CS0414 / CS8602 / CS8604; no new ones from W2 work). Build time ~6 s. |
+| Full tests | `dotnet test Terminal.sln --no-build` | **272 total** passing: 242 Terminal.Tests + 27 Concord.Core.Tests, 3 Maia-live skipped (no real Studio Pro on this build agent), 0 failed. Up from 244 in 5.0.0-alpha.1. |
+
+### Step 3 + 4 — Studio Pro UI smoke (NEO REQUIRED)
+
+Compile-time + unit-test green proves API-shape parity. The runtime parity check (pane opens; WebView renders; `concord-mcp` responds; one tool per family invokes successfully on a real Studio Pro install) requires Neo's hands.
+
+**Suggested matrix:**
+
+| Version | Pane opens | `/health` 200 | `tools/list` count | `save_all` | Concord-specific tool | Notes |
+|---|---|---|---|---|---|---|
+| 11.10.x | ☐ | ☐ | ~37 (curated allowlist) | ☐ | `delete_model_element` | |
+| 10.24.13 | ☐ | ☐ | ~87 (full SPMCP) | ☐ | `create_entity` | |
+| 11.10.x + Claude Code | ☐ | n/a | n/a | ☐ | `claude mcp call concord-mcp save_all` | |
+| 11.10.x + Codex | ☐ | n/a | n/a | ☐ | UI tool via Codex | |
+| 11.10.x + Copilot CLI | ☐ | n/a | n/a | ☐ | UI tool via Copilot | |
+
+**Setup:**
+- Set `MendixDeployTarget11x` to a 11.10 testbed and `MendixDeployTarget10x` to a 10.24.13 testbed in `Directory.Build.props`.
+- `dotnet build Terminal.sln` populates `<project>/extensions/Concord11x/` and `<project>/extensions/Concord10x/` respectively.
+- Open Studio Pro → Extensions → Concord → Open Pane.
+- The 10.24.13 install is the bigger unknown: this is the FIRST runtime test of the Host10x UI port after Phase 6's compile-time-only validation.
+
+**If anything diverges,** capture the divergence in a fresh handoff (`docs/superpowers/handoffs/2026-05-13-after-w2-smoke.md`) and roll the finding into the alpha.3 backlog. Don't tag until smoke is clean.
+
+### Step 5 — Capture findings (this section)
+
+Findings recorded as the smoke runs. If the matrix above lights up green on both versions, add a one-line "no divergences observed" note here and proceed to Step 6.
+
+### Step 6 — Tag (NEO'S CALL)
+
+```bash
+git tag -a v5.0.0-alpha.2 -m "Concord 5.0.0-alpha.2 — W2 SPMCP merge + Host10x UI port"
+# Pushing is a separate decision:
+# git push origin v5.0.0-alpha.2
+```
+
+**Do not tag until Step 4 (10.24.13 smoke) is green.** Compile-time parity is necessary but not sufficient for the "Studio Pro 10.x feature parity" claim made in the CHANGELOG entry. If 10.24.13 surfaces a runtime divergence, fix in alpha.2 before the tag OR roll the claim to alpha.3 and tag a narrower scope.
+
+### Step 7 — Commit smoke notes
+
+Append this file (already present) on completion. No new commit required for the empty placeholders above; only commit if the smoke results fill in actual rows.
