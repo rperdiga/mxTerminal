@@ -1,11 +1,3 @@
-// Helpers ported from Concord.Host11x.Interop for use in the Host10x Pane layer.
-// These are pure utility types (no Mendix API surface) that support the
-// TerminalPaneViewModel's action-server lifecycle management.
-// They live here rather than in Concord.Host10x/Interop/ so Task 23 (the VM
-// port) is self-contained within Pane/. Task 24 (TerminalPaneExtension port)
-// will reference them from this same namespace.
-
-using System.Net.Sockets;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -15,74 +7,33 @@ using Terminal.Interop;
 namespace Concord.Host10x.Interop;
 
 /// <summary>
-/// Probes the running Mendix app's HTTP port to determine run state.
-/// Mirrors Host11x RunStateProbe — no Mendix API coupling.
-/// </summary>
-internal sealed class RunStateProbe : IRunStateProbe
-{
-    private const int ConnectTimeoutMs = 250;
-
-    private readonly Func<string?> getApplicationRootUrl;
-
-    public RunStateProbe(Func<string?> getApplicationRootUrl)
-    {
-        this.getApplicationRootUrl = getApplicationRootUrl;
-    }
-
-    public string? GetActiveUrl() => getApplicationRootUrl();
-
-    public int? GetActivePort()
-    {
-        var url = getApplicationRootUrl();
-        if (string.IsNullOrWhiteSpace(url)) return null;
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return null;
-        return uri.Port;
-    }
-
-    public async Task<RunState> IsRunningAsync(CancellationToken ct = default)
-    {
-        var port = GetActivePort();
-        if (port is null or <= 0) return RunState.Unknown;
-
-        try
-        {
-            using var client = new TcpClient();
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeoutCts.CancelAfter(ConnectTimeoutMs);
-            await client.ConnectAsync("127.0.0.1", port.Value, timeoutCts.Token);
-            return RunState.Running;
-        }
-        catch (SocketException)
-        {
-            return RunState.Stopped;
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            return RunState.Stopped;
-        }
-        catch
-        {
-            return RunState.Unknown;
-        }
-    }
-}
-
-/// <summary>
 /// Drives Studio Pro's own menu/hotkey handlers from the action bridge so
-/// MCP tools like run_app / stop_app can fire F5 / Shift+F5 without needing
-/// focus on the IDE document tab.
-/// Mirrors Host11x StudioProUiAutomation — no Mendix API coupling.
+/// MCP tools like <c>run_app</c> / <c>stop_app</c> can fire F5 / Shift+F5
+/// without needing focus on the IDE document tab.
+/// <para>
+/// Two backends:
+/// <list type="bullet">
+///   <item><b>Windows</b>: Win32 <c>PostMessage</c> to our own
+///   <c>MainWindowHandle</c> — focus-independent.</item>
+///   <item><b>macOS</b>: <c>osascript</c> driving System Events to
+///   key-code our own process (identified by Unix PID, so the .app's
+///   display name doesn't matter). Requires Accessibility permission for
+///   Studio Pro the first time; a clear failure reason is surfaced when
+///   that's missing.</item>
+/// </list>
+/// </para>
 /// </summary>
-internal sealed class StudioProUiAutomation : IStudioProUiAutomation
+public sealed class StudioProUiAutomation : IStudioProUiAutomation
 {
-    private const uint WM_KEYDOWN    = 0x0100;
-    private const uint WM_KEYUP      = 0x0101;
+    private const uint WM_KEYDOWN = 0x0100;
+    private const uint WM_KEYUP   = 0x0101;
     private const uint WM_SYSKEYDOWN = 0x0104;
     private const uint WM_SYSKEYUP   = 0x0105;
 
+    // Virtual-key codes we use.
     private const ushort VK_SHIFT   = 0x10;
     private const ushort VK_CONTROL = 0x11;
-    private const ushort VK_MENU    = 0x12;
+    private const ushort VK_MENU    = 0x12; // Alt
     private const ushort VK_F1      = 0x70;
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -102,10 +53,10 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
         this.log = log;
     }
 
-    public bool TriggerRun()             => Send(runHotkey);
-    public bool TriggerStop()            => Send(stopHotkey);
-    public bool TriggerRefreshFromDisk() => Send(refreshHotkey);
-    public bool TriggerSaveAll()         => Send("Ctrl+S");
+    public bool TriggerRun()              => Send(runHotkey);
+    public bool TriggerStop()             => Send(stopHotkey);
+    public bool TriggerRefreshFromDisk()  => Send(refreshHotkey);
+    public bool TriggerSaveAll()          => Send("Ctrl+S");
 
     public string? LastFailureReason => lastFailureReason;
 
@@ -135,6 +86,7 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
             return false;
         }
 
+        // Press modifiers (in canonical order: Ctrl, Shift, Alt) then the key, then release in reverse.
         if (modifiers.HasFlag(Modifiers.Ctrl))  PostMessage(hwnd, WM_KEYDOWN, (IntPtr)VK_CONTROL, IntPtr.Zero);
         if (modifiers.HasFlag(Modifiers.Shift)) PostMessage(hwnd, WM_KEYDOWN, (IntPtr)VK_SHIFT,   IntPtr.Zero);
         if (modifiers.HasFlag(Modifiers.Alt))   PostMessage(hwnd, WM_SYSKEYDOWN, (IntPtr)VK_MENU, IntPtr.Zero);
@@ -149,6 +101,33 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
         return true;
     }
 
+    /// <summary>
+    /// Mac backend. Builds a one-shot AppleScript that targets our own
+    /// process (so the .app display name doesn't matter — "Mendix Studio Pro
+    /// 11.10.0 Beta.app" today, something else tomorrow) and runs it via
+    /// <c>/usr/bin/osascript</c>. Failure modes mapped to user-actionable
+    /// reasons:
+    /// <list type="bullet">
+    ///   <item>Accessibility permission missing → AppleEvent code -1719
+    ///   ("not allowed assistive access")</item>
+    ///   <item>osascript binary missing → caught Win32Exception</item>
+    ///   <item>Process lookup failed → script error logged with stderr</item>
+    /// </list>
+    /// Hotkey is parsed via the existing <see cref="TryParse"/> (Win VK
+    /// codes), then mapped to macOS HIToolbox key codes for the AppleScript
+    /// "key code N" form.
+    /// <para>
+    /// Before invoking osascript, we clear the WebView's first-responder
+    /// grip via AppKit's <c>[[NSApp keyWindow] makeFirstResponder:nil]</c>.
+    /// Without this, the xterm.js terminal inside Concord's pane absorbs F5
+    /// (and friends) before Studio Pro's accelerator handler sees them —
+    /// observed as "<c>JS: onData len=5</c>" landing in the log a few ms
+    /// after every "<c>sent F5</c>". Clearing first responder is a no-op for
+    /// non-Concord WebViews, so it's safe to do unconditionally on every
+    /// keystroke send. AppKit must be touched on the main thread; we marshal
+    /// via Eto.Forms's <c>Application.Instance.Invoke</c> when available.
+    /// </para>
+    /// </summary>
     private bool SendMac(string hotkeyText)
     {
         if (!TryParse(hotkeyText, out var modifiers, out var vk))
@@ -164,6 +143,7 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
             return false;
         }
 
+        // Defocus the WebView so xterm.js doesn't swallow the keystroke.
         try
         {
             bool cleared = ClearWebViewFirstResponder();
@@ -171,15 +151,22 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
         }
         catch (Exception ex)
         {
+            // Best-effort — fall through and try the keystroke anyway.
             log?.Warn($"UI automation (Mac): clear-first-responder failed: {ex.GetType().Name}: {ex.Message}");
         }
 
+        // Build "using {control down, shift down, option down}" clause.
         var modParts = new List<string>();
         if (modifiers.HasFlag(Modifiers.Ctrl))  modParts.Add("control down");
         if (modifiers.HasFlag(Modifiers.Shift)) modParts.Add("shift down");
         if (modifiers.HasFlag(Modifiers.Alt))   modParts.Add("option down");
         var usingClause = modParts.Count > 0 ? $" using {{{string.Join(", ", modParts)}}}" : string.Empty;
 
+        // Identify Studio Pro by our own Unix PID. System Events sends the
+        // keystroke to whichever application is frontmost at the time the
+        // statement runs; setting `frontmost` on our own process inside the
+        // same `tell application "System Events"` block makes the subsequent
+        // `key code` land on us.
         int pid = Environment.ProcessId;
         var script = new StringBuilder()
             .AppendLine("tell application \"System Events\"")
@@ -193,9 +180,9 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
         {
             var psi = new ProcessStartInfo("/usr/bin/osascript")
             {
-                RedirectStandardError  = true,
+                RedirectStandardError = true,
                 RedirectStandardOutput = true,
-                UseShellExecute        = false,
+                UseShellExecute = false,
             };
             psi.ArgumentList.Add("-e");
             psi.ArgumentList.Add(script);
@@ -214,6 +201,8 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
             string stderr = proc.StandardError.ReadToEnd().Trim();
             if (proc.ExitCode != 0)
             {
+                // -1719 = "not allowed assistive access" — the canonical signal
+                //         that Accessibility permission has not been granted.
                 if (stderr.Contains("-1719", StringComparison.Ordinal) ||
                     stderr.Contains("not allowed assistive access", StringComparison.OrdinalIgnoreCase))
                 {
@@ -239,7 +228,7 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
         }
         catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 2 /* ENOENT */)
         {
-            lastFailureReason = "macOS keystroke automation requires /usr/bin/osascript, which was not found.";
+            lastFailureReason = "macOS keystroke automation requires /usr/bin/osascript, which was not found. This is a stock macOS binary — if it's missing your install is unusual.";
             log?.Warn($"UI automation (Mac): {lastFailureReason}");
             return false;
         }
@@ -254,6 +243,7 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
     [Flags]
     private enum Modifiers { None = 0, Ctrl = 1, Shift = 2, Alt = 4 }
 
+    /// <summary>Parses "F5", "Shift+F5", "Ctrl+F4", "Ctrl+Shift+F12" into modifiers + VK.</summary>
     private static bool TryParse(string text, out Modifiers modifiers, out ushort vk)
     {
         modifiers = Modifiers.None;
@@ -275,12 +265,14 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
         }
 
         var key = parts[^1];
+        // Function keys: F1-F24
         if (key.Length >= 2 && (key[0] == 'F' || key[0] == 'f') &&
             int.TryParse(key.AsSpan(1), out var n) && n is >= 1 and <= 24)
         {
             vk = (ushort)(VK_F1 + (n - 1));
             return true;
         }
+        // Letter keys: A-Z (VK codes 0x41-0x5A); needed for Ctrl+S etc.
         if (key.Length == 1)
         {
             var c = char.ToUpperInvariant(key[0]);
@@ -289,8 +281,17 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
         return false;
     }
 
+    /// <summary>
+    /// Map a Windows virtual-key code (subset we accept in <see cref="TryParse"/>:
+    /// F1-F12, A-Z) to the macOS HIToolbox key code used by AppleScript's
+    /// <c>key code</c> primitive. Constants from
+    /// <c>/System/Library/Frameworks/Carbon.framework/.../HIToolbox/Events.h</c>.
+    /// Returns false for unmappable inputs (F13+, non-letter keys we don't
+    /// support today).
+    /// </summary>
     private static bool TryWinVkToMacKeyCode(ushort vk, out int mac)
     {
+        // F1-F12
         switch (vk)
         {
             case 0x70: mac = 122; return true; // F1
@@ -306,8 +307,11 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
             case 0x7A: mac = 103; return true; // F11
             case 0x7B: mac = 111; return true; // F12
         }
+        // Letters A-Z (VK 0x41-0x5A) — macOS keycodes are NOT contiguous, so
+        // explicit table.
         if (vk is >= 0x41 and <= 0x5A)
         {
+            // Index by letter: A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z
             int[] letterCodes = { 0, 11, 8, 2, 14, 3, 5, 4, 34, 38, 40, 37, 46, 45, 31, 35, 12, 15, 1, 17, 32, 9, 13, 7, 16, 6 };
             mac = letterCodes[vk - 0x41];
             return true;
@@ -315,6 +319,22 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
         mac = 0;
         return false;
     }
+
+    // ---- AppKit first-responder reset (Mac only) --------------------------
+    //
+    // Concord's pane lives in a WKWebView, which becomes the NSWindow's first
+    // responder when the user clicks into it. From that point on, any
+    // keystroke routed through System Events lands in the WebView (and is
+    // consumed by xterm.js) instead of reaching Studio Pro's main accelerator
+    // handler. We fix this by calling `[[NSApp keyWindow] makeFirstResponder:nil]`
+    // — equivalent to AppKit's "Stop Editing" — right before sending F5.
+    //
+    // Threading: AppKit insists on the main thread. The action HTTP server
+    // runs on the thread pool, so we marshal through Eto.Forms's main-thread
+    // dispatcher (Concord already depends on Eto). If Eto isn't initialized
+    // for some reason, fall through and call directly — undefined behavior in
+    // theory, but tends to work for these read-only NSApp accessors in
+    // practice and the alternative is to skip the defocus entirely.
 
     private static bool ClearWebViewFirstResponder()
     {
@@ -329,6 +349,8 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
 
     private static class MacAppKit
     {
+        // libobjc is part of /usr/lib on every Mac; no path needed for the
+        // dlopen behavior P/Invoke uses internally.
         private const string LibObjc = "/usr/lib/libobjc.A.dylib";
 
         [DllImport(LibObjc)]
@@ -337,12 +359,20 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
         [DllImport(LibObjc)]
         private static extern IntPtr sel_registerName([MarshalAs(UnmanagedType.LPStr)] string name);
 
+        // [obj selector]  → returns id, no extra args
         [DllImport(LibObjc, EntryPoint = "objc_msgSend")]
         private static extern IntPtr objc_msgSend_id(IntPtr receiver, IntPtr selector);
 
+        // [obj selector:nilOrId]  → returns BOOL (1 byte on Darwin), one id arg
         [DllImport(LibObjc, EntryPoint = "objc_msgSend")]
         private static extern byte objc_msgSend_bool_arg(IntPtr receiver, IntPtr selector, IntPtr arg);
 
+        /// <summary>
+        /// Sends <c>[[NSApp keyWindow] makeFirstResponder:nil]</c>. Returns
+        /// <c>true</c> if the call succeeded; <c>false</c> if any of the
+        /// objc lookups failed or no key window exists. Safe to call on
+        /// non-macOS — the DllImport will throw, caller catches.
+        /// </summary>
         public static bool ClearFirstResponderOnKeyWindow()
         {
             var nsAppCls = objc_getClass("NSApplication");
@@ -352,6 +382,8 @@ internal sealed class StudioProUiAutomation : IStudioProUiAutomation
             if (nsApp == IntPtr.Zero) return false;
 
             var win = objc_msgSend_id(nsApp, sel_registerName("keyWindow"));
+            // keyWindow can be nil if the app isn't in front or no window has
+            // key status; fall back to mainWindow (the document-level window).
             if (win == IntPtr.Zero)
                 win = objc_msgSend_id(nsApp, sel_registerName("mainWindow"));
             if (win == IntPtr.Zero) return false;
