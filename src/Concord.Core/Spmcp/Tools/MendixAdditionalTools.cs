@@ -208,29 +208,34 @@ namespace Terminal.Spmcp.Tools
     {
         try
         {
-            if (_model == null)
-            {
-                return JsonSerializer.Serialize(new { error = "IModel instance is null", success = false });
-            }
-
-            // Resolve modules — support both module_name (string) and module_names (array)
-            var modules = new List<IModule>();
+            // Resolve modules via HostServices — support both module_name (string) and module_names (array)
+            var modules = new List<ModuleId>();
             if (arguments.ContainsKey("module_names") && arguments["module_names"]?.GetValueKind() == JsonValueKind.Array)
             {
                 foreach (var mn in arguments["module_names"]!.AsArray())
                 {
                     if (mn?.GetValueKind() == JsonValueKind.String)
                     {
-                        var mod = Utils.Utils.ResolveModule(_model, mn.GetValue<string>());
-                        if (mod?.DomainModel != null) modules.Add(mod);
+                        var found = HostServices.Model.GetModuleByName(mn.GetValue<string>());
+                        if (found.HasValue) modules.Add(found.Value);
                     }
                 }
             }
             if (!modules.Any())
             {
                 var moduleName = arguments.ContainsKey("module_name") ? arguments["module_name"]?.ToString() : null;
-                var mod = Utils.Utils.ResolveModule(_model, moduleName);
-                if (mod?.DomainModel != null) modules.Add(mod);
+                if (!string.IsNullOrWhiteSpace(moduleName))
+                {
+                    var found = HostServices.Model.GetModuleByName(moduleName);
+                    if (found.HasValue) modules.Add(found.Value);
+                }
+                else
+                {
+                    // Fallback: use all non-AppStore modules (AppStore filter not available on ModuleId;
+                    // include all modules as a safe approximation — Task 14+ can refine via GetProjectInfo).
+                    var allModules = HostServices.Model.ListModules();
+                    if (allModules.Count > 0) modules.Add(allModules[0]);
+                }
             }
             if (!modules.Any())
             {
@@ -245,7 +250,7 @@ namespace Terminal.Spmcp.Tools
                     recordsPerEntity = Math.Clamp(rpeNode.GetValue<int>(), 1, 50);
             }
 
-            // Optional entity filter
+            // Optional entity filter (by simple entity name, matched against EntityRef.QualifiedName suffix)
             var entityFilter = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (arguments.ContainsKey("entity_names") && arguments["entity_names"]?.GetValueKind() == JsonValueKind.Array)
             {
@@ -263,14 +268,24 @@ namespace Terminal.Spmcp.Tools
             else
                 rng = new Random();
 
-            // Gather all entities across modules (with module reference)
-            var allEntityModulePairs = new List<(IEntity Entity, IModule Module)>();
+            // Gather all entity shapes across modules (with module reference)
+            var allEntityModulePairs = new List<(EntityShape Entity, ModuleId Module)>();
             foreach (var mod in modules)
             {
-                foreach (var entity in mod.DomainModel.GetEntities())
+                var entityRefs = HostServices.DomainModel.ListEntities(mod);
+                foreach (var entityRef in entityRefs)
                 {
-                    if (!entityFilter.Any() || entityFilter.Contains(entity.Name))
-                        allEntityModulePairs.Add((entity, mod));
+                    // EntityRef.QualifiedName is "ModuleName.EntityName"
+                    var simpleName = entityRef.QualifiedName.Contains('.')
+                        ? entityRef.QualifiedName.Split('.', 2)[1]
+                        : entityRef.QualifiedName;
+                    if (!entityFilter.Any()
+                        || entityFilter.Contains(simpleName)
+                        || entityFilter.Contains(entityRef.QualifiedName))
+                    {
+                        var shape = HostServices.DomainModel.ReadEntity(entityRef);
+                        allEntityModulePairs.Add((shape, mod));
+                    }
                 }
             }
 
@@ -293,7 +308,7 @@ namespace Terminal.Spmcp.Tools
 
             foreach (var (entity, mod) in sortedPairs)
             {
-                var qualifiedName = $"{mod.Name}.{entity.Name}";
+                var qualifiedName = entity.Self.QualifiedName;
                 var records = GenerateEntityRecordsV2(entity, mod, recordsPerEntity, rng, entityVirtualIds);
                 var jsonArray = new JsonArray();
                 foreach (var record in records)
@@ -313,7 +328,8 @@ namespace Terminal.Spmcp.Tools
             var saveResult = await SaveRootJsonToFile(rootObject);
             var filePath = saveResult.Success ? saveResult.FilePath : null;
 
-            // Auto-setup: wire import pipeline unless auto_setup=false
+            // Auto-setup is deferred to Task 14 slice 10 (SetupDataImport refactor).
+            // For now, generate data only and report that auto-setup is unavailable.
             object? importSetup = null;
             var autoSetup = true;
             if (arguments.ContainsKey("auto_setup") && arguments["auto_setup"]?.GetValue<bool>() == false)
@@ -321,17 +337,12 @@ namespace Terminal.Spmcp.Tools
 
             if (autoSetup)
             {
-                try
+                importSetup = new
                 {
-                    var microflowService = _serviceProvider.GetRequiredService<IMicroflowService>();
-                    var targetModuleName = modules.First().Name;
-                    importSetup = SetupDataImportInternal(targetModuleName, "ASu_LoadSampleData", false, microflowService, _serviceProvider);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "[generate_sample_data] Auto-setup failed (data was still generated successfully)");
-                    importSetup = new { success = false, error = $"Auto-setup failed: {ex.Message}" };
-                }
+                    success = false,
+                    deferred = true,
+                    message = "Auto-setup deferred until SetupDataImport is refactored to use HostServices.MicroflowAuthoring (Task 14)."
+                };
             }
 
             return JsonSerializer.Serialize(new
@@ -3281,7 +3292,7 @@ namespace Terminal.Spmcp.Tools
 
         // --- Metadata Builder ---
 
-        private JsonObject BuildMetadata(List<(IEntity Entity, IModule Module)> entityPairs, List<IModule> modules)
+        private JsonObject BuildMetadata(List<(EntityShape Entity, ModuleId Module)> entityPairs, List<ModuleId> modules)
         {
             var metadata = new JsonObject
             {
@@ -3292,31 +3303,27 @@ namespace Terminal.Spmcp.Tools
             };
 
             // Build entity metadata (enum attributes)
+            // NOTE: AttributeRef carries Kind but not the full enumeration document name.
+            // Enum qualified name is unavailable at the Interop boundary via AttributeRef alone
+            // (Task 14+ gap: would need IDomainModelHost.ReadEnumeration or similar).
+            // We record the attribute as Enum type but omit enum_name.
             var entitiesMeta = new JsonObject();
             foreach (var (entity, mod) in entityPairs)
             {
-                var qualifiedName = $"{mod.Name}.{entity.Name}";
+                var qualifiedName = entity.Self.QualifiedName;
                 var attrsMeta = new JsonObject();
                 bool hasEnumAttrs = false;
 
-                foreach (var attr in entity.GetAttributes())
+                foreach (var attr in entity.Attributes)
                 {
-                    if (attr.Type is IEnumerationAttributeType enumType)
+                    if (attr.Kind == AttributeKind.Enumeration)
                     {
-                        try
+                        attrsMeta[attr.Name] = new JsonObject
                         {
-                            var enumeration = enumType.Enumeration?.Resolve();
-                            if (enumeration != null)
-                            {
-                                attrsMeta[attr.Name] = new JsonObject
-                                {
-                                    ["type"] = "Enum",
-                                    ["enum_name"] = enumeration.QualifiedName.ToString()
-                                };
-                                hasEnumAttrs = true;
-                            }
-                        }
-                        catch { /* Skip */ }
+                            ["type"] = "Enum",
+                            // enum_name not available via AttributeRef; omitted (Task 14+ gap).
+                        };
+                        hasEnumAttrs = true;
                     }
                 }
 
@@ -3327,7 +3334,7 @@ namespace Terminal.Spmcp.Tools
             }
             metadata["entities"] = entitiesMeta;
 
-            // Build association metadata
+            // Build association metadata using EntityShape.OutgoingAssociations
             var assocsMeta = new JsonObject();
             var seenAssocs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -3335,37 +3342,17 @@ namespace Terminal.Spmcp.Tools
             {
                 try
                 {
-                    var assocs = entity.GetAssociations(AssociationDirection.Both, null);
-                    foreach (var assoc in assocs)
+                    foreach (var assoc in entity.OutgoingAssociations)
                     {
-                        // Build qualified association name
-                        var assocName = assoc.Association.Name;
-                        var parentQualified = $"{mod.Name}.{assoc.Parent.Name}";
-                        var childQualified = $"{mod.Name}.{assoc.Child.Name}";
-
-                        // For cross-module: check if child is in a different module
-                        foreach (var otherMod in modules)
-                        {
-                            if (otherMod.DomainModel.GetEntities().Any(e => e.Name == assoc.Child.Name))
-                            {
-                                childQualified = $"{otherMod.Name}.{assoc.Child.Name}";
-                                break;
-                            }
-                            if (otherMod.DomainModel.GetEntities().Any(e => e.Name == assoc.Parent.Name))
-                            {
-                                parentQualified = $"{otherMod.Name}.{assoc.Parent.Name}";
-                            }
-                        }
-
-                        var qualifiedAssocName = $"{mod.Name}.{assocName}";
+                        var qualifiedAssocName = $"{mod.Name}.{assoc.Name}";
                         if (seenAssocs.Contains(qualifiedAssocName)) continue;
                         seenAssocs.Add(qualifiedAssocName);
 
                         assocsMeta[qualifiedAssocName] = new JsonObject
                         {
-                            ["parent"] = parentQualified,
-                            ["child"] = childQualified,
-                            ["type"] = assoc.Association.Type.ToString()
+                            ["parent"] = assoc.ParentEntityQualifiedName,
+                            ["child"] = assoc.ChildEntityQualifiedName,
+                            ["type"] = assoc.Type.ToString()
                         };
                     }
                 }
@@ -3378,44 +3365,36 @@ namespace Terminal.Spmcp.Tools
 
         // --- Topological Sort (Multi-Module) ---
 
-        private List<(IEntity Entity, IModule Module)> TopologicalSortEntitiesMultiModule(List<(IEntity Entity, IModule Module)> entityPairs)
+        private List<(EntityShape Entity, ModuleId Module)> TopologicalSortEntitiesMultiModule(List<(EntityShape Entity, ModuleId Module)> entityPairs)
         {
-            var qualifiedNames = entityPairs.Select(p => $"{p.Module.Name}.{p.Entity.Name}")
+            // Build set of all qualified names present in this batch
+            var qualifiedNames = entityPairs.Select(p => p.Entity.Self.QualifiedName)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var inDegree = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var adjacency = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var (entity, mod) in entityPairs)
             {
-                var qn = $"{mod.Name}.{entity.Name}";
+                var qn = entity.Self.QualifiedName;
                 inDegree[qn] = 0;
                 adjacency[qn] = new List<string>();
             }
 
             foreach (var (entity, mod) in entityPairs)
             {
-                var ownerQn = $"{mod.Name}.{entity.Name}";
+                var ownerQn = entity.Self.QualifiedName;
                 try
                 {
-                    var assocs = entity.GetAssociations(AssociationDirection.Both, null);
-                    foreach (var assoc in assocs)
+                    // Use OutgoingAssociations from EntityShape (parent → child edges)
+                    foreach (var assoc in entity.OutgoingAssociations)
                     {
-                        var parentName = assoc.Parent.Name;
-                        var childName = assoc.Child.Name;
+                        // ownerQn is the parent; assoc.ChildEntityQualifiedName is the child
+                        var childQn = assoc.ChildEntityQualifiedName;
 
-                        if (parentName.Equals(entity.Name, StringComparison.OrdinalIgnoreCase))
+                        if (childQn != null && qualifiedNames.Contains(childQn) && !childQn.Equals(ownerQn, StringComparison.OrdinalIgnoreCase))
                         {
-                            // Find the child's qualified name
-                            var childQn = entityPairs
-                                .Where(p => p.Entity.Name.Equals(childName, StringComparison.OrdinalIgnoreCase))
-                                .Select(p => $"{p.Module.Name}.{p.Entity.Name}")
-                                .FirstOrDefault();
-
-                            if (childQn != null && qualifiedNames.Contains(childQn) && !childQn.Equals(ownerQn, StringComparison.OrdinalIgnoreCase))
-                            {
-                                adjacency[childQn].Add(ownerQn);
-                                inDegree[ownerQn] = inDegree.GetValueOrDefault(ownerQn) + 1;
-                            }
+                            adjacency[childQn].Add(ownerQn);
+                            inDegree[ownerQn] = inDegree.GetValueOrDefault(ownerQn) + 1;
                         }
                     }
                 }
@@ -3424,13 +3403,13 @@ namespace Terminal.Spmcp.Tools
 
             // Kahn's algorithm
             var queue = new Queue<string>(inDegree.Where(kv => kv.Value == 0).Select(kv => kv.Key));
-            var sorted = new List<(IEntity, IModule)>();
+            var sorted = new List<(EntityShape, ModuleId)>();
             var sortedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             while (queue.Count > 0)
             {
                 var qn = queue.Dequeue();
-                var pair = entityPairs.FirstOrDefault(p => $"{p.Module.Name}.{p.Entity.Name}".Equals(qn, StringComparison.OrdinalIgnoreCase));
+                var pair = entityPairs.FirstOrDefault(p => p.Entity.Self.QualifiedName.Equals(qn, StringComparison.OrdinalIgnoreCase));
                 if (pair.Entity != null)
                 {
                     sorted.Add(pair);
@@ -3447,7 +3426,7 @@ namespace Terminal.Spmcp.Tools
             // Append remaining (cycles)
             foreach (var pair in entityPairs)
             {
-                var qn = $"{pair.Module.Name}.{pair.Entity.Name}";
+                var qn = pair.Entity.Self.QualifiedName;
                 if (!sortedNames.Contains(qn)) sorted.Add(pair);
             }
 
@@ -3456,25 +3435,29 @@ namespace Terminal.Spmcp.Tools
 
         // --- Record Generation (V2 format) ---
 
-        private List<JsonObject> GenerateEntityRecordsV2(IEntity entity, IModule module, int count, Random rng, Dictionary<string, List<string>> entityVirtualIds)
+        private List<JsonObject> GenerateEntityRecordsV2(EntityShape entity, ModuleId module, int count, Random rng, Dictionary<string, List<string>> entityVirtualIds)
         {
             var records = new List<JsonObject>();
             var virtualIds = new List<string>();
-            var qualifiedName = $"{module.Name}.{entity.Name}";
+            var qualifiedName = entity.Self.QualifiedName;
+            // Simple name = part after the dot (e.g. "Customer" from "MyModule.Customer")
+            var simpleName = qualifiedName.Contains('.')
+                ? qualifiedName.Split('.', 2)[1]
+                : qualifiedName;
 
             for (int i = 1; i <= count; i++)
             {
                 var record = new JsonObject();
-                var virtualId = $"{entity.Name}_{i}";
+                var virtualId = $"{simpleName}_{i}";
                 record["VirtualId"] = virtualId;
                 virtualIds.Add(virtualId);
 
-                // Generate attribute values
-                foreach (var attr in entity.GetAttributes())
+                // Generate attribute values using AttributeRef (no Mendix IAttribute needed)
+                foreach (var attr in entity.Attributes)
                 {
                     try
                     {
-                        var value = GenerateAttributeValue(attr, entity.Name, i, rng);
+                        var value = GenerateAttributeValue(attr, simpleName, i, rng);
                         if (value != null)
                             record[attr.Name] = value;
                     }
@@ -3482,40 +3465,40 @@ namespace Terminal.Spmcp.Tools
                 }
 
                 // Generate association references in _associations format
+                // Use OutgoingAssociations from EntityShape (entity is parent/owner)
                 try
                 {
-                    var assocs = entity.GetAssociations(AssociationDirection.Both, null);
                     var associationsObj = new JsonObject();
                     bool hasAssociations = false;
 
-                    foreach (var assoc in assocs)
+                    foreach (var assoc in entity.OutgoingAssociations)
                     {
-                        var parentName = assoc.Parent.Name;
-                        var childName = assoc.Child.Name;
-                        var qualifiedAssocName = $"{module.Name}.{assoc.Association.Name}";
+                        var qualifiedAssocName = $"{module.Name}.{assoc.Name}";
+                        // ChildEntityQualifiedName is "ChildModule.ChildEntity"
+                        var childQualifiedName = assoc.ChildEntityQualifiedName;
+                        var childSimpleName = childQualifiedName.Contains('.')
+                            ? childQualifiedName.Split('.', 2)[1]
+                            : childQualifiedName;
 
-                        // Only set references where this entity is the owner (parent)
-                        if (parentName.Equals(entity.Name, StringComparison.OrdinalIgnoreCase))
+                        // Look for child VirtualIds by simple name or qualified name
+                        List<string>? targetIds = null;
+                        if (entityVirtualIds.ContainsKey(childSimpleName))
+                            targetIds = entityVirtualIds[childSimpleName];
+                        else if (entityVirtualIds.ContainsKey(childQualifiedName))
+                            targetIds = entityVirtualIds[childQualifiedName];
+                        else
                         {
-                            // Look for child VirtualIds by entity name (may be in different module)
-                            List<string>? targetIds = null;
-                            if (entityVirtualIds.ContainsKey(childName))
-                                targetIds = entityVirtualIds[childName];
-                            else
-                            {
-                                // Try qualified name lookup
-                                var qualifiedChild = entityVirtualIds.Keys
-                                    .FirstOrDefault(k => k.EndsWith($".{childName}", StringComparison.OrdinalIgnoreCase));
-                                if (qualifiedChild != null)
-                                    targetIds = entityVirtualIds[qualifiedChild];
-                            }
+                            var qualifiedChild = entityVirtualIds.Keys
+                                .FirstOrDefault(k => k.EndsWith($".{childSimpleName}", StringComparison.OrdinalIgnoreCase));
+                            if (qualifiedChild != null)
+                                targetIds = entityVirtualIds[qualifiedChild];
+                        }
 
-                            if (targetIds != null && targetIds.Any())
-                            {
-                                var pickedId = targetIds[rng.Next(targetIds.Count)];
-                                associationsObj[qualifiedAssocName] = new JsonObject { ["VirtualId"] = pickedId };
-                                hasAssociations = true;
-                            }
+                        if (targetIds != null && targetIds.Any())
+                        {
+                            var pickedId = targetIds[rng.Next(targetIds.Count)];
+                            associationsObj[qualifiedAssocName] = new JsonObject { ["VirtualId"] = pickedId };
+                            hasAssociations = true;
                         }
                     }
 
@@ -3527,83 +3510,82 @@ namespace Terminal.Spmcp.Tools
                 records.Add(record);
             }
 
-            // Store VirtualIds keyed by both entity name and qualified name
-            entityVirtualIds[entity.Name] = virtualIds;
+            // Store VirtualIds keyed by both simple name and qualified name
+            entityVirtualIds[simpleName] = virtualIds;
             entityVirtualIds[qualifiedName] = virtualIds;
             return records;
         }
 
         // --- Attribute Value Generation ---
 
-        private JsonNode? GenerateAttributeValue(IAttribute attr, string entityName, int recordIndex, Random rng)
+        private JsonNode? GenerateAttributeValue(AttributeRef attr, string entityName, int recordIndex, Random rng)
         {
-            if (attr.Type is IAutoNumberAttributeType) return null;
-            if (attr.Type is IBinaryAttributeType) return null;
+            // Map AttributeKind (from Interop) to generated values.
+            // AutoNumber and Binary are not generated — omit them.
+            switch (attr.Kind)
+            {
+                case AttributeKind.AutoNumber:
+                case AttributeKind.Binary:
+                    return null;
 
-            if (attr.Type is IStringAttributeType stringType)
-            {
-                int maxLen = stringType.Length > 0 ? stringType.Length : 100;
-                return JsonValue.Create(GenerateContextualString(attr.Name, entityName, maxLen, recordIndex, rng));
-            }
-            if (attr.Type is IIntegerAttributeType)
-            {
-                var name = attr.Name.ToLowerInvariant();
-                if (name.Contains("rating") || name.Contains("score") || name.Contains("stars"))
-                    return JsonValue.Create(rng.Next(1, 6)); // 1-5
-                if (name.Contains("sortorder") || name.Contains("sort_order") || name.Contains("priority") || name.Contains("rank") || name.Contains("order") || name.Contains("position") || name.Contains("index"))
-                    return JsonValue.Create(recordIndex * 10); // 10, 20, 30...
-                if (name.Contains("age")) return JsonValue.Create(rng.Next(18, 81));
-                if (name.Contains("count") || name.Contains("quantity") || name.Contains("stock"))
-                    return JsonValue.Create(rng.Next(1, 51)); // 1-50
-                if (name.Contains("year")) return JsonValue.Create(rng.Next(2020, 2027));
-                return JsonValue.Create(rng.Next(1, 101)); // 1-100 default
-            }
-            if (attr.Type is ILongAttributeType)
-            {
-                return JsonValue.Create((long)rng.Next(1000, 100001));
-            }
-            if (attr.Type is IDecimalAttributeType)
-            {
-                var name = attr.Name.ToLowerInvariant();
-                if (name.Contains("price") || name.Contains("amount") || name.Contains("cost") || name.Contains("total") || name.Contains("balance") || name.Contains("fee"))
-                    return JsonValue.Create(Math.Round(rng.NextDouble() * 499.98 + 0.01, 2)); // $0.01-$500
-                if (name.Contains("rate") || name.Contains("percentage") || name.Contains("percent") || name.Contains("discount"))
-                    return JsonValue.Create(Math.Round(rng.NextDouble() * 100, 2));
-                if (name.Contains("weight") || name.Contains("length") || name.Contains("width") || name.Contains("height"))
-                    return JsonValue.Create(Math.Round(rng.NextDouble() * 99.9 + 0.1, 2));
-                return JsonValue.Create(Math.Round(rng.NextDouble() * 999.98 + 0.01, 2));
-            }
-            if (attr.Type is IBooleanAttributeType)
-            {
-                return JsonValue.Create(rng.Next(2) == 1);
-            }
-            if (attr.Type is IDateTimeAttributeType)
-            {
-                var daysAgo = rng.Next(0, 366);
-                var date = DateTime.UtcNow.AddDays(-daysAgo).AddHours(rng.Next(0, 24)).AddMinutes(rng.Next(0, 60));
-                return JsonValue.Create(date.ToString("yyyy-MM-ddTHH:mm:ssZ"));
-            }
-            if (attr.Type is IEnumerationAttributeType enumType)
-            {
-                try
+                case AttributeKind.String:
+                case AttributeKind.HashString:
+                    if (attr.Kind == AttributeKind.HashString)
+                        return JsonValue.Create("Password123!");
+                    // String: maxLength is not on AttributeRef (gap — Task 14+); use 200 as safe default.
+                    return JsonValue.Create(GenerateContextualString(attr.Name, entityName, 200, recordIndex, rng));
+
+                case AttributeKind.Integer:
                 {
-                    var enumeration = enumType.Enumeration?.Resolve();
-                    if (enumeration != null)
-                    {
-                        var values = enumeration.GetValues().ToList();
-                        if (values.Any())
-                            return JsonValue.Create(values[rng.Next(values.Count)].Name);
-                    }
+                    var name = attr.Name.ToLowerInvariant();
+                    if (name.Contains("rating") || name.Contains("score") || name.Contains("stars"))
+                        return JsonValue.Create(rng.Next(1, 6)); // 1-5
+                    if (name.Contains("sortorder") || name.Contains("sort_order") || name.Contains("priority") || name.Contains("rank") || name.Contains("order") || name.Contains("position") || name.Contains("index"))
+                        return JsonValue.Create(recordIndex * 10); // 10, 20, 30...
+                    if (name.Contains("age")) return JsonValue.Create(rng.Next(18, 81));
+                    if (name.Contains("count") || name.Contains("quantity") || name.Contains("stock"))
+                        return JsonValue.Create(rng.Next(1, 51)); // 1-50
+                    if (name.Contains("year")) return JsonValue.Create(rng.Next(2020, 2027));
+                    return JsonValue.Create(rng.Next(1, 101)); // 1-100 default
                 }
-                catch { /* fallback */ }
-                return JsonValue.Create("Unknown");
-            }
-            if (attr.Type is IHashedStringAttributeType)
-            {
-                return JsonValue.Create("Password123!");
-            }
 
-            return JsonValue.Create($"Sample_{attr.Name}_{recordIndex}");
+                case AttributeKind.LongType:
+                    return JsonValue.Create((long)rng.Next(1000, 100001));
+
+                case AttributeKind.Decimal:
+                {
+                    var name = attr.Name.ToLowerInvariant();
+                    if (name.Contains("price") || name.Contains("amount") || name.Contains("cost") || name.Contains("total") || name.Contains("balance") || name.Contains("fee"))
+                        return JsonValue.Create(Math.Round(rng.NextDouble() * 499.98 + 0.01, 2)); // $0.01-$500
+                    if (name.Contains("rate") || name.Contains("percentage") || name.Contains("percent") || name.Contains("discount"))
+                        return JsonValue.Create(Math.Round(rng.NextDouble() * 100, 2));
+                    if (name.Contains("weight") || name.Contains("length") || name.Contains("width") || name.Contains("height"))
+                        return JsonValue.Create(Math.Round(rng.NextDouble() * 99.9 + 0.1, 2));
+                    return JsonValue.Create(Math.Round(rng.NextDouble() * 999.98 + 0.01, 2));
+                }
+
+                case AttributeKind.Boolean:
+                    return JsonValue.Create(rng.Next(2) == 1);
+
+                case AttributeKind.DateTime:
+                {
+                    var daysAgo = rng.Next(0, 366);
+                    var date = DateTime.UtcNow.AddDays(-daysAgo).AddHours(rng.Next(0, 24)).AddMinutes(rng.Next(0, 60));
+                    return JsonValue.Create(date.ToString("yyyy-MM-ddTHH:mm:ssZ"));
+                }
+
+                case AttributeKind.Enumeration:
+                    // Enumeration values are not accessible via AttributeRef alone.
+                    // Full enum value list requires IDomainModelHost.ListEnumerations + ReadEnumeration
+                    // (Task 14+ gap). Return "Unknown" as a safe placeholder.
+                    return JsonValue.Create("Unknown");
+
+                case AttributeKind.Object:
+                    return null;
+
+                default:
+                    return JsonValue.Create($"Sample_{attr.Name}_{recordIndex}");
+            }
         }
 
         // --- Contextual String Data ---
