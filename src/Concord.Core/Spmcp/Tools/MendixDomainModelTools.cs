@@ -80,25 +80,19 @@ namespace Terminal.Spmcp.Tools
                 }
 
                 // Check for duplicate
-                var existing = Utils.Utils.GetModuleByName(_model, moduleName);
+                var existing = HostServices.Model.GetModuleByName(moduleName);
                 if (existing != null)
                 {
                     return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' already exists" });
                 }
 
-                using (var transaction = _model.StartTransaction("create module"))
-                {
-                    var module = _model.Create<IModule>();
-                    module.Name = moduleName;
-                    _model.Root.AddModule(module);
-                    transaction.Commit();
-                }
+                var moduleId = HostServices.DomainModel.CreateModule(moduleName);
 
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
                     message = $"Module '{moduleName}' created successfully",
-                    module = new { name = moduleName, fromAppStore = false, entityCount = 0 }
+                    module = new { name = moduleId.Name, fromAppStore = false, entityCount = 0 }
                 });
             }
             catch (Exception ex)
@@ -680,70 +674,14 @@ namespace Terminal.Spmcp.Tools
 
         #region Phase 5: Constants + Enumerations
 
-        public async Task<string> CreateConstant(JsonObject parameters)
+        public Task<string> CreateConstant(JsonObject parameters)
         {
-            try
+            return Task.FromResult(JsonSerializer.Serialize(new
             {
-                var name = parameters?["name"]?.ToString();
-                var type = parameters?["type"]?.ToString()?.ToLowerInvariant() ?? "string";
-                var defaultValue = parameters?["default_value"]?.ToString() ?? "";
-                var exposedToClient = bool.Parse(parameters?["exposed_to_client"]?.ToString() ?? "false");
-                var moduleName = parameters?["module_name"]?.ToString();
-
-                if (string.IsNullOrEmpty(name))
-                    return JsonSerializer.Serialize(new { error = "Constant name is required" });
-
-                var module = Utils.Utils.ResolveModule(_model, moduleName);
-                if (module == null)
-                    return JsonSerializer.Serialize(new { error = $"Module '{moduleName ?? "default"}' not found" });
-
-                // Check for duplicate
-                var existingConstants = _model.Root.GetModuleDocuments<IConstant>(module);
-                if (existingConstants.Any(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
-                    return JsonSerializer.Serialize(new { error = $"Constant '{name}' already exists in module '{module.Name}'" });
-
-                using var transaction = _model.StartTransaction($"Create constant {name}");
-
-                var constant = _model.Create<IConstant>();
-                constant.Name = name;
-                constant.DefaultValue = defaultValue;
-                constant.ExposedToClient = exposedToClient;
-
-                // Set data type
-                constant.DataType = type switch
-                {
-                    "string" => DataType.String,
-                    "integer" or "int" => DataType.Integer,
-                    "boolean" or "bool" => DataType.Boolean,
-                    "decimal" => DataType.Decimal,
-                    "datetime" => DataType.DateTime,
-                    "float" => DataType.Float,
-                    _ => DataType.String
-                };
-
-                module.AddDocument(constant);
-                transaction.Commit();
-
-                return JsonSerializer.Serialize(new
-                {
-                    success = true,
-                    message = $"Constant '{name}' created in module '{module.Name}'",
-                    constant = new
-                    {
-                        name = constant.Name,
-                        qualifiedName = constant.QualifiedName?.ToString(),
-                        type,
-                        defaultValue,
-                        exposedToClient,
-                        module = module.Name
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating constant");
-                return JsonSerializer.Serialize(new { error = $"Failed to create constant: {ex.Message}" });
-            }
+                success = false,
+                escalation = "manual",
+                message = "CreateConstant: typed IConstant write is not exposed on the Core Interop surface (IModelHost.CreateConstant deferred). Create the constant in Studio Pro directly, or extend IModelHost with a Constant CRUD surface in a follow-up task."
+            }));
         }
 
         public async Task<string> ListConstants(JsonObject parameters)
@@ -825,24 +763,25 @@ namespace Terminal.Spmcp.Tools
                 if (valuesArray == null || valuesArray.Count == 0)
                     return JsonSerializer.Serialize(new { error = "At least one value is required for enumeration" });
 
-                var module = Utils.Utils.ResolveModule(_model, moduleName);
-                if (module == null)
+                // Resolve module name
+                if (string.IsNullOrWhiteSpace(moduleName))
                 {
-                    var available = Utils.Utils.ListUserModules(_model);
-                    return JsonSerializer.Serialize(new { error = $"Module '{moduleName ?? "default"}' not found. Available user modules: {available}" });
+                    var allModules = HostServices.Model.ListModules();
+                    if (!allModules.Any())
+                        return JsonSerializer.Serialize(new { error = "No modules found in the project" });
+                    moduleName = allModules.First().Name;
+                }
+                else
+                {
+                    var mid = HostServices.Model.GetModuleByName(moduleName);
+                    if (mid == null)
+                        return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" });
                 }
 
-                // Check for duplicate
-                var existingEnums = _model.Root.GetModuleDocuments<IEnumeration>(module);
-                if (existingEnums.Any(e => e.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
-                    return JsonSerializer.Serialize(new { error = $"Enumeration '{name}' already exists in module '{module.Name}'" });
-
-                using var transaction = _model.StartTransaction($"Create enumeration {name}");
-
-                var enumeration = _model.Create<IEnumeration>();
-                enumeration.Name = name;
-
+                // Build enumeration value specs
+                var valueSpecs = new List<EnumerationValueSpec>();
                 var createdValues = new List<object>();
+
                 foreach (var valueNode in valuesArray)
                 {
                     string? valueName = null;
@@ -860,29 +799,24 @@ namespace Terminal.Spmcp.Tools
 
                     if (string.IsNullOrEmpty(valueName)) continue;
 
-                    var enumValue = _model.Create<IEnumerationValue>();
-                    enumValue.Name = valueName;
-
-                    var captionText = _model.Create<IText>();
-                    captionText.AddOrUpdateTranslation("en_US", caption ?? valueName);
-                    enumValue.Caption = captionText;
-
-                    enumeration.AddValue(enumValue);
+                    valueSpecs.Add(new EnumerationValueSpec(valueName, caption));
                     createdValues.Add(new { name = valueName, caption = caption ?? valueName });
                 }
 
-                module.AddDocument(enumeration);
-                transaction.Commit();
+                if (valueSpecs.Count == 0)
+                    return JsonSerializer.Serialize(new { error = "No valid enumeration values provided" });
+
+                var enumRef = HostServices.DomainModel.CreateEnumeration(moduleName, name, valueSpecs);
 
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    message = $"Enumeration '{name}' created with {createdValues.Count} values in module '{module.Name}'",
+                    message = $"Enumeration '{name}' created with {createdValues.Count} values in module '{moduleName}'",
                     enumeration = new
                     {
-                        name = enumeration.Name,
-                        qualifiedName = enumeration.QualifiedName?.ToString(),
-                        module = module.Name,
+                        name,
+                        qualifiedName = enumRef.QualifiedName,
+                        module = moduleName,
                         values = createdValues
                     }
                 });
@@ -1136,101 +1070,74 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                using (var transaction = _model.StartTransaction("create entity"))
+                var entityName = parameters["entity_name"]?.ToString();
+                if (string.IsNullOrEmpty(entityName))
+                    return JsonSerializer.Serialize(new { error = "Entity name is required" });
+
+                var moduleName = parameters["module_name"]?.ToString();
+
+                // Resolve module
+                ModuleId moduleId;
+                if (!string.IsNullOrWhiteSpace(moduleName))
                 {
-                    var entityName = parameters["entity_name"]?.ToString();
-                    var attributesArray = parameters["attributes"]?.AsArray();
-
-                    // Extract persistable parameter (default to true for backward compatibility)
-                    bool persistable = true;
-                    if (parameters.ContainsKey("persistable"))
-                    {
-                        if (parameters["persistable"]?.AsValue().TryGetValue<bool>(out var persistableValue) == true)
-                        {
-                            persistable = persistableValue;
-                        }
-                    }
-
-                    // Extract entityType parameter (default to "persistent")
-                    string entityType = "persistent";
-                    if (parameters.ContainsKey("entityType"))
-                    {
-                        entityType = parameters["entityType"]?.ToString() ?? "persistent";
-                    }
-                    // Handle backward compatibility: if persistable is false, use non-persistent
-                    else if (!persistable)
-                    {
-                        entityType = "non-persistent";
-                    }                    if (string.IsNullOrEmpty(entityName))
-                    {
-                        return JsonSerializer.Serialize(new { error = "Entity name is required" });
-                    }
-
-                    var moduleName = parameters["module_name"]?.ToString();
-                    var module = Utils.Utils.ResolveModule(_model, moduleName);
-                    if (module?.DomainModel == null)
-                    {
-                        return JsonSerializer.Serialize(new { error = string.IsNullOrWhiteSpace(moduleName) ? "No domain model found" : $"Module '{moduleName}' not found" });
-                    }
-
-                    // Check if entity already exists
-                    var existingEntity = module.DomainModel.GetEntities()
-                        .FirstOrDefault(e => e.Name.Equals(entityName, StringComparison.OrdinalIgnoreCase));
-
-                    if (existingEntity != null)
-                    {
-                        return JsonSerializer.Serialize(new { error = $"Entity '{entityName}' already exists" });
-                    }
-
-                    IEntity mxEntity;
-                    string displayEntityType = entityType;
-
-                    if (entityType != "persistent")
-                    {
-                        // Use template-based approach for special entity types
-                        mxEntity = CreateEntityFromTemplate(module, entityName, attributesArray, entityType);
-                        if (mxEntity == null)
-                        {
-                            return JsonSerializer.Serialize(new 
-                            { 
-                                error = $"Failed to create {entityType} entity. AIExtension.{GetTemplateName(entityType)} template not found or invalid.",
-                                details = $"Make sure the AIExtension module exists with a {GetTemplateName(entityType)} entity properly configured."
-                            });
-                        }
-                    }
-                    else
-                    {
-                        // Create regular persistent entity
-                        mxEntity = CreateEntityFromTemplate(module, entityName, attributesArray, "persistent");
-                        if (mxEntity == null)
-                        {
-                            return JsonSerializer.Serialize(new 
-                            { 
-                                error = "Failed to create persistent entity.",
-                                details = "Error occurred while creating the entity."
-                            });
-                        }
-                    }
-
-                    transaction.Commit();
-
-                    return JsonSerializer.Serialize(new 
-                    { 
-                        success = true, 
-                        message = $"Entity '{entityName}' created successfully as {displayEntityType}",
-                        entity = new
-                        {
-                            name = mxEntity.Name,
-                            persistable = persistable,
-                            entityType = entityType,
-                            attributes = mxEntity.GetAttributes().Select(a => new
-                            {
-                                name = a.Name,
-                                type = a.Type?.GetType().Name ?? "Unknown"
-                            }).ToArray()
-                        }
-                    });
+                    var mid = HostServices.Model.GetModuleByName(moduleName);
+                    if (mid == null)
+                        return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" });
+                    moduleId = mid.Value;
                 }
+                else
+                {
+                    var allModules = HostServices.Model.ListModules();
+                    if (!allModules.Any())
+                        return JsonSerializer.Serialize(new { error = "No modules found in the project" });
+                    moduleId = allModules.First();
+                }
+
+                // Extract entityType / persistable
+                bool persistable = true;
+                if (parameters.ContainsKey("persistable"))
+                    parameters["persistable"]?.AsValue().TryGetValue<bool>(out persistable);
+
+                string entityType = "persistent";
+                if (parameters.ContainsKey("entityType"))
+                    entityType = parameters["entityType"]?.ToString() ?? "persistent";
+                else if (!persistable)
+                    entityType = "non-persistent";
+
+                var kind = entityType.Equals("non-persistent", StringComparison.OrdinalIgnoreCase)
+                    ? EntityKind.NonPersistent
+                    : EntityKind.Persistent;
+
+                // Build attribute specs from JSON
+                var attributeSpecs = BuildAttributeSpecs(parameters["attributes"]?.AsArray());
+
+                var generalization = parameters["generalization"]?.ToString();
+                var documentation = parameters["documentation"]?.ToString();
+
+                var request = new CreateEntityRequest(
+                    ModuleName: moduleId.Name,
+                    EntityName: entityName,
+                    Kind: kind,
+                    Generalization: generalization,
+                    Attributes: attributeSpecs,
+                    Documentation: documentation);
+
+                var entityRef = HostServices.DomainModel.CreateEntity(request);
+
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    message = $"Entity '{entityName}' created successfully as {entityType}",
+                    entity = new
+                    {
+                        name = entityName,
+                        qualifiedName = entityRef.QualifiedName,
+                        persistable,
+                        entityType,
+                        attributes = attributeSpecs?.Select(a => new { name = a.Name, type = a.Kind.ToString() }).ToArray()
+                            ?? Array.Empty<object>()
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -1244,106 +1151,89 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                using (var transaction = _model.StartTransaction("create association"))
+                var name = Utils.Utils.GetParam(parameters, "name", "association_name", "associationName");
+                var parent = Utils.Utils.GetParam(parameters, "parent", "parent_entity", "parentEntity", "from_entity");
+                var child = Utils.Utils.GetParam(parameters, "child", "child_entity", "childEntity", "to_entity");
+                var type = parameters["type"]?.ToString() ?? "one-to-many";
+
+                _logger.LogInformation($"CreateAssociation called with: name='{name}', parent='{parent}', child='{child}', type='{type}'");
+
+                if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(child))
                 {
-                    var name = Utils.Utils.GetParam(parameters, "name", "association_name", "associationName");
-                    var parent = Utils.Utils.GetParam(parameters, "parent", "parent_entity", "parentEntity", "from_entity");
-                    var child = Utils.Utils.GetParam(parameters, "child", "child_entity", "childEntity", "to_entity");
-                    var type = parameters["type"]?.ToString() ?? "one-to-many";
-
-                    // Add debugging to understand what parameters are being passed
-                    _logger.LogInformation($"CreateAssociation called with: name='{name}', parent='{parent}', child='{child}', type='{type}'");
-                    _logger.LogInformation($"IMPORTANT: In typical business terms, parent='{parent}' should be the 'one' side, child='{child}' should be the 'many' side");
-                    _logger.LogInformation($"For example: Customer (parent) has many Orders (child) -> 1 Customer : N Orders");
-
-                    if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(child))
-                    {
-                        return JsonSerializer.Serialize(new { 
-                            error = "Missing required parameters for association creation",
-                            message = "To create an association, you must provide: name, parent, and child parameters",
-                            required_parameters = new {
-                                name = new { type = "string", description = "Name of the association (e.g., 'Customer_Orders')", required = true },
-                                parent = new { type = "string", description = "Name of the parent entity (e.g., 'Customer')", required = true },
-                                child = new { type = "string", description = "Name of the child entity (e.g., 'Order')", required = true },
-                                type = new { type = "string", description = "Type of association ('one-to-many' or 'many-to-many')", required = false, @default = "one-to-many" }
-                            },
-                            example_usage = new {
-                                tool_name = "create_association",
-                                parameters = new {
-                                    name = "Customer_Orders",
-                                    parent = "Customer", 
-                                    child = "Order",
-                                    type = "one-to-many"
-                                }
-                            },
-                            available_entities = new string[] { "Customer", "Order" },
-                            guidance = "Make sure both parent and child entities exist before creating an association. Use the entity names exactly as they appear in the domain model."
-                        });
-                    }
-
-                    // Cross-module support: resolve entities from specified or any module
-                    var parentModuleName = parameters["parent_module"]?.ToString();
-                    var childModuleName = parameters["child_module"]?.ToString();
-                    var defaultModuleName = parameters["module_name"]?.ToString();
-                    parentModuleName ??= defaultModuleName;
-                    childModuleName ??= defaultModuleName;
-
-                    var (parentEntity, parentModuleResolved) = Utils.Utils.FindEntityAcrossModules(_model, parent, parentModuleName);
-                    var (childEntity, childModuleResolved) = Utils.Utils.FindEntityAcrossModules(_model, child, childModuleName);
-
-                    if (parentEntity == null)
-                    {
-                        return JsonSerializer.Serialize(new { error = $"Parent entity '{parent}' not found" + (parentModuleName != null ? $" in module '{parentModuleName}'" : " in any module") });
-                    }
-
-                    if (childEntity == null)
-                    {
-                        return JsonSerializer.Serialize(new { error = $"Child entity '{child}' not found" + (childModuleName != null ? $" in module '{childModuleName}'" : " in any module") });
-                    }
-
-                    // Create association - FIXED: For "1 Customer has many Orders",
-                    // we need to call childEntity.AddAssociation(parentEntity) because in Mendix:
-                    // - entity.AddAssociation(otherEntity) means "entity references otherEntity"
-                    // - For one-to-many, the "many" side should reference the "one" side
-                    // So Order (child/many) should reference Customer (parent/one)
-                    var mxAssociation = childEntity.AddAssociation(parentEntity);
-                    mxAssociation.Name = name;
-                    mxAssociation.Type = MapAssociationType(type);
-
-                    // Configure delete behavior if specified
-                    var parentDeleteBehavior = parameters["parent_delete_behavior"]?.ToString();
-                    var childDeleteBehavior = parameters["child_delete_behavior"]?.ToString();
-                    if (!string.IsNullOrEmpty(parentDeleteBehavior))
-                        mxAssociation.ParentDeleteBehavior = MapDeletingBehavior(parentDeleteBehavior);
-                    if (!string.IsNullOrEmpty(childDeleteBehavior))
-                        mxAssociation.ChildDeleteBehavior = MapDeletingBehavior(childDeleteBehavior);
-
-                    // Configure owner if specified
-                    var owner = parameters["owner"]?.ToString();
-                    if (!string.IsNullOrEmpty(owner) && owner.ToLowerInvariant().Trim() == "both")
-                        mxAssociation.Owner = AssociationOwner.Both;
-
-                    _logger.LogInformation($"FIXED: Created association {mxAssociation.Name} by calling {childEntity.Name}.AddAssociation({parentEntity.Name})");
-                    _logger.LogInformation($"This creates: 1 {parentEntity.Name} has many {childEntity.Name} (correct direction)");
-
-                    transaction.Commit();
-
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = true,
-                        message = $"Association '{name}' created successfully",
-                        association = new
-                        {
-                            name = mxAssociation.Name,
-                            parent = parentEntity.Name,
-                            child = childEntity.Name,
-                            type = mxAssociation.Type.ToString(),
-                            parentDeleteBehavior = FormatDeletingBehavior(mxAssociation.ParentDeleteBehavior),
-                            childDeleteBehavior = FormatDeletingBehavior(mxAssociation.ChildDeleteBehavior),
-                            owner = mxAssociation.Owner.ToString()
-                        }
+                    return JsonSerializer.Serialize(new {
+                        error = "Missing required parameters for association creation",
+                        message = "To create an association, you must provide: name, parent, and child parameters",
+                        required_parameters = new {
+                            name = new { type = "string", description = "Name of the association (e.g., 'Customer_Orders')", required = true },
+                            parent = new { type = "string", description = "Name of the parent entity (e.g., 'Customer')", required = true },
+                            child = new { type = "string", description = "Name of the child entity (e.g., 'Order')", required = true },
+                            type = new { type = "string", description = "Type of association ('one-to-many' or 'many-to-many')", required = false, @default = "one-to-many" }
+                        },
+                        example_usage = new {
+                            tool_name = "create_association",
+                            parameters = new {
+                                name = "Customer_Orders",
+                                parent = "Customer",
+                                child = "Order",
+                                type = "one-to-many"
+                            }
+                        },
+                        guidance = "Make sure both parent and child entities exist before creating an association."
                     });
                 }
+
+                // Cross-module support: resolve entities from specified or any module
+                var parentModuleName = parameters["parent_module"]?.ToString();
+                var childModuleName = parameters["child_module"]?.ToString();
+                var defaultModuleName = parameters["module_name"]?.ToString();
+                parentModuleName ??= defaultModuleName;
+                childModuleName ??= defaultModuleName;
+
+                var parentRef = ResolveEntityRef(parent, parentModuleName);
+                if (parentRef == null)
+                    return JsonSerializer.Serialize(new { error = $"Parent entity '{parent}' not found" + (parentModuleName != null ? $" in module '{parentModuleName}'" : " in any module") });
+
+                var childRef = ResolveEntityRef(child, childModuleName);
+                if (childRef == null)
+                    return JsonSerializer.Serialize(new { error = $"Child entity '{child}' not found" + (childModuleName != null ? $" in module '{childModuleName}'" : " in any module") });
+
+                var assocModuleName = defaultModuleName ?? parentRef.Value.QualifiedName.Split('.')[0];
+
+                var parentDeleteBehavior = MapDeleteBehavior(parameters["parent_delete_behavior"]?.ToString());
+                var childDeleteBehavior = MapDeleteBehavior(parameters["child_delete_behavior"]?.ToString());
+                var ownerStr = parameters["owner"]?.ToString();
+                var owner = (!string.IsNullOrEmpty(ownerStr) && ownerStr.ToLowerInvariant().Trim() == "both")
+                    ? AssociationOwner.Both
+                    : AssociationOwner.Default;
+
+                var request = new CreateAssociationRequest(
+                    ModuleName: assocModuleName,
+                    Name: name,
+                    ParentEntityQualifiedName: parentRef.Value.QualifiedName,
+                    ChildEntityQualifiedName: childRef.Value.QualifiedName,
+                    Type: MapAssociationType(type),
+                    ParentDeleteBehavior: parentDeleteBehavior,
+                    ChildDeleteBehavior: childDeleteBehavior,
+                    Owner: owner,
+                    Documentation: parameters["documentation"]?.ToString());
+
+                var assocRef = HostServices.DomainModel.CreateAssociation(request);
+
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    message = $"Association '{name}' created successfully",
+                    association = new
+                    {
+                        name = assocRef.Name,
+                        parent = assocRef.ParentEntityQualifiedName,
+                        child = assocRef.ChildEntityQualifiedName,
+                        type = assocRef.Type == AssociationType.ReferenceSet ? "many-to-many" : "one-to-many",
+                        parentDeleteBehavior = FormatDeleteBehavior(parentDeleteBehavior),
+                        childDeleteBehavior = FormatDeleteBehavior(childDeleteBehavior),
+                        owner = owner.ToString()
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -1357,180 +1247,111 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                using (var transaction = _model.StartTransaction("create multiple entities"))
+                var entitiesArray = parameters["entities"]?.AsArray();
+                if (entitiesArray == null)
+                    return JsonSerializer.Serialize(new { error = "Entities array is required" });
+
+                // Extract global persistable parameter (default to true for backward compatibility)
+                bool globalPersistable = true;
+                if (parameters.ContainsKey("persistable"))
+                    parameters["persistable"]?.AsValue().TryGetValue<bool>(out globalPersistable);
+
+                string globalEntityType = globalPersistable ? "persistent" : "non-persistent";
+
+                // Resolve default module
+                var globalModuleName = parameters["module_name"]?.ToString();
+                ModuleId defaultModuleId;
+                if (!string.IsNullOrWhiteSpace(globalModuleName))
                 {
-                    var entitiesArray = parameters["entities"]?.AsArray();
-                    
-                    // Extract persistable parameter (default to true for backward compatibility)
-                    bool persistable = true;
-                    if (parameters.ContainsKey("persistable"))
-                    {
-                        if (parameters["persistable"]?.AsValue().TryGetValue<bool>(out var persistableValue) == true)
-                        {
-                            persistable = persistableValue;
-                        }
-                    }
-
-                    if (entitiesArray == null)
-                    {
-                        return JsonSerializer.Serialize(new { error = "Entities array is required" });
-                    }
-
-                    var globalModuleName = parameters["module_name"]?.ToString();
-                    var defaultModule = Utils.Utils.ResolveModule(_model, globalModuleName);
-                    if (defaultModule?.DomainModel == null)
-                    {
-                        return JsonSerializer.Serialize(new { error = string.IsNullOrWhiteSpace(globalModuleName) ? "No domain model found" : $"Module '{globalModuleName}' not found" });
-                    }
-
-                    var createdEntities = new List<object>();
-                    string entityType = persistable ? "persistent" : "non-persistent";
-
-                    foreach (var entityNode in entitiesArray)
-                    {
-                        var entityObj = entityNode?.AsObject();
-                        if (entityObj == null) continue;
-
-                        // BUG-010 fix: Accept both 'entity_name' and 'name' fields
-                        var entityName = entityObj["entity_name"]?.ToString() ?? entityObj["name"]?.ToString();
-                        var attributesArray = entityObj["attributes"]?.AsArray();
-
-                        if (string.IsNullOrEmpty(entityName)) continue;
-
-                        // Per-entity module override
-                        var entityModuleName = entityObj["module_name"]?.ToString();
-                        var module = !string.IsNullOrWhiteSpace(entityModuleName)
-                            ? Utils.Utils.GetModuleByName(_model, entityModuleName) ?? defaultModule
-                            : defaultModule;
-
-                        // Check if entity already exists
-                        var existingEntity = module.DomainModel.GetEntities()
-                            .FirstOrDefault(e => e.Name.Equals(entityName, StringComparison.OrdinalIgnoreCase));
-
-                        if (existingEntity != null)
-                        {
-                            continue; // Skip existing entities
-                        }
-
-                        IEntity mxEntity;
-                        var entityAttributes = new List<object>();
-
-                        if (!persistable)
-                        {
-                            // Use template-based approach for non-persistent entities
-                            mxEntity = CreateEntityFromTemplate(module, entityName, attributesArray);
-                            if (mxEntity == null)
-                            {
-                                // Skip this entity and continue with others
-                                continue;
-                            }
-
-                            // Collect attributes for response
-                            foreach (var attr in mxEntity.GetAttributes())
-                            {
-                                entityAttributes.Add(new { name = attr.Name, type = attr.Type?.GetType().Name ?? "Unknown" });
-                            }
-                        }
-                        else
-                        {
-                            // Create regular persistent entity
-                            mxEntity = _model.Create<IEntity>();
-                            mxEntity.Name = entityName;
-                            module.DomainModel.AddEntity(mxEntity);
-
-                            // Add attributes if provided
-                            if (attributesArray != null)
-                            {
-                                foreach (var attrNode in attributesArray)
-                                {
-                                    var attrObj = attrNode?.AsObject();
-                                    if (attrObj == null) continue;
-
-                                    var attrName = attrObj["name"]?.ToString();
-                                    var attrType = attrObj["type"]?.ToString();
-
-                                    if (string.IsNullOrEmpty(attrName) || string.IsNullOrEmpty(attrType)) continue;
-
-                                    var mxAttribute = _model.Create<IAttribute>();
-                                    mxAttribute.Name = attrName;
-
-                                    if (attrType.Equals("Enumeration", StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        var enumValues = attrObj["enumerationValues"]?.AsArray()
-                                            ?.Select(v => v?.ToString())
-                                            ?.Where(v => !string.IsNullOrEmpty(v))
-                                            ?.ToList();
-
-                                        if (enumValues != null && enumValues.Any())
-                                        {
-                                            var enumTypeInstance = CreateEnumerationType(_model, attrName, enumValues, module);
-                                            mxAttribute.Type = enumTypeInstance;
-                                        }
-                                        else
-                                        {
-                                            continue; // Skip invalid enumerations
-                                        }
-                                    }
-                                    else
-                                    {
-                                        var attributeType = CreateAttributeType(_model, attrType);
-                                        mxAttribute.Type = attributeType;
-                                    }
-
-                                    // Set default value if provided
-                                    var defaultVal = attrObj["default_value"]?.ToString();
-                                    if (!string.IsNullOrEmpty(defaultVal))
-                                    {
-                                        var storedValue = _model.Create<IStoredValue>();
-                                        storedValue.DefaultValue = defaultVal;
-                                        mxAttribute.Value = storedValue;
-                                    }
-
-                                    mxEntity.AddAttribute(mxAttribute);
-                                    entityAttributes.Add(new { name = attrName, type = attrType, defaultValue = defaultVal });
-                                }
-                            }
-
-                            // Position entity
-                            PositionEntity(mxEntity, module.DomainModel.GetEntities().Count());
-                        }
-
-                        createdEntities.Add(new
-                        {
-                            name = entityName,
-                            persistable = persistable,
-                            entityType = entityType,
-                            attributes = entityAttributes
-                        });
-                    }
-
-                    transaction.Commit();
-
-                    // Auto-arrange the domain model after bulk creation
-                    object? layoutResult = null;
-                    try
-                    {
-                        using (var layoutTx = _model.StartTransaction("arrange domain model after bulk creation"))
-                        {
-                            layoutResult = ArrangeDomainModelInternal(defaultModule);
-                            layoutTx.Commit();
-                        }
-                    }
-                    catch (Exception layoutEx)
-                    {
-                        _logger.LogWarning(layoutEx, "Auto-arrange after bulk creation failed (non-fatal)");
-                    }
-
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = true,
-                        message = $"Successfully created {createdEntities.Count} {entityType} entities",
-                        entities = createdEntities,
-                        persistable = persistable,
-                        entityType = entityType,
-                        auto_arranged = layoutResult != null
-                    });
+                    var mid = HostServices.Model.GetModuleByName(globalModuleName);
+                    if (mid == null)
+                        return JsonSerializer.Serialize(new { error = $"Module '{globalModuleName}' not found" });
+                    defaultModuleId = mid.Value;
                 }
+                else
+                {
+                    var allModules = HostServices.Model.ListModules();
+                    if (!allModules.Any())
+                        return JsonSerializer.Serialize(new { error = "No modules found in the project" });
+                    defaultModuleId = allModules.First();
+                }
+
+                // Build requests
+                var requests = new List<CreateEntityRequest>();
+                var requestMeta = new List<(string entityName, string entityType, bool persistable)>();
+
+                foreach (var entityNode in entitiesArray)
+                {
+                    var entityObj = entityNode?.AsObject();
+                    if (entityObj == null) continue;
+
+                    var entityName = entityObj["entity_name"]?.ToString() ?? entityObj["name"]?.ToString();
+                    if (string.IsNullOrEmpty(entityName)) continue;
+
+                    // Per-entity module override
+                    var entityModuleName = entityObj["module_name"]?.ToString();
+                    ModuleId moduleId = defaultModuleId;
+                    if (!string.IsNullOrWhiteSpace(entityModuleName))
+                    {
+                        var mid = HostServices.Model.GetModuleByName(entityModuleName);
+                        if (mid != null) moduleId = mid.Value;
+                    }
+
+                    // Per-entity entityType
+                    string entityType = globalEntityType;
+                    bool persistable = globalPersistable;
+                    if (entityObj.ContainsKey("entityType"))
+                    {
+                        entityType = entityObj["entityType"]?.ToString() ?? globalEntityType;
+                        persistable = !entityType.Equals("non-persistent", StringComparison.OrdinalIgnoreCase);
+                    }
+
+                    var kind = entityType.Equals("non-persistent", StringComparison.OrdinalIgnoreCase)
+                        ? EntityKind.NonPersistent
+                        : EntityKind.Persistent;
+
+                    var attrSpecs = BuildAttributeSpecs(entityObj["attributes"]?.AsArray());
+
+                    requests.Add(new CreateEntityRequest(
+                        ModuleName: moduleId.Name,
+                        EntityName: entityName,
+                        Kind: kind,
+                        Generalization: entityObj["generalization"]?.ToString(),
+                        Attributes: attrSpecs,
+                        Documentation: entityObj["documentation"]?.ToString()));
+
+                    requestMeta.Add((entityName, entityType, persistable));
+                }
+
+                var createdRefs = HostServices.DomainModel.CreateMultipleEntities(requests);
+
+                var createdEntities = createdRefs.Select((r, i) => new
+                {
+                    name = i < requestMeta.Count ? requestMeta[i].entityName : r.QualifiedName,
+                    qualifiedName = r.QualifiedName,
+                    persistable = i < requestMeta.Count ? requestMeta[i].persistable : globalPersistable,
+                    entityType = i < requestMeta.Count ? requestMeta[i].entityType : globalEntityType
+                }).ToList();
+
+                // Trigger arrange via host
+                bool arranged = false;
+                try
+                {
+                    HostServices.DomainModel.ArrangeDomainModel(new ArrangeDomainModelRequest(defaultModuleId.Name));
+                    arranged = true;
+                }
+                catch (Exception layoutEx)
+                {
+                    _logger.LogWarning(layoutEx, "Auto-arrange after bulk creation failed (non-fatal)");
+                }
+
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    message = $"Successfully created {createdEntities.Count} entities",
+                    entities = createdEntities,
+                    auto_arranged = arranged
+                });
             }
             catch (Exception ex)
             {
@@ -1543,13 +1364,11 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                using (var transaction = _model.StartTransaction("create multiple associations"))
-                {
                     var associationsArray = parameters["associations"]?.AsArray();
 
                     if (associationsArray == null)
                     {
-                        return JsonSerializer.Serialize(new { 
+                        return JsonSerializer.Serialize(new {
                             error = "Missing required 'associations' array parameter",
                             message = "To create multiple associations, you must provide an 'associations' array containing association objects",
                             required_parameters = new {
@@ -1583,74 +1402,67 @@ namespace Terminal.Spmcp.Tools
                         });
                     }
 
-                    var createdAssociations = new List<object>();
+                // Build requests
+                var defaultModuleName = parameters["module_name"]?.ToString();
+                var requests = new List<CreateAssociationRequest>();
 
-                    foreach (var assocNode in associationsArray)
-                    {
-                        var assocObj = assocNode?.AsObject();
-                        if (assocObj == null) continue;
+                foreach (var assocNode in associationsArray)
+                {
+                    var assocObj = assocNode?.AsObject();
+                    if (assocObj == null) continue;
 
-                        var name = assocObj["name"]?.ToString();
-                        var parent = assocObj["parent"]?.ToString();
-                        var child = assocObj["child"]?.ToString();
-                        var type = assocObj["type"]?.ToString() ?? "one-to-many";
+                    var name = assocObj["name"]?.ToString();
+                    var parent = assocObj["parent"]?.ToString();
+                    var child = assocObj["child"]?.ToString();
+                    var type = assocObj["type"]?.ToString() ?? "one-to-many";
 
-                        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(child))
-                        {
-                            continue; // Skip invalid associations
-                        }
+                    if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(child))
+                        continue; // Skip invalid associations
 
-                        // Cross-module entity resolution per association
-                        var parentModuleName = assocObj["parent_module"]?.ToString();
-                        var childModuleName = assocObj["child_module"]?.ToString();
+                    var parentModuleName = assocObj["parent_module"]?.ToString() ?? defaultModuleName;
+                    var childModuleName = assocObj["child_module"]?.ToString() ?? defaultModuleName;
 
-                        var (parentEntity, _) = Utils.Utils.FindEntityAcrossModules(_model, parent, parentModuleName);
-                        var (childEntity, _) = Utils.Utils.FindEntityAcrossModules(_model, child, childModuleName);
+                    var parentRef = ResolveEntityRef(parent, parentModuleName);
+                    var childRef = ResolveEntityRef(child, childModuleName);
 
-                        if (parentEntity == null || childEntity == null)
-                        {
-                            continue; // Skip if entities don't exist
-                        }
+                    if (parentRef == null || childRef == null)
+                        continue; // Skip if entities don't exist
 
-                        // Create association - FIXED: Use child.AddAssociation(parent) for correct direction
-                        var mxAssociation = childEntity.AddAssociation(parentEntity);
-                        mxAssociation.Name = name;
-                        mxAssociation.Type = MapAssociationType(type);
+                    var assocModuleName = defaultModuleName ?? parentRef.Value.QualifiedName.Split('.')[0];
 
-                        // Configure delete behavior if specified
-                        var parentDeleteBehavior = assocObj["parent_delete_behavior"]?.ToString();
-                        var childDeleteBehavior = assocObj["child_delete_behavior"]?.ToString();
-                        if (!string.IsNullOrEmpty(parentDeleteBehavior))
-                            mxAssociation.ParentDeleteBehavior = MapDeletingBehavior(parentDeleteBehavior);
-                        if (!string.IsNullOrEmpty(childDeleteBehavior))
-                            mxAssociation.ChildDeleteBehavior = MapDeletingBehavior(childDeleteBehavior);
+                    var ownerStr = assocObj["owner"]?.ToString();
+                    var owner = (!string.IsNullOrEmpty(ownerStr) && ownerStr.ToLowerInvariant().Trim() == "both")
+                        ? AssociationOwner.Both
+                        : AssociationOwner.Default;
 
-                        // Configure owner if specified
-                        var assocOwner = assocObj["owner"]?.ToString();
-                        if (!string.IsNullOrEmpty(assocOwner) && assocOwner.ToLowerInvariant().Trim() == "both")
-                            mxAssociation.Owner = AssociationOwner.Both;
-
-                        createdAssociations.Add(new
-                        {
-                            name = mxAssociation.Name,
-                            parent = parentEntity.Name,
-                            child = childEntity.Name,
-                            type = mxAssociation.Type.ToString(),
-                            parentDeleteBehavior = FormatDeletingBehavior(mxAssociation.ParentDeleteBehavior),
-                            childDeleteBehavior = FormatDeletingBehavior(mxAssociation.ChildDeleteBehavior),
-                            owner = mxAssociation.Owner.ToString()
-                        });
-                    }
-
-                    transaction.Commit();
-
-                    return JsonSerializer.Serialize(new 
-                    { 
-                        success = true, 
-                        message = $"Successfully created {createdAssociations.Count} associations",
-                        associations = createdAssociations
-                    });
+                    requests.Add(new CreateAssociationRequest(
+                        ModuleName: assocModuleName,
+                        Name: name,
+                        ParentEntityQualifiedName: parentRef.Value.QualifiedName,
+                        ChildEntityQualifiedName: childRef.Value.QualifiedName,
+                        Type: MapAssociationType(type),
+                        ParentDeleteBehavior: MapDeleteBehavior(assocObj["parent_delete_behavior"]?.ToString()),
+                        ChildDeleteBehavior: MapDeleteBehavior(assocObj["child_delete_behavior"]?.ToString()),
+                        Owner: owner,
+                        Documentation: assocObj["documentation"]?.ToString()));
                 }
+
+                var createdRefs = HostServices.DomainModel.CreateMultipleAssociations(requests);
+
+                var createdAssociations = createdRefs.Select(r => new
+                {
+                    name = r.Name,
+                    parent = r.ParentEntityQualifiedName,
+                    child = r.ChildEntityQualifiedName,
+                    type = r.Type == AssociationType.ReferenceSet ? "many-to-many" : "one-to-many"
+                }).ToList();
+
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    message = $"Successfully created {createdAssociations.Count} associations",
+                    associations = createdAssociations
+                });
             }
             catch (Exception ex)
             {
@@ -1663,173 +1475,49 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                using (var transaction = _model.StartTransaction("create domain model from schema"))
+                var schema = parameters["schema"]?.AsObject();
+                if (schema == null)
+                    return JsonSerializer.Serialize(new { error = "Schema object is required" });
+
+                var moduleName = parameters["module_name"]?.ToString();
+                if (string.IsNullOrWhiteSpace(moduleName))
                 {
-                    var schema = parameters["schema"]?.AsObject();
-
-                    if (schema == null)
-                    {
-                        return JsonSerializer.Serialize(new { error = "Schema object is required" });
-                    }
-
-                    // Extract persistable parameter (default to true for backward compatibility)
-                    bool persistable = true;
-                    if (parameters.ContainsKey("persistable"))
-                    {
-                        if (parameters["persistable"]?.AsValue().TryGetValue<bool>(out var persistableValue) == true)
-                        {
-                            persistable = persistableValue;
-                        }
-                    }
-
-                    var moduleName = parameters["module_name"]?.ToString();
-                    var module = Utils.Utils.ResolveModule(_model, moduleName);
-                    if (module?.DomainModel == null)
-                    {
-                        return JsonSerializer.Serialize(new { error = string.IsNullOrWhiteSpace(moduleName) ? "No domain model found" : $"Module '{moduleName}' not found" });
-                    }
-
-                    var entitiesArray = schema["entities"]?.AsArray();
-                    var associationsArray = schema["associations"]?.AsArray();
-
-                    var createdEntities = new List<object>();
-                    var createdAssociations = new List<object>();
-                    string entityType = persistable ? "persistent" : "non-persistent";
-
-                    // Create entities first
-                    if (entitiesArray != null)
-                    {
-                        foreach (var entityNode in entitiesArray)
-                        {
-                            var entityObj = entityNode?.AsObject();
-                            if (entityObj == null) continue;
-
-                            // BUG-012 fix: Accept both 'entity_name' and 'name' fields
-                            var entityName = entityObj["entity_name"]?.ToString() ?? entityObj["name"]?.ToString();
-                            var attributesArray = entityObj["attributes"]?.AsArray();
-
-                            if (string.IsNullOrEmpty(entityName)) continue;
-
-                            // Extract entityType for this specific entity
-                            string currentEntityType = "persistent";
-                            if (entityObj.ContainsKey("entityType"))
-                            {
-                                currentEntityType = entityObj["entityType"]?.ToString() ?? "persistent";
-                            }
-                            // Handle backward compatibility: if global persistable is false, use non-persistent
-                            else if (!persistable)
-                            {
-                                currentEntityType = "non-persistent";
-                            }
-
-                            // Check if entity already exists
-                            var existingEntity = module.DomainModel.GetEntities()
-                                .FirstOrDefault(e => e.Name.Equals(entityName, StringComparison.OrdinalIgnoreCase));
-
-                            if (existingEntity != null)
-                            {
-                                continue; // Skip existing entities
-                            }
-
-                            IEntity mxEntity;
-                            var entityAttributes = new List<object>();
-
-                            // Use template-based approach for all entity types
-                            mxEntity = CreateEntityFromTemplate(module, entityName, attributesArray, currentEntityType);
-                            if (mxEntity == null)
-                            {
-                                // Skip this entity and continue with others
-                                continue;
-                            }
-
-                            // Collect attributes for response
-                            foreach (var attr in mxEntity.GetAttributes())
-                            {
-                                entityAttributes.Add(new { name = attr.Name, type = attr.Type?.GetType().Name ?? "Unknown" });
-                            }
-
-                            createdEntities.Add(new 
-                            { 
-                                name = entityName, 
-                                persistable = currentEntityType == "persistent",
-                                entityType = currentEntityType,
-                                attributes = entityAttributes 
-                            });
-                        }
-                    }
-
-                    // Create associations after entities
-                    if (associationsArray != null)
-                    {
-                        foreach (var assocNode in associationsArray)
-                        {
-                            var assocObj = assocNode?.AsObject();
-                            if (assocObj == null) continue;
-
-                            var name = assocObj["name"]?.ToString();
-                            var parent = assocObj["parent"]?.ToString();
-                            var child = assocObj["child"]?.ToString();
-                            var type = assocObj["type"]?.ToString() ?? "one-to-many";
-
-                            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(child))
-                            {
-                                continue; // Skip invalid associations
-                            }
-
-                            // Cross-module entity resolution for schema associations
-                            var parentModuleName = assocObj["parent_module"]?.ToString();
-                            var childModuleName = assocObj["child_module"]?.ToString();
-
-                            var (parentEntity, _) = Utils.Utils.FindEntityAcrossModules(_model, parent, parentModuleName);
-                            var (childEntity, _) = Utils.Utils.FindEntityAcrossModules(_model, child, childModuleName);
-
-                            if (parentEntity == null || childEntity == null)
-                            {
-                                continue; // Skip if entities don't exist
-                            }
-
-                            // Create association - Use child.AddAssociation(parent) for correct direction
-                            var mxAssociation = childEntity.AddAssociation(parentEntity);
-                            mxAssociation.Name = name;
-                            mxAssociation.Type = MapAssociationType(type);
-
-                            createdAssociations.Add(new
-                            {
-                                name = mxAssociation.Name,
-                                parent = parentEntity.Name,
-                                child = childEntity.Name,
-                                type = mxAssociation.Type.ToString()
-                            });
-                        }
-                    }
-
-                    transaction.Commit();
-
-                    // Auto-arrange the domain model after schema creation (entities + associations now exist)
-                    object? layoutResult = null;
-                    try
-                    {
-                        using (var layoutTx = _model.StartTransaction("arrange domain model after schema creation"))
-                        {
-                            layoutResult = ArrangeDomainModelInternal(module);
-                            layoutTx.Commit();
-                        }
-                    }
-                    catch (Exception layoutEx)
-                    {
-                        _logger.LogWarning(layoutEx, "Auto-arrange after schema creation failed (non-fatal)");
-                    }
-
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = true,
-                        message = $"Successfully created domain model with {createdEntities.Count} entities and {createdAssociations.Count} associations",
-                        entities = createdEntities,
-                        associations = createdAssociations,
-                        persistable = persistable,
-                        auto_arranged = layoutResult != null
-                    });
+                    // Fall back to first module
+                    var allModules = HostServices.Model.ListModules();
+                    if (!allModules.Any())
+                        return JsonSerializer.Serialize(new { error = "No modules found in the project" });
+                    moduleName = allModules.First().Name;
                 }
+                else
+                {
+                    var mid = HostServices.Model.GetModuleByName(moduleName);
+                    if (mid == null)
+                        return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" });
+                }
+
+                // Pass the schema JSON verbatim to the host — it owns validation
+                var schemaJson = schema.ToJsonString();
+                var createdRefs = HostServices.DomainModel.CreateDomainModelFromSchema(moduleName, schemaJson);
+
+                // Trigger arrange via host
+                bool arranged = false;
+                try
+                {
+                    HostServices.DomainModel.ArrangeDomainModel(new ArrangeDomainModelRequest(moduleName));
+                    arranged = true;
+                }
+                catch (Exception layoutEx)
+                {
+                    _logger.LogWarning(layoutEx, "Auto-arrange after schema creation failed (non-fatal)");
+                }
+
+                return JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    message = $"Successfully created domain model with {createdRefs.Count} entities",
+                    entities = createdRefs.Select(r => new { qualifiedName = r.QualifiedName }).ToList(),
+                    auto_arranged = arranged
+                });
             }
             catch (Exception ex)
             {
@@ -2181,6 +1869,156 @@ namespace Terminal.Spmcp.Tools
 
             return result;
         }
+
+        #region HostServices Interop Helpers
+
+        /// <summary>
+        /// Resolves an entity by simple name (or "Module.Entity" qualified name) to an EntityRef
+        /// using HostServices.DomainModel.ListEntities. Returns null if not found.
+        /// </summary>
+        private EntityRef? ResolveEntityRef(string entityName, string? moduleName)
+        {
+            // Handle qualified names like "ModuleName.EntityName"
+            if (entityName.Contains('.') && string.IsNullOrWhiteSpace(moduleName))
+            {
+                var parts = entityName.Split('.', 2);
+                moduleName = parts[0];
+                entityName = parts[1];
+            }
+
+            if (!string.IsNullOrWhiteSpace(moduleName))
+            {
+                var mid = HostServices.Model.GetModuleByName(moduleName);
+                if (mid == null) return null;
+                return HostServices.DomainModel.ListEntities(mid.Value)
+                    .FirstOrDefault(e =>
+                    {
+                        var dot = e.QualifiedName.IndexOf('.');
+                        var simpleName = dot >= 0 ? e.QualifiedName.Substring(dot + 1) : e.QualifiedName;
+                        return simpleName.Equals(entityName, StringComparison.OrdinalIgnoreCase);
+                    }) is EntityRef r && r.Id != Guid.Empty ? r : (EntityRef?)null;
+            }
+
+            // Search all modules
+            foreach (var modId in HostServices.Model.ListModules())
+            {
+                foreach (var eRef in HostServices.DomainModel.ListEntities(modId))
+                {
+                    var dot = eRef.QualifiedName.IndexOf('.');
+                    var simpleName = dot >= 0 ? eRef.QualifiedName.Substring(dot + 1) : eRef.QualifiedName;
+                    if (simpleName.Equals(entityName, StringComparison.OrdinalIgnoreCase))
+                        return eRef;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Builds a list of AttributeSpec from a JSON array of attribute objects.
+        /// Returns null (not an empty list) when the array is null or empty, matching
+        /// CreateEntityRequest's nullable Attributes field.
+        /// </summary>
+        private IReadOnlyList<AttributeSpec>? BuildAttributeSpecs(JsonArray? attributesArray)
+        {
+            if (attributesArray == null || attributesArray.Count == 0)
+                return null;
+
+            var specs = new List<AttributeSpec>();
+            foreach (var attrNode in attributesArray)
+            {
+                var attrObj = attrNode?.AsObject();
+                if (attrObj == null) continue;
+
+                var attrName = attrObj["name"]?.ToString();
+                var attrType = attrObj["type"]?.ToString();
+                if (string.IsNullOrEmpty(attrName) || string.IsNullOrEmpty(attrType)) continue;
+
+                var kind = ParseAttributeKind(attrType);
+
+                string? enumQualifiedName = null;
+                IReadOnlyList<string>? enumValues = null;
+
+                if (kind == AttributeKind.Enumeration)
+                {
+                    if (attrType.StartsWith("Enumeration:", StringComparison.OrdinalIgnoreCase))
+                        enumQualifiedName = attrType.Substring("Enumeration:".Length).Trim();
+                    enumQualifiedName ??= attrObj["enumeration_name"]?.ToString();
+                    if (enumQualifiedName == null)
+                    {
+                        enumValues = attrObj["enumerationValues"]?.AsArray()
+                            ?.Select(v => v?.ToString())
+                            ?.Where(v => !string.IsNullOrEmpty(v))
+                            ?.ToList()!;
+                    }
+                }
+
+                int? maxLength = null;
+                if (attrObj["max_length"]?.AsValue().TryGetValue<int>(out var ml) == true) maxLength = ml;
+
+                bool? localizeDate = null;
+                if (attrObj["localize_date"]?.AsValue().TryGetValue<bool>(out var ld) == true) localizeDate = ld;
+
+                specs.Add(new AttributeSpec(
+                    Name: attrName,
+                    Kind: kind,
+                    EnumerationQualifiedName: enumQualifiedName,
+                    EnumerationValues: enumValues,
+                    MaxLength: maxLength,
+                    LocalizeDate: localizeDate,
+                    DefaultValue: attrObj["default_value"]?.ToString(),
+                    Documentation: attrObj["documentation"]?.ToString()));
+            }
+
+            return specs.Count > 0 ? specs : null;
+        }
+
+        private static AttributeKind ParseAttributeKind(string attrType)
+        {
+            var normalized = attrType.ToLowerInvariant().Trim();
+            if (normalized.StartsWith("enumeration")) return AttributeKind.Enumeration;
+            return normalized switch
+            {
+                "decimal" => AttributeKind.Decimal,
+                "integer" or "int" => AttributeKind.Integer,
+                "long" => AttributeKind.LongType,
+                "string" => AttributeKind.String,
+                "boolean" or "bool" => AttributeKind.Boolean,
+                "datetime" => AttributeKind.DateTime,
+                "autonumber" => AttributeKind.AutoNumber,
+                "binary" => AttributeKind.Binary,
+                "hashedstring" or "hashstring" => AttributeKind.HashString,
+                _ => AttributeKind.String
+            };
+        }
+
+        /// <summary>Maps a JSON string to the interop DeleteBehavior enum.</summary>
+        private static DeleteBehavior MapDeleteBehavior(string? behavior)
+        {
+            if (string.IsNullOrEmpty(behavior))
+                return DeleteBehavior.DeleteMeButKeepReferences;
+
+            return behavior.ToLowerInvariant().Trim() switch
+            {
+                "delete_me_and_references" or "cascade" or "delete_me_too" or "delete_referencing"
+                    => DeleteBehavior.DeleteMeAndReferences,
+                "delete_me_if_no_references" or "prevent" or "keep_if_referenced"
+                    => DeleteBehavior.DeleteMeIfNoReferences,
+                _ => DeleteBehavior.DeleteMeButKeepReferences
+            };
+        }
+
+        /// <summary>Formats the interop DeleteBehavior enum to a JSON-friendly string.</summary>
+        private static string FormatDeleteBehavior(DeleteBehavior behavior)
+        {
+            return behavior switch
+            {
+                DeleteBehavior.DeleteMeAndReferences => "delete_me_and_references",
+                DeleteBehavior.DeleteMeIfNoReferences => "delete_me_if_no_references",
+                _ => "delete_me_but_keep_references"
+            };
+        }
+
+        #endregion
 
         #region Helper Methods
 
