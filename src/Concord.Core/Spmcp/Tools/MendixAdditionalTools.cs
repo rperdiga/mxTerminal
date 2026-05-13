@@ -4888,39 +4888,24 @@ namespace Terminal.Spmcp.Tools
             try
             {
                 var moduleName = parameters?["module_name"]?.ToString();
-                var modules = string.IsNullOrEmpty(moduleName)
-                    ? Utils.Utils.GetAllNonAppStoreModules(_model).ToList()
-                    : new List<Mendix.StudioPro.ExtensionsAPI.Model.Projects.IModule> { Utils.Utils.ResolveModule(_model, moduleName) };
-
-                modules.RemoveAll(m => m == null);
-                if (!modules.Any())
-                    return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" });
-
-                var result = new List<object>();
-                foreach (var module in modules)
+                ModuleId? moduleFilter = null;
+                if (!string.IsNullOrEmpty(moduleName))
                 {
-                    var javaActions = _model.Root.GetModuleDocuments<IJavaAction>(module);
-                    foreach (var ja in javaActions)
-                    {
-                        var actionParams = ja.GetActionParameters()
-                            .Select(p => new
-                            {
-                                name = p.Name,
-                                description = p.Description,
-                                category = p.Category
-                            })
-                            .ToList();
-
-                        result.Add(new
-                        {
-                            name = ja.Name,
-                            qualifiedName = ja.QualifiedName?.ToString(),
-                            module = module.Name,
-                            parameterCount = actionParams.Count,
-                            parameters = actionParams
-                        });
-                    }
+                    var moduleId = HostServices.Model.GetModuleByName(moduleName);
+                    if (moduleId == null)
+                        return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" });
+                    moduleFilter = moduleId;
                 }
+
+                var javaActions = HostServices.MicroflowAuthoring.ListJavaActions(moduleFilter);
+                var result = javaActions.Select(jad => new
+                {
+                    name = jad.Document.QualifiedName,
+                    qualifiedName = jad.Document.QualifiedName,
+                    module = jad.Module,
+                    parameterCount = jad.ParameterNames.Count,
+                    parameters = jad.ParameterNames.Select(p => new { name = p }).ToList<object>()
+                }).ToList<object>();
 
                 return JsonSerializer.Serialize(new
                 {
@@ -4956,16 +4941,19 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                var runtimeSettings = GetSettingsPart<IRuntimeSettings>();
-                if (runtimeSettings == null)
-                    return JsonSerializer.Serialize(new { error = "Could not find runtime settings in the project" });
+                var settings = HostServices.Model.ReadRuntimeSettings();
+                var result = settings.Select(s => new
+                {
+                    key = s.Key,
+                    value = s.Value,
+                    description = s.Description
+                }).ToList();
 
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    afterStartupMicroflow = runtimeSettings.AfterStartupMicroflow?.ToString(),
-                    beforeShutdownMicroflow = runtimeSettings.BeforeShutdownMicroflow?.ToString(),
-                    healthCheckMicroflow = runtimeSettings.HealthCheckMicroflow?.ToString()
+                    totalSettings = result.Count,
+                    settings = result
                 });
             }
             catch (Exception ex)
@@ -4979,60 +4967,28 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                var runtimeSettings = GetSettingsPart<IRuntimeSettings>();
-                if (runtimeSettings == null)
-                    return JsonSerializer.Serialize(new { error = "Could not find runtime settings in the project" });
+                var key = parameters["key"]?.ToString();
+                var value = parameters["value"]?.ToString();
 
-                using var transaction = _model.StartTransaction("Set runtime settings");
-                bool changed = false;
-
-                if (parameters.ContainsKey("after_startup_microflow"))
+                // Support batch: array of { key, value } pairs
+                if (parameters["settings"] is JsonArray settingsArr)
                 {
-                    var mfName = parameters["after_startup_microflow"]?.ToString();
-                    runtimeSettings.AfterStartupMicroflow = string.IsNullOrEmpty(mfName) ? null : _model.ToQualifiedName<IMicroflow>(mfName);
-                    changed = true;
-                }
-                if (parameters.ContainsKey("before_shutdown_microflow"))
-                {
-                    var mfName = parameters["before_shutdown_microflow"]?.ToString();
-                    runtimeSettings.BeforeShutdownMicroflow = string.IsNullOrEmpty(mfName) ? null : _model.ToQualifiedName<IMicroflow>(mfName);
-                    changed = true;
-                }
-                if (parameters.ContainsKey("health_check_microflow"))
-                {
-                    var mfName = parameters["health_check_microflow"]?.ToString();
-                    runtimeSettings.HealthCheckMicroflow = string.IsNullOrEmpty(mfName) ? null : _model.ToQualifiedName<IMicroflow>(mfName);
-                    changed = true;
+                    var results = new List<object>();
+                    foreach (var item in settingsArr)
+                    {
+                        var k = item?["key"]?.ToString() ?? "";
+                        var v = item?["value"]?.ToString();
+                        var success = HostServices.Model.WriteRuntimeSetting(k, v);
+                        results.Add(new { key = k, value = v, success });
+                    }
+                    return JsonSerializer.Serialize(new { success = true, results });
                 }
 
-                if (parameters.ContainsKey("clear_after_startup") && parameters["clear_after_startup"]?.GetValue<bool>() == true)
-                {
-                    runtimeSettings.AfterStartupMicroflow = null;
-                    changed = true;
-                }
-                if (parameters.ContainsKey("clear_before_shutdown") && parameters["clear_before_shutdown"]?.GetValue<bool>() == true)
-                {
-                    runtimeSettings.BeforeShutdownMicroflow = null;
-                    changed = true;
-                }
-                if (parameters.ContainsKey("clear_health_check") && parameters["clear_health_check"]?.GetValue<bool>() == true)
-                {
-                    runtimeSettings.HealthCheckMicroflow = null;
-                    changed = true;
-                }
+                if (string.IsNullOrEmpty(key))
+                    return JsonSerializer.Serialize(new { error = "key is required (or provide a settings array)" });
 
-                if (!changed)
-                    return JsonSerializer.Serialize(new { error = "No settings parameters provided. Use after_startup_microflow, before_shutdown_microflow, health_check_microflow, or clear_* flags." });
-
-                transaction.Commit();
-
-                return JsonSerializer.Serialize(new
-                {
-                    success = true,
-                    afterStartupMicroflow = runtimeSettings.AfterStartupMicroflow?.ToString(),
-                    beforeShutdownMicroflow = runtimeSettings.BeforeShutdownMicroflow?.ToString(),
-                    healthCheckMicroflow = runtimeSettings.HealthCheckMicroflow?.ToString()
-                });
+                var writeSuccess = HostServices.Model.WriteRuntimeSetting(key, value);
+                return JsonSerializer.Serialize(new { success = writeSuccess, key, value });
             }
             catch (Exception ex)
             {
@@ -5045,26 +5001,22 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                var configSettings = GetSettingsPart<IConfigurationSettings>();
-                if (configSettings == null)
-                    return JsonSerializer.Serialize(new { error = "Could not find configuration settings in the project" });
-
+                var configs = HostServices.Model.ReadConfigurations();
                 var configName = parameters?["configuration_name"]?.ToString();
-                var configs = configSettings.GetConfigurations();
 
-                if (!string.IsNullOrEmpty(configName))
-                    configs = configs.Where(c => c.Name.Equals(configName, StringComparison.OrdinalIgnoreCase)).ToList();
+                var filtered = string.IsNullOrEmpty(configName)
+                    ? configs
+                    : configs.Where(c => c.Name.Equals(configName, StringComparison.OrdinalIgnoreCase)).ToList();
 
-                var result = configs.Select(c => new
+                // Note: IsActive, DatabaseType, DatabaseConnectionString are returned as false/null
+                // by the typed API — this is expected per Phase 3 spike findings.
+                var result = filtered.Select(c => new
                 {
                     name = c.Name,
-                    applicationRootUrl = c.ApplicationRootUrl,
-                    customSettings = c.GetCustomSettings().Select(cs => new { name = cs.Name, value = cs.Value }).ToList(),
-                    constantValues = c.GetConstantValues().Select(cv => new
-                    {
-                        constant = cv.Constant?.ToString(),
-                        valueType = cv.SharedOrPrivateValue?.GetType().Name
-                    }).ToList()
+                    is_active = c.IsActive,
+                    database_type = c.DatabaseType,
+                    database_connection_string = c.DatabaseConnectionString,
+                    custom_settings = c.CustomSettings
                 }).ToList();
 
                 return JsonSerializer.Serialize(new
@@ -5085,66 +5037,22 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                var configSettings = GetSettingsPart<IConfigurationSettings>();
-                if (configSettings == null)
-                    return JsonSerializer.Serialize(new { error = "Could not find configuration settings in the project" });
-
                 var configName = parameters["configuration_name"]?.ToString();
                 if (string.IsNullOrEmpty(configName))
                     return JsonSerializer.Serialize(new { error = "configuration_name is required" });
 
-                using var transaction = _model.StartTransaction($"Set configuration '{configName}'");
-
-                var config = configSettings.GetConfigurations()
-                    .FirstOrDefault(c => c.Name.Equals(configName, StringComparison.OrdinalIgnoreCase));
-
-                bool created = false;
-                if (config == null)
+                var setSuccess = HostServices.Model.SetActiveConfiguration(configName);
+                if (!setSuccess)
                 {
-                    var createIfMissing = parameters["create_if_missing"]?.GetValue<bool>() ?? true;
-                    if (!createIfMissing)
-                        return JsonSerializer.Serialize(new { error = $"Configuration '{configName}' not found and create_if_missing is false" });
-
-                    config = _model.Create<IConfiguration>();
-                    config.Name = configName;
-                    configSettings.AddConfiguration(config);
-                    created = true;
-                }
-
-                if (parameters.ContainsKey("application_root_url"))
-                {
-                    config.ApplicationRootUrl = parameters["application_root_url"]?.ToString() ?? "";
-                }
-
-                if (parameters.ContainsKey("custom_settings") && parameters["custom_settings"] is JsonArray customSettingsArr)
-                {
-                    // Remove existing custom settings first
-                    foreach (var existing in config.GetCustomSettings().ToList())
-                        config.RemoveCustomSetting(existing);
-
-                    foreach (var item in customSettingsArr)
+                    return JsonSerializer.Serialize(new
                     {
-                        var setting = _model.Create<ICustomSetting>();
-                        setting.Name = item?["name"]?.ToString() ?? "";
-                        setting.Value = item?["value"]?.ToString() ?? "";
-                        config.AddCustomSetting(setting);
-                    }
+                        success = false,
+                        escalation = "manual",
+                        message = "SetActiveConfiguration is not exposed in Core; toggle the configuration in Studio Pro."
+                    });
                 }
 
-                transaction.Commit();
-
-                return JsonSerializer.Serialize(new
-                {
-                    success = true,
-                    created,
-                    configuration = new
-                    {
-                        name = config.Name,
-                        applicationRootUrl = config.ApplicationRootUrl,
-                        customSettingsCount = config.GetCustomSettings().Count,
-                        constantValuesCount = config.GetConstantValues().Count
-                    }
-                });
+                return JsonSerializer.Serialize(new { success = true, configuration_name = configName });
             }
             catch (Exception ex)
             {
@@ -5157,58 +5065,25 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                if (_versionControlService == null)
-                    return JsonSerializer.Serialize(new { error = "Version control service is not available" });
-
-                var isVc = _versionControlService.IsProjectVersionControlled(_model);
-                if (!isVc)
-                {
+                if (!HostServices.VersionControl.IsAvailable)
                     return JsonSerializer.Serialize(new
                     {
-                        success = true,
-                        isVersionControlled = false,
-                        message = "Project is not under version control"
+                        success = false,
+                        available = false,
+                        message = "Version control service not available on this Studio Pro version."
                     });
-                }
 
-                string? branchName = null;
-                string? commitId = null;
-                string? commitAuthor = null;
-                string? commitDate = null;
-                string? commitMessage = null;
-
-                try
-                {
-                    var branch = _versionControlService.GetCurrentBranch(_model);
-                    branchName = branch?.Name;
-
-                    if (branch != null)
-                    {
-                        try
-                        {
-                            var headCommit = _versionControlService.GetHeadCommit(_model, branch);
-                            commitId = headCommit?.ID;
-                            commitAuthor = headCommit?.Author;
-                            commitDate = headCommit?.Date;
-                            commitMessage = headCommit?.Message;
-                        }
-                        catch (Exception) { /* Branch may have no commits */ }
-                    }
-                }
-                catch (Exception) { /* Git config may not be readable */ }
-
+                var info = HostServices.VersionControl.Read();
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    isVersionControlled = true,
-                    branch = branchName,
-                    headCommit = new
-                    {
-                        id = commitId,
-                        author = commitAuthor,
-                        date = commitDate,
-                        message = commitMessage
-                    }
+                    available = true,
+                    is_version_controlled = info.IsVersionControlled,
+                    branch = info.BranchName,
+                    commit_id = info.CommitId,
+                    commit_author = info.CommitAuthor,
+                    commit_date = info.CommitDate,
+                    commit_message = info.CommitMessage
                 });
             }
             catch (Exception ex)
