@@ -83,3 +83,33 @@ Captured 2026-05-12 from `src/Concord.Core/Spmcp/Tools/` + `Handlers/`.
 
 ## Open compile-time blockers expected during Phase 2
 - (record findings here as Phase 2 progresses)
+
+## Phase 3 API-drift findings
+
+Date: 2026-05-12 (Task 11 implementation)
+
+### Service namespace verification (XML grep results)
+
+Checked both `mendix.studiopro.extensionsapi/10.21.1` and `11.6.2` XML docs.
+
+| Service | 10.21.1 namespace | 11.6.2 namespace | Notes |
+|---|---|---|---|
+| `IPageGenerationService` | `Services` | `Services` | Same on both; no drift |
+| `INavigationManagerService` | `Services` | `Services` | Same on both. Spike note in "Out-of-scope leakage" flagged `UI.Services` but only `Services` appears in the type index (`T:` entries); `UI.Services` mention was in the method-level docs only. RESOLUTION: use `Mendix.StudioPro.ExtensionsAPI.Services.INavigationManagerService` in both hosts. |
+| `IMicroflowService` | `Services` | `Services` | Same on both; no drift |
+| `IUntypedModelAccessService` | `Services` | `Services` | Present on BOTH 10.21.1 and 11.6.2. IsAvailable=true on both if service is injected. |
+| `IVersionControlService` | `UI.Services` | `UI.Services` | ONLY in `UI.Services` on BOTH versions — NOT in `Services`. The T: type index shows `Mendix.StudioPro.ExtensionsAPI.UI.Services.IVersionControlService` in both XML files. |
+
+### IsAvailable conclusions
+
+- **VersionControlHost10x.IsAvailable** — `true` when `IVersionControlService` is injected. The service IS present in 10.21.1 (`UI.Services` namespace). Both versions implemented normally; no stub needed.
+- **UntypedModelHost10x.IsAvailable** — `true` when `IUntypedModelAccessService` is injected. The service IS present in 10.21.1 (`Services` namespace). Both versions implemented normally; no stub needed.
+
+### API gaps found in 11.6.2 typed surface (affects both host versions)
+
+- `IMicroflow.Documentation` — NOT exposed in 11.6.2 ExtensionsAPI. `MicroflowSummary.Documentation` is always null from these hosts. (Documentation IS accessible via the untyped model if needed.)
+- `IActionActivity.Delete()` — NOT exposed. `DeleteActivity()` throws `NotSupportedException` on both host versions.
+- `IMicroflowCallAction.Microflow` — property does not exist. Correct pattern is `IMicroflowCallAction.MicroflowCall.Microflow` (using the intermediate `IMicroflowCall` object).
+- `IPageGenerationService.GenerateOverviewPages` — returns `IEnumerable<IPage>` (not `IReadOnlyList`); `.ToList()` required.
+- Navigation read-back (`ListProfiles`, `ReadProfile`) — `INavigationManagerService` exposes only `PopulateWebNavigationWith`. No read API for profiles or existing items. `ListProfiles()` returns empty; `ReadProfile()` returns null. `RemoveItem`/`SetItemIcon` are no-ops. `SetItemTarget` re-adds via PopulateWebNavigationWith (appends, does not replace).
+- `IMicroflow.SetAccessLevel` / `AllowedModuleRoles` — not accessible via typed API. `SetAccessLevel()` is a no-op; security lives in a separate `IModuleSecurity` untyped model unit.
