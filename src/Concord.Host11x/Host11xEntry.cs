@@ -3,6 +3,7 @@ namespace Concord.Host11x;
 using System.ComponentModel.Composition;
 using Terminal;
 using Terminal.Interop;
+using Terminal.Mcp;
 
 /// <summary>
 /// Single point of MEF activation for the 11.x host. Wires HostContext +
@@ -13,6 +14,8 @@ using Terminal.Interop;
 public class Host11xEntry
 {
     private static int _initialized;
+
+    public static ToolCatalog? Catalog { get; private set; }
 
     [ImportingConstructor]
     public Host11xEntry()
@@ -25,5 +28,9 @@ public class Host11xEntry
             runConfigs: new Interop.RunConfigurationsHost11x(),
             runState: new Interop.RunStateHost11x(),
             moduleImport: new Interop.ModuleImportHost11x());
+
+        var catalog = new ToolCatalog(TargetMode.Studio11x);
+        Spmcp.SpmcpToolBootstrap11x.Register(catalog);
+        Catalog = catalog;
     }
 }

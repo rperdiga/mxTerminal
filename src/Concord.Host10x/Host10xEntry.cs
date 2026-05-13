@@ -3,6 +3,7 @@ namespace Concord.Host10x;
 using System.ComponentModel.Composition;
 using Terminal;
 using Terminal.Interop;
+using Terminal.Mcp;
 
 /// <summary>
 /// Single point of MEF activation for the 10.x host. Wires HostContext +
@@ -19,6 +20,8 @@ public class Host10xEntry
 {
     private static int _initialized;
 
+    public static ToolCatalog? Catalog { get; private set; }
+
     [ImportingConstructor]
     public Host10xEntry()
     {
@@ -30,5 +33,9 @@ public class Host10xEntry
             runConfigs: new Interop.RunConfigurationsHost10x(),
             runState: new Interop.RunStateHost10x(),
             moduleImport: new Interop.ModuleImportHost10x());
+
+        var catalog = new ToolCatalog(TargetMode.Studio10x);
+        Spmcp.SpmcpToolBootstrap10x.Register(catalog);
+        Catalog = catalog;
     }
 }
