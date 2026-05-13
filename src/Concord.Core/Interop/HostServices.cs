@@ -26,6 +26,7 @@ public static class HostServices
     // pane opens, not at MEF activation time.
     private static IRunStateProbe? _runStateProbe;
     private static IStudioProUiAutomation? _uiAutomation;
+    private static Maia.MaiaActions? _maiaActions;
     private static readonly object _gate = new();
 
     public static IStudioProAppHost App
@@ -67,6 +68,17 @@ public static class HostServices
     public static IStudioProUiAutomation UiAutomation
         => _uiAutomation ?? throw NotInitialized(nameof(IStudioProUiAutomation));
 
+    /// <summary>
+    /// Set by the pane after constructing MaiaActions (pane-scoped, hot-swapped
+    /// on settings save). Null when Maia integration is disabled or not yet
+    /// initialized. MaiaToolsBootstrap delegates read this at invoke time (late
+    /// binding) so hot-swaps are visible without re-registration.
+    /// </summary>
+    public static Maia.MaiaActions? MaiaActions
+    {
+        get { lock (_gate) return _maiaActions; }
+    }
+
     public static void SetRunStateProbe(IRunStateProbe probe)
     {
         lock (_gate) { _runStateProbe = probe; }
@@ -75,6 +87,11 @@ public static class HostServices
     public static void SetUiAutomation(IStudioProUiAutomation ui)
     {
         lock (_gate) { _uiAutomation = ui; }
+    }
+
+    public static void SetMaiaActions(Maia.MaiaActions? maia)
+    {
+        lock (_gate) { _maiaActions = maia; }
     }
 
     /// <summary>
@@ -148,6 +165,7 @@ public static class HostServices
             _microflowAuthoring = null;
             _runStateProbe = null;
             _uiAutomation = null;
+            _maiaActions = null;
         }
     }
 

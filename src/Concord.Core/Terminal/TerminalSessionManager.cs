@@ -162,11 +162,7 @@ public sealed class TerminalSessionManager : IDisposable
 
     public void StartActionServer(
         int port,
-        StudioProActions actions,
         Logger? log = null,
-        Terminal.Maia.MaiaActions? maia = null,
-        bool studioProActionsEnabled = true,
-        bool maiaIntegrationEnabled = false,
         // v4.2.1: caller hands ownership of the singleton CdpClient (when
         // Maia is enabled) to the manager. The previous client is explicitly
         // disposed before the swap so a settings toggle off→on doesn't leak
@@ -179,13 +175,13 @@ public sealed class TerminalSessionManager : IDisposable
         Terminal.Maia.CdpClient? oldCdp;
         lock (actionServerGate)
         {
-            // Always rebuild — the caller may have constructed a fresh `actions` with
-            // updated hotkey config that we can't detect from here. The cost is one
+            // Always rebuild — callers may have updated hotkey config, maia
+            // state, or family toggles via HostServices. The cost is one
             // TCP listener bind cycle, which is cheap.
             actionServer?.Dispose();
             oldCdp = activeCdpClient;
             activeCdpClient = cdpClient;
-            var s = new StudioProActionServer(actions, port, log, maia, studioProActionsEnabled, maiaIntegrationEnabled);
+            var s = new StudioProActionServer(port, log);
             s.Start();
             actionServer = s;
         }

@@ -9,6 +9,19 @@ using Xunit;
 
 namespace Terminal.Tests;
 
+/// <summary>
+/// Ensures StudioProActionServerTests and MaiaJsonRpcTests run sequentially —
+/// both classes mutate ToolCatalogRegistry.Active and HostServices (static
+/// singletons) and would race if xUnit ran them in parallel.
+/// </summary>
+[CollectionDefinition("ActionServer")]
+public class ActionServerCollection { }
+
+/// <summary>
+/// Shares the "ActionServer" collection with MaiaJsonRpcTests so both run
+/// sequentially and don't race on ToolCatalogRegistry.Active + HostServices.
+/// </summary>
+[Collection("ActionServer")]
 public class StudioProActionServerTests : IAsyncLifetime
 {
     private sealed class FakeProbe : IRunStateProbe
@@ -38,11 +51,14 @@ public class StudioProActionServerTests : IAsyncLifetime
         HostServices.Reset();
         HostServices.SetRunStateProbe(new FakeProbe { Next = () => RunState.Running });
         HostServices.SetUiAutomation(new FakeUi());
-        var actions = new StudioProActions(
-            runTimeout: TimeSpan.FromMilliseconds(200),
-            stopTimeout: TimeSpan.FromMilliseconds(200),
-            pollInterval: TimeSpan.FromMilliseconds(50));
-        server = new StudioProActionServer(actions, port: 0);  // ephemeral
+
+        // Register UI-action tools in the catalog so the server's catalog-only
+        // dispatch path can find them. Studio10x mode skips the 11.x allowlist.
+        var catalog = new Terminal.Mcp.ToolCatalog(TargetMode.Studio10x);
+        Terminal.Mcp.UiActionsBootstrap.Register(catalog);
+        Terminal.Mcp.ToolCatalogRegistry.Active = catalog;
+
+        server = new StudioProActionServer(port: 0);  // ephemeral
         server.Start();
         http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{server.Port}") };
         return Task.CompletedTask;
@@ -52,6 +68,8 @@ public class StudioProActionServerTests : IAsyncLifetime
     {
         server?.Dispose();
         http.Dispose();
+        Terminal.Mcp.ToolCatalogRegistry.Active = null;
+        HostServices.Reset();
         return Task.CompletedTask;
     }
 
@@ -146,8 +164,7 @@ public class StudioProActionServerTests : IAsyncLifetime
         HostServices.Reset();
         HostServices.SetRunStateProbe(new FakeProbe());
         HostServices.SetUiAutomation(new FakeUi());
-        var actions = new StudioProActions();
-        var s = new StudioProActionServer(actions, port: 0);
+        var s = new StudioProActionServer(port: 0);
         s.Start();
         var port = s.Port;
         s.Dispose();

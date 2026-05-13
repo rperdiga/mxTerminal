@@ -278,11 +278,9 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 catch (Exception ex) { log?.Warn($"GetActiveConfiguration threw: {ex.Message}"); return null; }
             });
             HostServices.SetRunStateProbe(probe);
-            var actions = new StudioProActions();
             // Build Maia plumbing only on Windows when the toggle is on. The router
             // probe runs in the background; the router is functional even before it
             // returns (early calls just see all-tiers-down and fail with a clear message).
-            Terminal.Maia.MaiaActions? maia = null;
             Terminal.Maia.CdpClient? sharedCdp = null;
             bool maiaEnabled = OperatingSystem.IsWindows() && settings.MaiaIntegrationEnabled;
             if (maiaEnabled)
@@ -306,18 +304,24 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 };
                 var router = new Terminal.Maia.MaiaRouter(transports);
                 _ = router.ProbeAllAsync(CancellationToken.None);  // fire-and-forget; safe
-                maia = new Terminal.Maia.MaiaActions(router);
+                var maia = new Terminal.Maia.MaiaActions(router);
+                HostServices.SetMaiaActions(maia);
             }
+            else
+            {
+                HostServices.SetMaiaActions(null);
+            }
+
+            // Gate catalog families from settings before starting the server so
+            // tools/list reflects the current toggles immediately.
+            Host10xEntry.Catalog?.SetFamilyEnabled(Terminal.Mcp.ToolFamily.UiActions, settings.StudioProActionsEnabled);
+            Host10xEntry.Catalog?.SetFamilyEnabled(Terminal.Mcp.ToolFamily.Maia, maiaEnabled);
 
             // Fixed default — saved settings.McpServerPort is ignored.
             // The server falls back to a free OS-assigned port if 7783 is taken.
             manager.StartActionServer(
                 StudioProActionServer.DefaultPort,
-                actions,
                 log,
-                maia,
-                studioProActionsEnabled: settings.StudioProActionsEnabled,
-                maiaIntegrationEnabled: maiaEnabled,
                 cdpClient: sharedCdp);
             // Log the LIVE bound port — DefaultPort may have been busy and the
             // server quietly fell back to an OS-assigned free port.

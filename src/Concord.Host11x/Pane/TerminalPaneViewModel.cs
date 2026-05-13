@@ -269,12 +269,10 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 HostServices.SetUiAutomation(ui);
                 var probe = new RunStateProbe(getApplicationRootUrl);
                 HostServices.SetRunStateProbe(probe);
-                var actions = new StudioProActions();
 
                 // Build Maia plumbing only on Windows when the toggle is on. The router
                 // probe runs in the background; the router is functional even before it
                 // returns (early calls just see all-tiers-down and fail with a clear message).
-                Terminal.Maia.MaiaActions? maia = null;
                 Terminal.Maia.CdpClient? sharedCdp = null;
                 bool maiaEnabled = OperatingSystem.IsWindows() && newMaiaIntegration;
                 if (maiaEnabled)
@@ -292,16 +290,21 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     };
                     var router = new Terminal.Maia.MaiaRouter(transports);
                     _ = router.ProbeAllAsync(CancellationToken.None);  // fire-and-forget; safe
-                    maia = new Terminal.Maia.MaiaActions(router);
+                    var maia = new Terminal.Maia.MaiaActions(router);
+                    HostServices.SetMaiaActions(maia);
                 }
+                else
+                {
+                    HostServices.SetMaiaActions(null);
+                }
+
+                // Gate catalog families from settings before starting the server.
+                Concord.Host11x.Host11xEntry.Catalog?.SetFamilyEnabled(Terminal.Mcp.ToolFamily.UiActions, newStudioProActions);
+                Concord.Host11x.Host11xEntry.Catalog?.SetFamilyEnabled(Terminal.Mcp.ToolFamily.Maia, maiaEnabled);
 
                 manager.StartActionServer(
                     StudioProActionServer.DefaultPort,
-                    actions,
                     log,
-                    maia,
-                    studioProActionsEnabled: newStudioProActions,
-                    maiaIntegrationEnabled: maiaEnabled,
                     cdpClient: sharedCdp);
 
                 // Probe the LIVE bound port (auto-fallback may have moved off
