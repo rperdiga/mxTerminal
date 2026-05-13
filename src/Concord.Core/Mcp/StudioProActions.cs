@@ -110,8 +110,7 @@ public sealed class StudioProActions
         var info = HostServices.RunConfigurations.GetActive();
         if (info is null)
             return Task.FromResult(ActionResult.OkWith("no_active_configuration", new { }));
-        var cfg = new RunConfigurationSnapshot(info.Id, info.Name, info.ApplicationRootUrl);
-        return Task.FromResult(ActionResult.OkWith("ok", cfg));
+        return Task.FromResult(ActionResult.OkWith("ok", info));
     }
 
     /// <summary>Composite snapshot for orienting Claude Code: project, run state, active config.</summary>
@@ -128,14 +127,13 @@ public sealed class StudioProActions
             _                => "unknown",
         };
         var url = state == RunState.Running ? probe.GetActiveUrl() : null;
-        var info2 = HostServices.RunConfigurations.GetActive();
-        var cfg = info2 is null ? null : new RunConfigurationSnapshot(info2.Id, info2.Name, info2.ApplicationRootUrl);
+        var activeConfig = HostServices.RunConfigurations.GetActive();
         var info = new AppStatusInfo(
             ProjectPath: projPath,
             ProjectName: projName,
             Running: stateStr,
             RunningUrl: url,
-            ActiveRunConfiguration: cfg);
+            ActiveRunConfiguration: activeConfig);
         return ActionResult.OkWith("ok", info);
     }
 

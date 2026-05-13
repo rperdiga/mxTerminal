@@ -1,3 +1,5 @@
+using Terminal.Interop;
+
 namespace Terminal;
 
 /// <summary>
@@ -16,13 +18,10 @@ public sealed record ActionResult(
     public static ActionResult Fail(string error) => new(Error: error);
 }
 
-/// <summary>Snapshot of a Mendix local run configuration.</summary>
-public sealed record RunConfigurationSnapshot(string? Id, string? Name, string? ApplicationRootUrl);
-
 /// <summary>Composite status for the get_app_status tool.</summary>
 public sealed record AppStatusInfo(
     string? ProjectPath,
     string? ProjectName,
     string Running,                    // "running" | "stopped" | "unknown"
     string? RunningUrl,
-    RunConfigurationSnapshot? ActiveRunConfiguration);
+    RunConfigurationInfo? ActiveRunConfiguration);
