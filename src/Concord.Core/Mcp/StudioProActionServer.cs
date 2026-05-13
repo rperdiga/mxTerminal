@@ -376,6 +376,9 @@ public sealed class StudioProActionServer : IDisposable
                 try
                 {
                     var resultObj = await catalog.InvokeAsync(name, args);
+                    var actionResult = resultObj as ActionResult;
+                    if (actionResult?.Error != null)
+                        log?.Warn($"[concord-mcp] tool '{name}' failed: {actionResult.Error}");
                     var payloadJson = resultObj as string ?? System.Text.Json.JsonSerializer.Serialize(
                         resultObj,
                         new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)
@@ -388,7 +391,7 @@ public sealed class StudioProActionServer : IDisposable
                         {
                             new JsonObject { ["type"] = "text", ["text"] = payloadJson }
                         },
-                        ["isError"] = false,
+                        ["isError"] = actionResult?.Error != null,
                     };
                 }
                 catch (Exception ex)

@@ -10,6 +10,22 @@ using Xunit;
 namespace Terminal.Tests;
 
 /// <summary>
+/// Minimal ITool implementation for use in tests. Delegates Invoke to a
+/// caller-supplied lambda so individual tests control the return value.
+/// </summary>
+file sealed class FakeTool : Terminal.Mcp.ITool
+{
+    private readonly Func<System.Text.Json.Nodes.JsonObject, Task<object>> _invoke;
+    public FakeTool(string name, Terminal.Mcp.ToolFamily family, Func<System.Text.Json.Nodes.JsonObject, Task<object>> invoke)
+    {
+        Name = name; Family = family; _invoke = invoke;
+    }
+    public string Name { get; }
+    public Terminal.Mcp.ToolFamily Family { get; }
+    public Func<System.Text.Json.Nodes.JsonObject, Task<object>> Invoke => _invoke;
+}
+
+/// <summary>
 /// Ensures StudioProActionServerTests and MaiaJsonRpcTests run sequentially —
 /// both classes mutate ToolCatalogRegistry.Active and HostServices (static
 /// singletons) and would race if xUnit ran them in parallel.
@@ -120,6 +136,24 @@ public class StudioProActionServerTests : IAsyncLifetime
         var inner = JsonDocument.Parse(text).RootElement;
         inner.GetProperty("status").GetString().Should().Be("already_running");
         inner.GetProperty("url").GetString().Should().Be("http://localhost:8080");
+    }
+
+    [Fact]
+    public async Task ToolsCall_FailingTool_ReturnsIsErrorTrue()
+    {
+        // Register a fake tool that returns ActionResult.Fail so we can assert
+        // the catalog dispatch path surfaces isError=true (regression for Task 21).
+        var fakeTool = new FakeTool(
+            name: "fake_failing_tool",
+            family: Terminal.Mcp.ToolFamily.UiActions,
+            invoke: _ => Task.FromResult<object>(ActionResult.Fail("test failure")));
+        Terminal.Mcp.ToolCatalogRegistry.Active!.Register(fakeTool);
+
+        var doc = await Post("""{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"fake_failing_tool","arguments":{}}}""");
+        var result = doc.RootElement.GetProperty("result");
+        result.GetProperty("isError").GetBoolean().Should().BeTrue();
+        var text = result.GetProperty("content")[0].GetProperty("text").GetString()!;
+        text.Should().Contain("test failure");
     }
 
     [Fact]
