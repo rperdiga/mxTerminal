@@ -402,122 +402,72 @@ namespace Terminal.Spmcp.Tools
 
     public async Task<object> GenerateOverviewPages(JsonObject arguments)
     {
+        await Task.CompletedTask;
         try
         {
-            if (_model == null)
+            var entityNamesArray = arguments["entity_names"]?.AsArray();
+            var generateIndexSnippet = arguments["generate_index_snippet"]?.GetValue<bool>() ?? true;
+
+            if (entityNamesArray == null || !entityNamesArray.Any())
             {
-                var error = "IModel instance is null in GenerateOverviewPages.";
+                return JsonSerializer.Serialize(new {
+                    error = "Invalid request format or no entity names provided",
+                    success = false
+                });
+            }
+
+            var entityNames = entityNamesArray
+                .Select(node => node?.ToString())
+                .Where(name => !string.IsNullOrEmpty(name))
+                .Cast<string>()
+                .ToList();
+
+            if (!entityNames.Any())
+            {
+                return JsonSerializer.Serialize(new {
+                    error = "No valid entity names provided",
+                    success = false
+                });
+            }
+
+            var overviewModuleName = arguments["module_name"]?.ToString();
+            if (string.IsNullOrWhiteSpace(overviewModuleName))
+            {
+                var error = "module_name is required for GenerateOverviewPages.";
                 _logger.LogError(error);
                 SetLastError(error);
                 return JsonSerializer.Serialize(new { error, success = false });
             }
 
-            var entityNamesArray = arguments["entity_names"]?.AsArray();
-                var generateIndexSnippet = arguments["generate_index_snippet"]?.GetValue<bool>() ?? true;
+            var request = new PageGenerationRequest(overviewModuleName, entityNames, generateIndexSnippet);
+            var result = HostServices.PageGeneration.GenerateOverviewPages(request);
 
-                if (entityNamesArray == null || !entityNamesArray.Any())
-                {
-                    return JsonSerializer.Serialize(new { 
-                        error = "Invalid request format or no entity names provided",
-                        success = false
-                    });
-                }
-
-                var entityNames = entityNamesArray
-                    .Select(node => node?.ToString())
-                    .Where(name => !string.IsNullOrEmpty(name))
-                    .ToList();
-
-                if (!entityNames.Any())
-                {
-                    return JsonSerializer.Serialize(new { 
-                        error = "No valid entity names provided",
-                        success = false
-                    });
-                }
-
-                var overviewModuleName = arguments["module_name"]?.ToString();
-                var module = Utils.Utils.ResolveModule(_model, overviewModuleName);
-                if (module == null)
-                {
-                    var error = string.IsNullOrWhiteSpace(overviewModuleName) ? "No module found in GenerateOverviewPages." : $"Module '{overviewModuleName}' not found.";
-                    _logger.LogError(error);
-                    SetLastError(error);
-                    return JsonSerializer.Serialize(new { error, success = false });
-                }
-                if (module?.DomainModel == null)
-                {
-                    return JsonSerializer.Serialize(new { 
-                        error = "No domain model found",
-                        success = false
-                    });
-                }
-
-                // Get all entities from the domain model
-                var allEntities = module.DomainModel.GetEntities().ToList();
-                
-                // Filter entities based on the requested names
-                var entitiesToGenerate = allEntities
-                    .Where(e => entityNames.Contains(e.Name, StringComparer.OrdinalIgnoreCase))
-                    .ToList();
-
-                if (!entitiesToGenerate.Any())
-                {
-                    return JsonSerializer.Serialize(new { 
-                        error = "None of the requested entities were found in the domain model",
-                        success = false,
-                        available_entities = allEntities.Select(e => e.Name).ToArray()
-                    });
-                }
-
-                // Generate overview pages using the injected service
-                var generatedOverviewPages = _pageGenerationService.GenerateOverviewPages(
-                    module,
-                    entitiesToGenerate,
-                    generateIndexSnippet
-                );
-
-                // Add pages to navigation using the injected service
-                var overviewPages = generatedOverviewPages
-                    .Where(page => page.Name.Contains("overview", StringComparison.InvariantCultureIgnoreCase))
-                    .Select(page => (page.Name, page))
-                    .ToArray();
-
-                _navigationManagerService.PopulateWebNavigationWith(
-                    _model,
-                    overviewPages
-                );
-
-                // BUG-009 note: The Mendix IPageGenerationService may generate broken widget bindings
-                // for enumeration-typed attributes and association references (CE1613 errors).
-                // Warn the user so they know to check and fix in Studio Pro.
-                var hasEnumAttrs = entitiesToGenerate.Any(e =>
-                    e.GetAttributes().Any(a => a.Type?.GetType().Name?.Contains("Enumeration") == true));
-                var hasAssocs = entitiesToGenerate.Any(e => e.GetAssociations(AssociationDirection.Both, null).Any());
-                var warnings = new List<string>();
-                if (hasEnumAttrs)
-                    warnings.Add("Some entities have enumeration-typed attributes which may generate broken widget bindings (CE1613). Please verify in Studio Pro.");
-                if (hasAssocs)
-                    warnings.Add("Some entities have associations which may generate broken reference widget bindings. Please verify in Studio Pro.");
-
-                return JsonSerializer.Serialize(new {
-                    success = true,
-                    message = $"Successfully generated {overviewPages.Length} overview pages",
-                    generated_pages = overviewPages.Select(p => p.Name).ToArray(),
-                    entities_processed = entitiesToGenerate.Select(e => e.Name).ToArray(),
-                    warnings = warnings.Any() ? warnings.ToArray() : null
-                });
-            }
-            catch (Exception ex)
+            if (!result.Success)
             {
-                _logger.LogError(ex, "Error generating overview pages");
-                SetLastError("Error generating overview pages", ex);
-                return JsonSerializer.Serialize(new { 
-                    error = ex.Message,
-                    success = false
-                });
+                var error = result.Error ?? "GenerateOverviewPages failed.";
+                _logger.LogError(error);
+                SetLastError(error);
+                return JsonSerializer.Serialize(new { error, success = false, warnings = result.Warnings });
             }
+
+            return JsonSerializer.Serialize(new {
+                success = true,
+                message = $"Successfully generated {result.CreatedPageNames.Count} overview pages",
+                generated_pages = result.CreatedPageNames,
+                created_pages = result.CreatedPageNames,
+                warnings = result.Warnings.Any() ? result.Warnings : null
+            });
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating overview pages");
+            SetLastError("Error generating overview pages", ex);
+            return JsonSerializer.Serialize(new {
+                error = ex.Message,
+                success = false
+            });
+        }
+    }
 
     public async Task<object> ListMicroflows(JsonObject arguments)
     {
@@ -1032,20 +982,19 @@ namespace Terminal.Spmcp.Tools
     }
 
 
-        // ...existing code...
         public async Task<object> CreateMicroflow(JsonObject arguments)
         {
-            // This method now just redirects to indicate that service injection is needed
-            var error = "CreateMicroflow requires service provider context. Use CreateMicroflowWithService instead.";
-            SetLastError(error);
-            _logger.LogError("[create_microflow] Method called without service context.");
-            return JsonSerializer.Serialize(new { error });
-        }
-
-        public async Task<object> CreateMicroflowWithService(JsonObject arguments, IMicroflowService microflowService, IServiceProvider serviceProvider)
-        {
+            await Task.CompletedTask;
             try
             {
+                if (!HostServices.MicroflowAuthoring.IsAvailable)
+                {
+                    var error = "IMicroflowService is not available in the current environment.";
+                    SetLastError(error);
+                    _logger.LogError("[create_microflow] MicroflowAuthoring host reports IsAvailable=false.");
+                    return JsonSerializer.Serialize(new { error });
+                }
+
                 var microflowName = Utils.Utils.GetParam(arguments, "name", "microflow_name", "microflowName");
                 if (string.IsNullOrWhiteSpace(microflowName))
                 {
@@ -1056,43 +1005,53 @@ namespace Terminal.Spmcp.Tools
                 }
 
                 var mfModuleName = arguments["module_name"]?.ToString();
-                var module = Utils.Utils.ResolveModule(_model, mfModuleName);
-                if (module == null)
+                if (string.IsNullOrWhiteSpace(mfModuleName))
                 {
-                    var available = Utils.Utils.ListUserModules(_model);
-                    var error = string.IsNullOrWhiteSpace(mfModuleName)
-                        ? $"No user module found. Available modules: {available}"
-                        : $"Module '{mfModuleName}' not found. Available user modules: {available}";
+                    var error = "module_name is required for create_microflow.";
                     SetLastError(error);
-                    _logger.LogError($"[create_microflow] {error}");
+                    _logger.LogError("[create_microflow] module_name is missing in arguments.");
                     return JsonSerializer.Serialize(new { error });
                 }
 
-                // Check for duplicate
-                var existing = module.GetDocuments().OfType<IMicroflow>()
-                    .FirstOrDefault(mf => mf.Name.Equals(microflowName, StringComparison.OrdinalIgnoreCase));
-                if (existing != null)
+                // Resolve access level
+                var accessLevelStr = arguments["access_level"]?.ToString() ?? "CheckPerOperation";
+                if (!Enum.TryParse<MicroflowAccessLevel>(accessLevelStr, ignoreCase: true, out var accessLevel))
+                    accessLevel = MicroflowAccessLevel.CheckPerOperation;
+
+                // Resolve return type info
+                var returnTypeStr = arguments["returnType"]?.ToString() ?? arguments["return_type"]?.ToString();
+                var returnEntityStr = arguments["returnEntity"]?.ToString() ?? arguments["return_entity"]?.ToString();
+                bool returnIsList = false;
+                string? returnTypeQualifiedName = null;
+
+                if (!string.IsNullOrWhiteSpace(returnTypeStr) &&
+                    !returnTypeStr.Trim().Equals("void", StringComparison.OrdinalIgnoreCase))
                 {
-                    var error = $"Microflow '{microflowName}' already exists in module '{module.Name}'.";
-                    SetLastError(error);
-                    _logger.LogError($"[create_microflow] Microflow '{microflowName}' already exists in module '{module.Name}'.");
-                    return JsonSerializer.Serialize(new { error });
+                    var normalizedReturn = returnTypeStr.Trim().ToLowerInvariant();
+                    if (normalizedReturn == "list" && !string.IsNullOrWhiteSpace(returnEntityStr))
+                    {
+                        returnTypeQualifiedName = returnEntityStr;
+                        returnIsList = true;
+                    }
+                    else if (normalizedReturn == "object" && !string.IsNullOrWhiteSpace(returnEntityStr))
+                    {
+                        returnTypeQualifiedName = returnEntityStr;
+                        returnIsList = false;
+                    }
+                    else
+                    {
+                        // Scalar type (String, Integer, Boolean, etc.) — pass as-is
+                        returnTypeQualifiedName = returnTypeStr.Trim();
+                        returnIsList = false;
+                    }
                 }
 
-                if (microflowService == null)
+                // Resolve parameters
+                var parametersArray = arguments["parameters"]?.AsArray();
+                var mfParams = new List<MicroflowParameter>();
+                if (parametersArray != null)
                 {
-                    var error = "IMicroflowService is not available in the current environment.";
-                    SetLastError(error);
-                    _logger.LogError("[create_microflow] IMicroflowService is null.");
-                    return JsonSerializer.Serialize(new { error });
-                }
-
-                // Prepare parameters
-                var parameters = arguments["parameters"]?.AsArray();
-                var paramList = new List<(string, Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType)>();
-                if (parameters != null)
-                {
-                    foreach (var param in parameters)
+                    foreach (var param in parametersArray)
                     {
                         var paramObj = param?.AsObject();
                         if (paramObj == null)
@@ -1103,157 +1062,67 @@ namespace Terminal.Spmcp.Tools
                         var paramName = paramObj["name"]?.ToString();
                         var paramTypeStr = paramObj["type"]?.ToString();
                         var paramEntityStr = paramObj["entity"]?.ToString();
+                        var paramDocStr = paramObj["documentation"]?.ToString();
+                        var paramIsList = paramObj["is_list"]?.GetValue<bool>() ?? false;
+
                         if (string.IsNullOrWhiteSpace(paramName) || string.IsNullOrWhiteSpace(paramTypeStr))
                         {
                             _logger.LogError($"[create_microflow] Parameter missing name or type: {paramObj}");
                             continue;
                         }
 
-                        // Handle Object and List parameter types with entity reference
-                        Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType dataType;
+                        // For object/list types, use entity as the qualified name
                         var normalizedParamType = paramTypeStr.Trim().ToLowerInvariant();
-                        if ((normalizedParamType == "object" || normalizedParamType == "list") && !string.IsNullOrWhiteSpace(paramEntityStr))
+                        string typeQualifiedName;
+                        bool isList;
+                        if ((normalizedParamType == "object" || normalizedParamType == "list") &&
+                            !string.IsNullOrWhiteSpace(paramEntityStr))
                         {
-                            var (paramEntity, _) = Utils.Utils.FindEntityAcrossModules(_model, paramEntityStr);
-                            if (paramEntity != null)
-                            {
-                                dataType = normalizedParamType == "object"
-                                    ? Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType.Object(paramEntity.QualifiedName)
-                                    : Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType.List(paramEntity.QualifiedName);
-                            }
-                            else
-                            {
-                                _logger.LogWarning($"[create_microflow] Entity '{paramEntityStr}' not found for param '{paramName}', defaulting to String");
-                                dataType = Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType.String;
-                            }
+                            typeQualifiedName = paramEntityStr;
+                            isList = normalizedParamType == "list" || paramIsList;
                         }
                         else
                         {
-                            dataType = Utils.Utils.DataTypeFromString(paramTypeStr);
+                            typeQualifiedName = paramTypeStr.Trim();
+                            isList = paramIsList;
                         }
-                        paramList.Add((paramName, dataType));
+
+                        mfParams.Add(new MicroflowParameter(paramName, typeQualifiedName, isList, paramDocStr));
                     }
                 }
 
-                // Prepare return value with proper expressions
-                var returnTypeStr = arguments["returnType"]?.ToString() ?? arguments["return_type"]?.ToString();
-                var returnEntityStr = arguments["returnEntity"]?.ToString() ?? arguments["return_entity"]?.ToString();
-                Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType returnType = Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType.Void;
+                var documentation = arguments["documentation"]?.ToString();
+                var folderPath = arguments["folder_path"]?.ToString() ?? arguments["folderPath"]?.ToString();
 
-                // Only set a non-void return type if explicitly specified and meaningful
-                if (!string.IsNullOrWhiteSpace(returnTypeStr) &&
-                    !returnTypeStr.Trim().Equals("void", StringComparison.OrdinalIgnoreCase) &&
-                    !returnTypeStr.Trim().Equals("", StringComparison.OrdinalIgnoreCase))
-                {
-                    // BUG-002 fix: Handle List and Object return types that require entity reference
-                    var normalizedReturnType = returnTypeStr.Trim().ToLowerInvariant();
-                    if ((normalizedReturnType == "list" || normalizedReturnType == "object") && !string.IsNullOrWhiteSpace(returnEntityStr))
-                    {
-                        var (returnEntity, _) = Utils.Utils.FindEntityAcrossModules(_model, returnEntityStr);
-                        if (returnEntity != null)
-                        {
-                            returnType = normalizedReturnType == "list"
-                                ? Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType.List(returnEntity.QualifiedName)
-                                : Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType.Object(returnEntity.QualifiedName);
-                            _logger.LogInformation($"[create_microflow] Created {normalizedReturnType} return type for entity '{returnEntityStr}'");
-                        }
-                        else
-                        {
-                            _logger.LogWarning($"[create_microflow] Entity '{returnEntityStr}' not found for {normalizedReturnType} return type, falling back to String");
-                            returnType = Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType.String;
-                        }
-                    }
-                    else
-                    {
-                        returnType = Utils.Utils.DataTypeFromString(returnTypeStr);
-                    }
-                }
+                var createRequest = new CreateMicroflowRequest(
+                    ModuleName: mfModuleName,
+                    Name: microflowName,
+                    Parameters: mfParams,
+                    ReturnTypeQualifiedName: returnTypeQualifiedName,
+                    ReturnIsList: returnIsList,
+                    AccessLevel: accessLevel,
+                    Documentation: documentation,
+                    FolderPath: folderPath);
 
-                _logger.LogInformation($"[create_microflow] Return type string: '{returnTypeStr ?? "null"}', entity: '{returnEntityStr ?? "null"}', resolved to: {returnType}");
+                _logger.LogInformation($"[create_microflow] Calling HostServices.MicroflowAuthoring.Create: module={mfModuleName}, name={microflowName}, paramCount={mfParams.Count}");
 
-                Mendix.StudioPro.ExtensionsAPI.Model.Microflows.MicroflowReturnValue? returnValue = null;
+                var documentId = HostServices.MicroflowAuthoring.Create(createRequest);
 
-                // Check for custom return expression (allows caller to set end event to return a variable like $CountResult)
-                var returnExpressionStr = arguments["return_expression"]?.ToString() ?? arguments["returnExpression"]?.ToString();
+                _logger.LogInformation($"[create_microflow] Created microflow '{documentId.QualifiedName}' (guid={documentId.Value})");
 
-                // For non-void return types, create proper return value with expression
-                if (returnType != Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType.Void)
-                {
-                    try
-                    {
-                        var microflowExpressionService = serviceProvider.GetRequiredService<IMicroflowExpressionService>();
-                        // Use custom return expression if provided, otherwise use type default
-                        var expressionStr = !string.IsNullOrWhiteSpace(returnExpressionStr)
-                            ? NormalizeMendixExpression(returnExpressionStr)
-                            : GetDefaultExpressionForDataType(returnType);
-                        var expression = microflowExpressionService.CreateFromString(expressionStr);
-                        returnValue = new Mendix.StudioPro.ExtensionsAPI.Model.Microflows.MicroflowReturnValue(returnType, expression);
-                        _logger.LogInformation($"[create_microflow] Created return value for {returnType} with expression: {expressionStr}");
+                return JsonSerializer.Serialize(new {
+                    success = true,
+                    message = $"Microflow '{microflowName}' created successfully in module '{mfModuleName}'.",
+                    document_id = documentId.Value,
+                    qualified_name = documentId.QualifiedName,
+                    microflow = new {
+                        name = microflowName,
+                        qualifiedName = documentId.QualifiedName,
+                        module = mfModuleName,
+                        returnType = returnTypeQualifiedName ?? "void",
+                        parameterCount = mfParams.Count
                     }
-                    catch (Exception ex)
-                    {
-                        // BUG-002 fix: For List/Object types, try without expression (use empty)
-                        _logger.LogWarning(ex, $"[create_microflow] Failed to create return value with expression, trying with 'empty': {ex.Message}");
-                        try
-                        {
-                            var microflowExpressionService = serviceProvider.GetRequiredService<IMicroflowExpressionService>();
-                            var expression = microflowExpressionService.CreateFromString("empty");
-                            returnValue = new Mendix.StudioPro.ExtensionsAPI.Model.Microflows.MicroflowReturnValue(returnType, expression);
-                            _logger.LogInformation($"[create_microflow] Created return value for {returnType} with 'empty' expression");
-                        }
-                        catch (Exception ex2)
-                        {
-                            _logger.LogError(ex2, $"[create_microflow] Failed to create return value for {returnType}");
-                            var error = $"Failed to create return value for type {returnType}: {ex2.Message}";
-                            SetLastError(error, ex2);
-                            return JsonSerializer.Serialize(new { error });
-                        }
-                    }
-                }
-
-                // Wrap model changes in a transaction
-                using (var transaction = _model.StartTransaction("Create microflow"))
-                {
-                    // Cast module to IFolderBase as required by the API
-                    var folderBase = (Mendix.StudioPro.ExtensionsAPI.Model.Projects.IFolderBase)module;
-                    
-                    // Add debug logging
-                    _logger.LogInformation($"[create_microflow] About to call CreateMicroflow with: model={_model != null}, folderBase={folderBase != null}, name={microflowName}, returnValue={returnValue != null}, paramCount={paramList.Count}");
-                    
-                    var microflow = microflowService.CreateMicroflow(_model, folderBase, microflowName, returnValue, paramList.ToArray());
-                    if (microflow == null)
-                    {
-                        var error = "Failed to create microflow.";
-                        SetLastError(error);
-                        _logger.LogError("[create_microflow] IMicroflowService.CreateMicroflow returned null.");
-                        return JsonSerializer.Serialize(new { error });
-                    }
-                    
-                    transaction.Commit();
-                    
-                    string qualifiedName = "";
-                    try
-                    {
-                        qualifiedName = microflow.QualifiedName != null ? (microflow.QualifiedName.FullName ?? "") : "";
-                    }
-                    catch (Exception qnEx)
-                    {
-                        _logger.LogError(qnEx, "[create_microflow] Exception accessing microflow.QualifiedName.FullName");
-                        qualifiedName = "";
-                    }
-                    
-                    return JsonSerializer.Serialize(new {
-                        success = true,
-                        message = $"Microflow '{microflowName}' created successfully in module '{module.Name}'.",
-                        microflow = new {
-                            name = microflow.Name,
-                            qualifiedName = qualifiedName,
-                            module = module.Name,
-                            returnType = returnType.ToString(),
-                            parameterCount = paramList.Count
-                        }
-                    });
-                }
+                });
             }
             catch (Exception ex)
             {
@@ -7678,6 +7547,7 @@ namespace Terminal.Spmcp.Tools
 
         public async Task<string> DeleteDocument(JsonObject parameters)
         {
+            await Task.CompletedTask;
             try
             {
                 var documentName = parameters["document_name"]?.ToString();
@@ -7689,60 +7559,31 @@ namespace Terminal.Spmcp.Tools
                 if (string.IsNullOrEmpty(moduleName))
                     return JsonSerializer.Serialize(new { error = "module_name is required" });
 
-                var module = _model.Root.GetModules()
-                    .FirstOrDefault(m => m.Name.Equals(moduleName, StringComparison.OrdinalIgnoreCase));
-                if (module == null)
-                    return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" });
-
-                // Search for the document at root level first
-                IDocument? doc = null;
-                IFolderBase? parentFolder = null;
-
-                // Check root level
-                doc = module.GetDocuments().FirstOrDefault(d => d.Name.Equals(documentName, StringComparison.OrdinalIgnoreCase));
-                if (doc != null)
-                    parentFolder = module;
-
-                // Search in subfolders if not found
-                if (doc == null)
+                // Build qualified name and resolve via IModelHost
+                var qualifiedName = $"{moduleName}.{documentName}";
+                var documentId = HostServices.Model.GetDocumentByQualifiedName(qualifiedName);
+                if (documentId == null)
                 {
-                    (doc, parentFolder) = FindDocumentWithParent(module, documentName);
+                    var error = $"Document '{documentName}' not found in module '{moduleName}'";
+                    _logger.LogError(error);
+                    return JsonSerializer.Serialize(new { error });
                 }
 
-                if (doc == null || parentFolder == null)
-                    return JsonSerializer.Serialize(new { error = $"Document '{documentName}' not found in module '{moduleName}'" });
-
-                // Optionally filter by type
-                if (!string.IsNullOrEmpty(documentType))
+                var deleted = HostServices.PageGeneration.DeleteDocument(documentId.Value);
+                if (!deleted)
                 {
-                    bool typeMatch = documentType switch
-                    {
-                        "page" => doc is Mendix.StudioPro.ExtensionsAPI.Model.Pages.IPage,
-                        "microflow" => doc is IMicroflow,
-                        _ => true
-                    };
-                    if (!typeMatch)
-                        return JsonSerializer.Serialize(new { error = $"Document '{documentName}' exists but is not a {documentType}" });
+                    var error = $"Failed to delete document '{documentName}' from module '{moduleName}'.";
+                    _logger.LogError(error);
+                    return JsonSerializer.Serialize(new { error, success = false });
                 }
 
-                var docTypeName = doc switch
-                {
-                    Mendix.StudioPro.ExtensionsAPI.Model.Pages.IPage => "page",
-                    IMicroflow => "microflow",
-                    _ => doc.GetType().Name
-                };
-
-                using var transaction = _model.StartTransaction($"Delete {docTypeName} '{documentName}'");
-                parentFolder.RemoveDocument(doc);
-                transaction.Commit();
-
-                _logger.LogInformation($"Deleted {docTypeName} '{documentName}' from module '{moduleName}'");
+                _logger.LogInformation($"Deleted document '{qualifiedName}'");
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    message = $"Deleted {docTypeName} '{documentName}' from module '{moduleName}'",
+                    message = $"Deleted '{documentName}' from module '{moduleName}'",
                     deletedDocument = documentName,
-                    documentType = docTypeName,
+                    qualified_name = qualifiedName,
                     module = moduleName
                 });
             }
