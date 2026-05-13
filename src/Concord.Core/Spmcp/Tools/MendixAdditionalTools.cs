@@ -514,19 +514,6 @@ namespace Terminal.Spmcp.Tools
         }
     }
 
-    private string FormatDataType(DataType? dt)
-    {
-        if (dt == null) return "Void";
-        return dt switch
-        {
-            ListType lt => $"List of {lt.EntityName?.FullName ?? "Unknown"}",
-            ObjectType ot => $"Object of {ot.EntityName?.FullName ?? "Unknown"}",
-            EnumerationType et => $"Enumeration {et.EnumerationName?.FullName ?? "Unknown"}",
-            _ => dt.ToString()
-        };
-    }
-
-
     public async Task<object> ReadMicroflowDetails(JsonObject arguments)
     {
         try
@@ -1137,19 +1124,6 @@ namespace Terminal.Spmcp.Tools
         /// <summary>
         /// Gets default expression strings for different data types
         /// </summary>
-        private string GetDefaultExpressionForDataType(Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType dataType)
-        {
-            return dataType switch
-            {
-                var dt when dt == Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType.String => "''",
-                var dt when dt == Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType.Integer => "0",
-                var dt when dt == Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType.Decimal => "0.0",
-                var dt when dt == Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType.Boolean => "false",
-                var dt when dt == Mendix.StudioPro.ExtensionsAPI.Model.DataTypes.DataType.DateTime => "dateTime(1900)",
-                _ => "empty"
-            };
-        }
-
         /// <summary>
         /// Normalizes Mendix expression strings by replacing double quotes with single quotes.
         /// Mendix expressions use single-quoted string literals ('Hello'). AI agents frequently
@@ -1706,10 +1680,9 @@ namespace Terminal.Spmcp.Tools
             {
                 try
                 {
-                    var untypedRoot = GetUntypedModelRoot();
-                    if (untypedRoot != null)
+                    if (HostServices.UntypedModel.IsAvailable)
                     {
-                        var elements = GetUnitsWithFallback(untypedRoot, "JavaActions$JavaAction");
+                        var elements = GetUnitsOfType("JavaActions$JavaAction");
                         foreach (var elem in elements)
                         {
                             try
@@ -3130,52 +3103,45 @@ namespace Terminal.Spmcp.Tools
 
         #region Phase 12: Untyped Model Introspection
 
-        private IModelRoot? GetUntypedModelRoot()
+        /// <summary>
+        /// Returns the UntypedModel host if available, or null. Callers must handle null
+        /// (means IUntypedModelAccessService not available on this Studio Pro version).
+        /// </summary>
+        private IUntypedModelHost? GetUntypedModel()
         {
-            return _untypedModelService?.GetUntypedModel(_model);
+            var svc = HostServices.UntypedModel;
+            return svc.IsAvailable ? svc : null;
         }
 
-        private List<IModelUnit> GetUnitsWithFallback(IModelRoot root, string typeString)
+        /// <summary>
+        /// Lists all model units of the given Mendix type string via HostServices.UntypedModel.
+        /// Returns empty list if service unavailable or type not found.
+        /// </summary>
+        private IReadOnlyList<UntypedUnitDescriptor> GetUnitsOfType(string typeString)
         {
-            // Try with $ separator first, then . separator
-            var units = root.GetUnitsOfType(typeString)?.ToList() ?? new List<IModelUnit>();
-            if (units.Count == 0 && typeString.Contains("$"))
-            {
-                units = root.GetUnitsOfType(typeString.Replace("$", "."))?.ToList() ?? new List<IModelUnit>();
-            }
-            return units;
+            var svc = HostServices.UntypedModel;
+            if (!svc.IsAvailable) return Array.Empty<UntypedUnitDescriptor>();
+            return svc.GetUnitsOfType(typeString);
         }
 
-        private object SerializeModelUnit(IModelUnit unit, bool includeProperties = false, int maxProperties = 20)
+        private object SerializeUntypedUnit(UntypedUnitDescriptor unit, bool includeProperties = false)
         {
             var result = new Dictionary<string, object?>();
             result["name"] = unit.Name;
             result["qualifiedName"] = unit.QualifiedName;
-            result["type"] = unit.Type;
+            result["type"] = unit.TypeString;
 
-            if (includeProperties)
+            if (includeProperties && unit.QualifiedName != null)
             {
-                var props = unit.GetProperties().Take(maxProperties).Select(p =>
+                try
                 {
-                    object? val = null;
-                    try
-                    {
-                        if (p.IsList)
-                        {
-                            var values = p.GetValues();
-                            val = values?.Take(5).Select(v => v?.ToString()).ToList();
-                        }
-                        else
-                        {
-                            val = p.Value?.ToString();
-                        }
-                    }
-                    catch { val = "<error reading value>"; }
-
-                    return new { name = p.Name, type = p.Type.ToString(), isList = p.IsList, value = val };
-                }).ToList();
-
-                result["properties"] = props;
+                    var json = HostServices.UntypedModel.ReadUnitPropertiesAsJson(unit.QualifiedName);
+                    result["properties"] = json;
+                }
+                catch (Exception ex)
+                {
+                    result["properties"] = $"<error: {ex.Message}>";
+                }
             }
 
             return result;
@@ -3199,19 +3165,15 @@ namespace Terminal.Spmcp.Tools
             }));
         }
 
-        /// <summary>Helper to safely read a property value from an untyped model element</summary>
-        private object? ReadPropValue(IModelStructure element, string propertyName)
+        /// <summary>
+        /// Helper to safely read a single property from a model unit via HostServices.UntypedModel.
+        /// qualifiedName is the unit's qualified name (e.g. "MyModule.MyPage").
+        /// </summary>
+        private string? ReadUnitProp(string qualifiedName, string propertyName)
         {
             try
             {
-                var prop = element.GetProperty(propertyName);
-                if (prop == null) return null;
-                if (prop.IsList)
-                {
-                    var values = prop.GetValues();
-                    return values?.Select(v => v?.ToString()).ToList();
-                }
-                return prop.Value?.ToString();
+                return HostServices.UntypedModel.ReadUnitProperty(qualifiedName, propertyName);
             }
             catch { return null; }
         }
@@ -3273,116 +3235,6 @@ namespace Terminal.Spmcp.Tools
         #endregion
 
         #region Phase 24: Nanoflow Introspection
-
-        /// <summary>Maps untyped model DataType type strings to friendly names</summary>
-        private string MapReturnType(IModelUnit unit)
-        {
-            try
-            {
-                var rtProp = unit.GetProperty("microflowReturnType");
-                if (rtProp == null) return "Unknown";
-
-                var rtVal = rtProp.Value;
-                if (rtVal == null) return "Unknown";
-
-                // rtVal is an IModelStructure child element — get its Type
-                if (rtVal is IModelStructure rtElement)
-                {
-                    var typeName = rtElement.Type ?? "";
-                    return typeName switch
-                    {
-                        "DataTypes$VoidType" => "Void",
-                        "DataTypes$BooleanType" => "Boolean",
-                        "DataTypes$StringType" => "String",
-                        "DataTypes$IntegerType" => "Integer",
-                        "DataTypes$LongType" => "Long",
-                        "DataTypes$DecimalType" => "Decimal",
-                        "DataTypes$FloatType" => "Float",
-                        "DataTypes$DateTimeType" => "DateTime",
-                        "DataTypes$BinaryType" => "Binary",
-                        "DataTypes$ObjectType" => ExtractEntityFromDataType(rtElement, "Object"),
-                        "DataTypes$ListType" => ExtractEntityFromDataType(rtElement, "List"),
-                        "DataTypes$EnumerationType" => ExtractEnumFromDataType(rtElement),
-                        _ => typeName.Contains("$") ? typeName.Split('$').Last() : typeName
-                    };
-                }
-
-                return rtVal.ToString() ?? "Unknown";
-            }
-            catch { return "Unknown"; }
-        }
-
-        private string ExtractEntityFromDataType(IModelStructure rtElement, string prefix)
-        {
-            try
-            {
-                var entityProp = rtElement.GetProperty("entity") ?? rtElement.GetProperty("entityRef");
-                if (entityProp != null)
-                {
-                    var val = entityProp.Value?.ToString();
-                    if (!string.IsNullOrEmpty(val))
-                        return $"{prefix}<{val}>";
-                }
-            }
-            catch { }
-            return prefix;
-        }
-
-        private string ExtractEnumFromDataType(IModelStructure rtElement)
-        {
-            try
-            {
-                var enumProp = rtElement.GetProperty("enumeration") ?? rtElement.GetProperty("enumerationRef");
-                if (enumProp != null)
-                {
-                    var val = enumProp.Value?.ToString();
-                    if (!string.IsNullOrEmpty(val))
-                        return $"Enum<{val}>";
-                }
-            }
-            catch { }
-            return "Enumeration";
-        }
-
-        /// <summary>Counts activities in a nanoflow/microflow objectCollection</summary>
-        private (int activityCount, int flowCount, int paramCount) CountFlowElements(IModelUnit unit)
-        {
-            int activityCount = 0, flowCount = 0, paramCount = 0;
-            try
-            {
-                // Count flows
-                var flowsProp = unit.GetProperty("flows");
-                if (flowsProp != null && flowsProp.IsList)
-                    flowCount = flowsProp.GetValues()?.Count() ?? 0;
-
-                // Count activities from objectCollection
-                var objCollProp = unit.GetProperty("objectCollection");
-                if (objCollProp?.Value is IModelStructure objColl)
-                {
-                    var objects = objColl.GetProperty("objects");
-                    if (objects != null && objects.IsList)
-                    {
-                        var vals = objects.GetValues();
-                        if (vals != null)
-                        {
-                            foreach (var v in vals)
-                            {
-                                if (v is IModelStructure obj)
-                                {
-                                    var typeName = obj.Type ?? "";
-                                    if (typeName.Contains("ParameterObject"))
-                                        paramCount++;
-                                    else if (!typeName.Contains("StartEvent") && !typeName.Contains("EndEvent"))
-                                        activityCount++;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            catch { }
-            return (activityCount, flowCount, paramCount);
-        }
 
         public async Task<string> ReadNanoflowDetails(JsonObject parameters)
         {
@@ -3496,218 +3348,240 @@ namespace Terminal.Spmcp.Tools
             }
         }
 
-        public async Task<string> ListScheduledEvents(JsonObject parameters)
+        public Task<string> ListScheduledEvents(JsonObject parameters)
         {
             try
             {
-                var root = GetUntypedModelRoot();
-                if (root == null)
-                    return JsonSerializer.Serialize(new { error = "IUntypedModelAccessService is not available" });
+                if (!HostServices.UntypedModel.IsAvailable)
+                    return Task.FromResult(JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        available = false,
+                        message = "Untyped model service not available on this Studio Pro version."
+                    }));
 
                 var moduleName = parameters?["module_name"]?.ToString();
-                var events = GetUnitsWithFallback(root, "ScheduledEvents$ScheduledEvent");
+                var events = HostServices.UntypedModel.GetUnitsOfType("ScheduledEvents$ScheduledEvent");
 
                 var result = events
                     .Where(e => string.IsNullOrEmpty(moduleName) ||
-                                (e.QualifiedName?.Contains(moduleName, StringComparison.OrdinalIgnoreCase) ?? false))
+                                (e.QualifiedName?.StartsWith(moduleName + ".", StringComparison.OrdinalIgnoreCase) == true))
                     .Select(e =>
                     {
-                        var enabled = e.GetProperty("Enabled")?.Value?.ToString();
-                        var interval = e.GetProperty("Interval")?.Value?.ToString();
-                        var intervalType = e.GetProperty("IntervalType")?.Value?.ToString();
-                        var startOffset = e.GetProperty("StartOffset")?.Value?.ToString();
-
+                        var qn = e.QualifiedName ?? "";
                         return new
                         {
                             name = e.Name,
-                            qualifiedName = e.QualifiedName,
-                            module = e.QualifiedName?.Split('.').FirstOrDefault(),
-                            enabled,
-                            interval,
-                            intervalType,
-                            startOffset
+                            qualifiedName = qn,
+                            module = qn.Split('.', 2).FirstOrDefault(),
+                            enabled = HostServices.UntypedModel.ReadUnitProperty(qn, "enabled")
+                                   ?? HostServices.UntypedModel.ReadUnitProperty(qn, "Enabled"),
+                            interval = HostServices.UntypedModel.ReadUnitProperty(qn, "interval")
+                                    ?? HostServices.UntypedModel.ReadUnitProperty(qn, "Interval"),
+                            intervalType = HostServices.UntypedModel.ReadUnitProperty(qn, "intervalType")
+                                        ?? HostServices.UntypedModel.ReadUnitProperty(qn, "IntervalType"),
+                            startOffset = HostServices.UntypedModel.ReadUnitProperty(qn, "startOffset")
+                                       ?? HostServices.UntypedModel.ReadUnitProperty(qn, "StartOffset")
                         };
                     })
                     .ToList();
 
-                return JsonSerializer.Serialize(new
+                return Task.FromResult(JsonSerializer.Serialize(new
                 {
                     success = true,
                     totalScheduledEvents = result.Count,
                     scheduledEvents = result
-                });
+                }));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error listing scheduled events");
-                return JsonSerializer.Serialize(new { error = ex.Message });
+                return Task.FromResult(JsonSerializer.Serialize(new { error = ex.Message }));
             }
         }
 
-        public async Task<string> ListRestServices(JsonObject parameters)
+        public Task<string> ListRestServices(JsonObject parameters)
         {
             try
             {
-                var root = GetUntypedModelRoot();
-                if (root == null)
-                    return JsonSerializer.Serialize(new { error = "IUntypedModelAccessService is not available" });
+                if (!HostServices.UntypedModel.IsAvailable)
+                    return Task.FromResult(JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        available = false,
+                        message = "Untyped model service not available on this Studio Pro version."
+                    }));
 
                 var moduleName = parameters?["module_name"]?.ToString();
-                var services = GetUnitsWithFallback(root, "Rest$PublishedRestService");
+                var services = HostServices.UntypedModel.GetUnitsOfType("Rest$PublishedRestService");
 
                 var result = services
                     .Where(s => string.IsNullOrEmpty(moduleName) ||
-                                (s.QualifiedName?.Contains(moduleName, StringComparison.OrdinalIgnoreCase) ?? false))
+                                (s.QualifiedName?.StartsWith(moduleName + ".", StringComparison.OrdinalIgnoreCase) == true))
                     .Select(s =>
                     {
-                        var path = s.GetProperty("Path")?.Value?.ToString();
-                        var version = s.GetProperty("Version")?.Value?.ToString();
-                        var authentication = s.GetProperty("AuthenticationType")?.Value?.ToString();
-
-                        var resources = s.GetElementsOfType("Rest$PublishedRestServiceResource")
-                            .Select(r => new
-                            {
-                                name = r.Name,
-                                type = r.Type
-                            })
-                            .ToList();
+                        var qn = s.QualifiedName ?? "";
+                        // Sub-element traversal (GetElementsOfType for resources) is not exposed
+                        // on IUntypedModelHost — use ReadUnitPropertiesAsJson for full property dump.
+                        string? propertiesJson = null;
+                        try { propertiesJson = HostServices.UntypedModel.ReadUnitPropertiesAsJson(qn); } catch { }
 
                         return new
                         {
                             name = s.Name,
-                            qualifiedName = s.QualifiedName,
-                            module = s.QualifiedName?.Split('.').FirstOrDefault(),
-                            path,
-                            version,
-                            authentication,
-                            resourceCount = resources.Count,
-                            resources
+                            qualifiedName = qn,
+                            module = qn.Split('.', 2).FirstOrDefault(),
+                            path = HostServices.UntypedModel.ReadUnitProperty(qn, "path")
+                                ?? HostServices.UntypedModel.ReadUnitProperty(qn, "Path"),
+                            version = HostServices.UntypedModel.ReadUnitProperty(qn, "version")
+                                   ?? HostServices.UntypedModel.ReadUnitProperty(qn, "Version"),
+                            authentication = HostServices.UntypedModel.ReadUnitProperty(qn, "authenticationType")
+                                          ?? HostServices.UntypedModel.ReadUnitProperty(qn, "AuthenticationType"),
+                            note = "Resource sub-elements not available via IUntypedModelHost; use propertiesJson for raw dump",
+                            propertiesJson
                         };
                     })
                     .ToList();
 
-                return JsonSerializer.Serialize(new
+                return Task.FromResult(JsonSerializer.Serialize(new
                 {
                     success = true,
                     totalRestServices = result.Count,
                     restServices = result
-                });
+                }));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error listing REST services");
-                return JsonSerializer.Serialize(new { error = ex.Message });
+                return Task.FromResult(JsonSerializer.Serialize(new { error = ex.Message }));
             }
         }
 
-        public async Task<string> QueryModelElements(JsonObject parameters)
+        public Task<string> QueryModelElements(JsonObject parameters)
         {
             try
             {
-                var root = GetUntypedModelRoot();
-                if (root == null)
-                    return JsonSerializer.Serialize(new { error = "IUntypedModelAccessService is not available" });
-
                 var typeName = parameters["type_name"]?.ToString();
                 if (string.IsNullOrEmpty(typeName))
-                    return JsonSerializer.Serialize(new { error = "type_name is required (e.g. 'Navigation$NavigationProfile', 'Microflows$Nanoflow')" });
+                    return Task.FromResult(JsonSerializer.Serialize(new { error = "type_name is required (e.g. 'Navigation$NavigationProfile', 'Microflows$Nanoflow')" }));
 
                 var moduleName = parameters?["module_name"]?.ToString();
                 var includeProperties = parameters?["include_properties"]?.GetValue<bool>() ?? false;
                 var maxResults = parameters?["max_results"]?.GetValue<int>() ?? 50;
 
-                var units = GetUnitsWithFallback(root, typeName);
-
-                // BUG-014 fix: For embedded types (Entity, Association, Attribute), use the typed API
-                // since GetUnitsOfType only works for top-level document units
+                // BUG-014 fix: For embedded types (Entity, Association), route through IDomainModelHost
+                // since GetUnitsOfType only works for top-level document units.
                 var normalizedType = typeName.ToLowerInvariant();
-                if (units.Count == 0 && (normalizedType.Contains("entity") || normalizedType.Contains("association") || normalizedType.Contains("attribute")))
+                if (normalizedType.Contains("entity") && !normalizedType.Contains("association"))
                 {
                     var embeddedResults = new List<object>();
-                    var modules = string.IsNullOrEmpty(moduleName)
-                        ? Utils.Utils.GetAllNonAppStoreModules(_model).ToList()
-                        : new List<IModule> { Utils.Utils.GetModuleByName(_model, moduleName)! }.Where(m => m != null).ToList();
-
-                    foreach (var mod in modules)
+                    ModuleId? moduleFilter = null;
+                    if (!string.IsNullOrEmpty(moduleName))
                     {
-                        if (mod?.DomainModel == null) continue;
+                        moduleFilter = HostServices.Model.GetModuleByName(moduleName);
+                        if (moduleFilter == null)
+                            return Task.FromResult(JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" }));
+                    }
 
-                        if (normalizedType.Contains("entity") && !normalizedType.Contains("association"))
+                    var allModules = HostServices.Model.ListModules();
+                    foreach (var modId in allModules)
+                    {
+                        if (moduleFilter.HasValue && modId.Value != moduleFilter.Value.Value) continue;
+                        var entities = HostServices.DomainModel.ListEntities(modId);
+                        foreach (var eRef in entities.Take(maxResults - embeddedResults.Count))
                         {
-                            foreach (var entity in mod.DomainModel.GetEntities().Take(maxResults - embeddedResults.Count))
+                            var entityInfo = new Dictionary<string, object?>
                             {
-                                var entityInfo = new Dictionary<string, object?>
-                                {
-                                    ["name"] = entity.Name,
-                                    ["qualifiedName"] = entity.QualifiedName?.ToString(),
-                                    ["module"] = mod.Name,
-                                    ["type"] = "DomainModels$Entity"
-                                };
-                                if (includeProperties)
-                                {
-                                    entityInfo["attributes"] = entity.GetAttributes().Select(a => new { name = a.Name, type = a.Type?.GetType().Name }).ToList();
-                                    entityInfo["attributeCount"] = entity.GetAttributes().Count();
-                                    entityInfo["associationCount"] = entity.GetAssociations(AssociationDirection.Both, null).Count();
-                                }
-                                embeddedResults.Add(entityInfo);
-                                if (embeddedResults.Count >= maxResults) break;
-                            }
-                        }
-                        else if (normalizedType.Contains("association"))
-                        {
-                            foreach (var entity in mod.DomainModel.GetEntities())
+                                ["name"] = eRef.QualifiedName.Split('.').LastOrDefault(),
+                                ["qualifiedName"] = eRef.QualifiedName,
+                                ["module"] = modId.Name,
+                                ["type"] = "DomainModels$Entity"
+                            };
+                            if (includeProperties)
                             {
-                                foreach (var assoc in entity.GetAssociations(AssociationDirection.Both, null).Take(maxResults - embeddedResults.Count))
-                                {
-                                    var assocInfo = new Dictionary<string, object?>
-                                    {
-                                        ["name"] = assoc.Association?.Name,
-                                        ["qualifiedName"] = assoc.Association?.Name != null ? $"{mod.Name}.{assoc.Association.Name}" : null,
-                                        ["module"] = mod.Name,
-                                        ["type"] = "DomainModels$Association",
-                                        ["parent"] = assoc.Parent?.Name,
-                                        ["child"] = assoc.Child?.Name
-                                    };
-                                    embeddedResults.Add(assocInfo);
-                                    if (embeddedResults.Count >= maxResults) break;
-                                }
-                                if (embeddedResults.Count >= maxResults) break;
+                                var shape = HostServices.DomainModel.ReadEntity(eRef);
+                                entityInfo["attributeCount"] = shape.Attributes.Count;
+                                entityInfo["attributes"] = shape.Attributes.Select(a => new { name = a.Name, kind = a.Kind.ToString() }).ToList();
+                                entityInfo["outgoingAssociationCount"] = shape.OutgoingAssociations.Count;
+                                entityInfo["incomingAssociationCount"] = shape.IncomingAssociations.Count;
                             }
+                            embeddedResults.Add(entityInfo);
+                            if (embeddedResults.Count >= maxResults) break;
                         }
                         if (embeddedResults.Count >= maxResults) break;
                     }
 
-                    return JsonSerializer.Serialize(new
+                    return Task.FromResult(JsonSerializer.Serialize(new
                     {
                         success = true,
                         typeName,
                         totalFound = embeddedResults.Count,
                         returned = embeddedResults.Count,
                         elements = embeddedResults,
-                        note = "Results obtained via typed domain model API (embedded elements are not accessible via GetUnitsOfType)"
-                    });
+                        note = "Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)"
+                    }));
                 }
+
+                if (normalizedType.Contains("association"))
+                {
+                    var assocResults = HostServices.DomainModel.QueryAssociations(
+                        entityQualifiedName: null,
+                        moduleName: moduleName,
+                        direction: "both")
+                        .Take(maxResults)
+                        .Select(a => (object)new
+                        {
+                            name = a.Name,
+                            qualifiedName = moduleName != null ? $"{moduleName}.{a.Name}" : a.Name,
+                            type = "DomainModels$Association",
+                            parent = a.ParentEntityQualifiedName,
+                            child = a.ChildEntityQualifiedName,
+                            associationType = a.Type.ToString()
+                        })
+                        .ToList();
+
+                    return Task.FromResult(JsonSerializer.Serialize(new
+                    {
+                        success = true,
+                        typeName,
+                        totalFound = assocResults.Count,
+                        returned = assocResults.Count,
+                        elements = assocResults,
+                        note = "Results obtained via HostServices.DomainModel.QueryAssociations"
+                    }));
+                }
+
+                // Generic path: use IUntypedModelHost for top-level document units
+                if (!HostServices.UntypedModel.IsAvailable)
+                    return Task.FromResult(JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        available = false,
+                        message = "Untyped model service not available on this Studio Pro version."
+                    }));
+
+                var units = HostServices.UntypedModel.GetUnitsOfType(typeName);
 
                 var filtered = units
                     .Where(u => string.IsNullOrEmpty(moduleName) ||
-                                (u.QualifiedName?.Contains(moduleName, StringComparison.OrdinalIgnoreCase) ?? false))
+                                (u.QualifiedName?.StartsWith(moduleName + ".", StringComparison.OrdinalIgnoreCase) == true))
                     .Take(maxResults)
-                    .Select(u => SerializeModelUnit(u, includeProperties))
+                    .Select(u => SerializeUntypedUnit(u, includeProperties))
                     .ToList();
 
-                return JsonSerializer.Serialize(new
+                return Task.FromResult(JsonSerializer.Serialize(new
                 {
                     success = true,
                     typeName,
                     totalFound = units.Count,
                     returned = filtered.Count,
                     elements = filtered
-                });
+                }));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error querying model elements");
-                return JsonSerializer.Serialize(new { error = ex.Message });
+                return Task.FromResult(JsonSerializer.Serialize(new { error = ex.Message }));
             }
         }
 
@@ -3785,19 +3659,6 @@ namespace Terminal.Spmcp.Tools
                 _logger.LogError(ex, "Error managing navigation");
                 return JsonSerializer.Serialize(new { error = ex.Message });
             }
-        }
-
-        private Mendix.StudioPro.ExtensionsAPI.Model.Pages.IPage? FindPageRecursive(IFolderBase parent, string pageName)
-        {
-            foreach (var folder in parent.GetFolders())
-            {
-                var page = folder.GetDocuments().OfType<Mendix.StudioPro.ExtensionsAPI.Model.Pages.IPage>()
-                    .FirstOrDefault(p => p.Name.Equals(pageName, StringComparison.OrdinalIgnoreCase));
-                if (page != null) return page;
-                var found = FindPageRecursive(folder, pageName);
-                if (found != null) return found;
-            }
-            return null;
         }
 
         #endregion
@@ -4030,93 +3891,68 @@ namespace Terminal.Spmcp.Tools
 
         #region Phase 17: Page & Document Management
 
-        public async Task<string> ListPages(JsonObject parameters)
+        public Task<string> ListPages(JsonObject parameters)
         {
             try
             {
+                if (!HostServices.UntypedModel.IsAvailable)
+                    return Task.FromResult(JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        available = false,
+                        message = "Untyped model service not available on this Studio Pro version."
+                    }));
+
                 var moduleName = parameters["module_name"]?.ToString();
                 var includeExcluded = parameters["include_excluded"]?.GetValue<bool>() ?? false;
 
-                var modules = _model.Root.GetModules();
+                var pages = HostServices.UntypedModel.GetUnitsOfType("Pages$Page");
+
                 var results = new List<object>();
-
-                IEnumerable<IModule> targetModules;
-                if (!string.IsNullOrEmpty(moduleName))
+                foreach (var pg in pages)
                 {
-                    var module = modules.FirstOrDefault(m => m.Name.Equals(moduleName, StringComparison.OrdinalIgnoreCase));
-                    if (module == null)
-                        return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" });
-                    targetModules = new[] { module };
-                }
-                else
-                {
-                    targetModules = modules;
-                }
+                    var qn = pg.QualifiedName ?? "";
 
-                // Get untyped model root for enriched info
-                var untypedRoot = GetUntypedModelRoot();
+                    // Module filter
+                    if (!string.IsNullOrEmpty(moduleName) &&
+                        !qn.StartsWith(moduleName + ".", StringComparison.OrdinalIgnoreCase))
+                        continue;
 
-                foreach (var module in targetModules)
-                {
-                    var pages = new List<Mendix.StudioPro.ExtensionsAPI.Model.Pages.IPage>();
-
-                    // Get pages from root level
-                    pages.AddRange(module.GetDocuments().OfType<Mendix.StudioPro.ExtensionsAPI.Model.Pages.IPage>());
-
-                    // Get pages from subfolders recursively
-                    CollectPagesRecursive(module, pages);
-
-                    foreach (var page in pages)
+                    // Excluded filter — read via ReadUnitProperty; skip if excluded=true (unless requested)
+                    if (!includeExcluded)
                     {
-                        if (!includeExcluded && page.Excluded)
+                        var excludedVal = HostServices.UntypedModel.ReadUnitProperty(qn, "excluded");
+                        if (string.Equals(excludedVal, "true", StringComparison.OrdinalIgnoreCase))
                             continue;
-
-                        var qualifiedName = $"{module.Name}.{page.Name}";
-                        var pageInfo = new Dictionary<string, object?>
-                        {
-                            ["name"] = page.Name,
-                            ["module"] = module.Name,
-                            ["qualifiedName"] = qualifiedName,
-                            ["excluded"] = page.Excluded
-                        };
-
-                        // Enrich with untyped model data if available
-                        if (untypedRoot != null)
-                        {
-                            var (widgetCount, hasParameters, layoutName, documentation) = GetPageUntypedInfo(untypedRoot, qualifiedName);
-                            pageInfo["widgetCount"] = widgetCount;
-                            pageInfo["hasParameters"] = hasParameters;
-                            if (layoutName != null)
-                                pageInfo["layout"] = layoutName;
-                            if (documentation != null)
-                                pageInfo["documentation"] = documentation;
-                        }
-
-                        results.Add(pageInfo);
                     }
+
+                    var pageModule = qn.Split('.', 2).FirstOrDefault() ?? "";
+                    var pageInfo = new Dictionary<string, object?>
+                    {
+                        ["name"] = pg.Name,
+                        ["module"] = pageModule,
+                        ["qualifiedName"] = qn,
+                        ["excluded"] = HostServices.UntypedModel.ReadUnitProperty(qn, "excluded"),
+                        ["documentation"] = HostServices.UntypedModel.ReadUnitProperty(qn, "documentation"),
+                        ["layout"] = HostServices.UntypedModel.ReadUnitProperty(qn, "layoutCall")
+                                  ?? HostServices.UntypedModel.ReadUnitProperty(qn, "layout")
+                    };
+
+                    results.Add(pageInfo);
                 }
 
-                return JsonSerializer.Serialize(new
+                return Task.FromResult(JsonSerializer.Serialize(new
                 {
                     success = true,
                     count = results.Count,
                     moduleName = moduleName ?? "(all)",
                     pages = results
-                });
+                }));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error listing pages");
-                return JsonSerializer.Serialize(new { error = ex.Message });
-            }
-        }
-
-        private void CollectPagesRecursive(IFolderBase parent, List<Mendix.StudioPro.ExtensionsAPI.Model.Pages.IPage> pages)
-        {
-            foreach (var folder in parent.GetFolders())
-            {
-                pages.AddRange(folder.GetDocuments().OfType<Mendix.StudioPro.ExtensionsAPI.Model.Pages.IPage>());
-                CollectPagesRecursive(folder, pages);
+                return Task.FromResult(JsonSerializer.Serialize(new { error = ex.Message }));
             }
         }
 
@@ -4169,18 +4005,6 @@ namespace Terminal.Spmcp.Tools
             }
         }
 
-        private (IDocument? doc, IFolderBase? parent) FindDocumentWithParent(IFolderBase parent, string documentName)
-        {
-            foreach (var folder in parent.GetFolders())
-            {
-                var doc = folder.GetDocuments().FirstOrDefault(d => d.Name.Equals(documentName, StringComparison.OrdinalIgnoreCase));
-                if (doc != null) return (doc, folder);
-                var result = FindDocumentWithParent(folder, documentName);
-                if (result.doc != null) return result;
-            }
-            return (null, null);
-        }
-
         public async Task<string> SyncFilesystem(JsonObject parameters)
         {
             try
@@ -4222,8 +4046,7 @@ namespace Terminal.Spmcp.Tools
                 if (string.IsNullOrEmpty(microflowName))
                     return JsonSerializer.Serialize(new { error = "microflow_name is required" });
 
-                // Build qualified name and resolve native microflow (needed for return_type / return_variable_name
-                // which are not exposed on IMicroflowAuthoringHost — escalation:manual for typed API).
+                // Build qualified name
                 if (microflowName!.Contains('.') && string.IsNullOrEmpty(moduleName))
                 {
                     var parts = microflowName.Split('.', 2);
@@ -4231,16 +4054,26 @@ namespace Terminal.Spmcp.Tools
                     microflowName = parts[1];
                 }
 
-                var module = Utils.Utils.ResolveModule(_model, moduleName);
-                if (module == null)
-                    return JsonSerializer.Serialize(new { error = $"Module '{moduleName ?? "(default)"}' not found" });
+                // Resolve via HostServices.MicroflowAuthoring (no typed-model dependency)
+                string qualifiedName;
+                if (!string.IsNullOrEmpty(moduleName))
+                {
+                    qualifiedName = $"{moduleName}.{microflowName}";
+                }
+                else
+                {
+                    var all = HostServices.MicroflowAuthoring.ListMicroflows(null);
+                    var match = all.FirstOrDefault(m => m.Name.Equals(microflowName, StringComparison.OrdinalIgnoreCase));
+                    if (match == null)
+                        return JsonSerializer.Serialize(new { error = $"Microflow '{microflowName}' not found. Specify module_name to disambiguate." });
+                    qualifiedName = match.QualifiedName;
+                }
 
-                var microflow = module.GetDocuments().OfType<IMicroflow>()
-                    .FirstOrDefault(mf => mf.Name.Equals(microflowName, StringComparison.OrdinalIgnoreCase));
-                if (microflow == null)
-                    return JsonSerializer.Serialize(new { error = $"Microflow '{microflowName}' not found in module '{module.Name}'" });
+                // Verify microflow exists
+                var existing = HostServices.MicroflowAuthoring.ReadMicroflow(qualifiedName);
+                if (existing == null)
+                    return JsonSerializer.Serialize(new { error = $"Microflow '{qualifiedName}' not found" });
 
-                var qualifiedName = $"{module.Name}.{microflow.Name}";
                 var changes = new List<string>();
                 var warnings = new List<string>();
 
@@ -4252,92 +4085,21 @@ namespace Terminal.Spmcp.Tools
                     changes.Add($"url = '{url}'");
                 }
 
-                // --- Return type + return variable name: no typed host method exists (escalation:manual).
-                //     Retain direct IMendix-model mutation so functionality is not regressed. ---
-                var returnTypeStr = parameters["return_type"]?.ToString()?.ToLowerInvariant();
-                var returnVarName = parameters["return_variable_name"]?.ToString();
-
-                bool needsNativeTransaction = !string.IsNullOrEmpty(returnTypeStr) || returnVarName != null;
-                if (needsNativeTransaction)
+                // --- Return type: not exposed on IMicroflowAuthoringHost — escalation:manual ---
+                var returnTypeStr = parameters["return_type"]?.ToString();
+                if (!string.IsNullOrEmpty(returnTypeStr))
                 {
-                    using var transaction = _model.StartTransaction($"Update microflow '{microflowName}'");
+                    changes.Add($"return_type = '{returnTypeStr}' (NOT APPLIED — typed API does not expose IMicroflow.ReturnType mutation)");
+                    warnings.Add("Setting return_type requires direct IMicroflow.ReturnType mutation, which is not exposed on IMicroflowAuthoringHost. " +
+                                 "Edit the microflow's end event in Studio Pro, or delete + recreate via create_microflow with the desired returnType.");
+                }
 
-                    if (!string.IsNullOrEmpty(returnTypeStr))
-                    {
-                        DataType? newReturnType = returnTypeStr switch
-                        {
-                            "void" or "nothing" => DataType.Void,
-                            "boolean" or "bool" => DataType.Boolean,
-                            "string" => DataType.String,
-                            "integer" or "int" => DataType.Integer,
-                            "decimal" => DataType.Decimal,
-                            "float" => DataType.Float,
-                            "datetime" or "date" => DataType.DateTime,
-                            _ => null
-                        };
-
-                        // Handle entity types: "Object:Module.Entity" or "List:Module.Entity"
-                        if (newReturnType == null && returnTypeStr.StartsWith("object:"))
-                        {
-                            var entityQualifiedName = returnTypeStr.Substring(7);
-                            var (entity, _) = Utils.Utils.FindEntityAcrossModules(_model, entityQualifiedName, null);
-                            if (entity != null)
-                                newReturnType = DataType.Object(entity.QualifiedName);
-                            else
-                            {
-                                transaction.Rollback();
-                                return JsonSerializer.Serialize(new { error = $"Entity '{entityQualifiedName}' not found for return type" });
-                            }
-                        }
-                        else if (newReturnType == null && returnTypeStr.StartsWith("list:"))
-                        {
-                            var entityQualifiedName = returnTypeStr.Substring(5);
-                            var (entity, _) = Utils.Utils.FindEntityAcrossModules(_model, entityQualifiedName, null);
-                            if (entity != null)
-                                newReturnType = DataType.List(entity.QualifiedName);
-                            else
-                            {
-                                transaction.Rollback();
-                                return JsonSerializer.Serialize(new { error = $"Entity '{entityQualifiedName}' not found for return type" });
-                            }
-                        }
-
-                        if (newReturnType == null)
-                        {
-                            transaction.Rollback();
-                            return JsonSerializer.Serialize(new { error = $"Unknown return type '{returnTypeStr}'. Supported: void, boolean, string, integer, decimal, float, datetime, object:Module.Entity, list:Module.Entity" });
-                        }
-
-                        microflow.ReturnType = newReturnType;
-                        changes.Add($"returnType = {FormatDataType(newReturnType)}");
-
-                        // BUG-024: Extensions API explicitly excludes "flows" from IMicroflowBase,
-                        // and the untyped model API is read-only — no way to update end event expression.
-                        if (newReturnType != DataType.Void)
-                        {
-                            var defaultExpr = GetDefaultExpressionForDataType(newReturnType);
-                            warnings.Add($"IMPORTANT: Return type changed to {FormatDataType(newReturnType)} but the end event " +
-                                $"expression was NOT updated (Mendix Extensions API limitation — end events are inaccessible). " +
-                                $"This WILL cause error CE0117 in check_project_errors. " +
-                                $"Workaround: delete this microflow (delete_document) and recreate it with the correct return type " +
-                                $"using create_microflow with returnType={FormatDataType(newReturnType)}. " +
-                                $"Expected end event expression: '{defaultExpr}'.");
-                        }
-                        else
-                        {
-                            warnings.Add($"Return type changed to Void but the end event expression was NOT cleared " +
-                                $"(Mendix Extensions API limitation). This may cause error CE0117. " +
-                                $"Workaround: delete this microflow (delete_document) and recreate it as Void.");
-                        }
-                    }
-
-                    if (returnVarName != null)
-                    {
-                        microflow.ReturnVariableName = returnVarName;
-                        changes.Add($"returnVariableName = '{returnVarName}'");
-                    }
-
-                    transaction.Commit();
+                // --- Return variable name: not exposed on IMicroflowAuthoringHost — escalation:manual ---
+                var returnVarName = parameters["return_variable_name"]?.ToString();
+                if (returnVarName != null)
+                {
+                    changes.Add($"return_variable_name = '{returnVarName}' (NOT APPLIED — typed API does not expose IMicroflow.ReturnVariableName)");
+                    warnings.Add("Setting return_variable_name requires direct IMicroflow.ReturnVariableName mutation, which is not exposed on IMicroflowAuthoringHost.");
                 }
 
                 if (changes.Count == 0)
@@ -4568,21 +4330,23 @@ namespace Terminal.Spmcp.Tools
 
         #region Phase 25: Page Introspection
 
-        public async Task<string> ReadPageDetails(JsonObject parameters)
+        public Task<string> ReadPageDetails(JsonObject parameters)
         {
             try
             {
-                var root = GetUntypedModelRoot();
-                if (root == null)
-                    return JsonSerializer.Serialize(new { error = "IUntypedModelAccessService is not available" });
+                if (!HostServices.UntypedModel.IsAvailable)
+                    return Task.FromResult(JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        available = false,
+                        message = "Untyped model service not available on this Studio Pro version."
+                    }));
 
                 var pageName = parameters?["page_name"]?.ToString();
                 var moduleName = parameters?["module_name"]?.ToString();
-                var maxDepth = parameters?["max_depth"]?.GetValue<int>() ?? 3;
-                maxDepth = Math.Clamp(maxDepth, 1, 5);
 
                 if (string.IsNullOrEmpty(pageName))
-                    return JsonSerializer.Serialize(new { error = "page_name is required" });
+                    return Task.FromResult(JsonSerializer.Serialize(new { error = "page_name is required" }));
 
                 // Parse qualified name
                 string? targetModule = moduleName;
@@ -4594,19 +4358,17 @@ namespace Terminal.Spmcp.Tools
                     targetName = parts[1];
                 }
 
-                var pages = GetUnitsWithFallback(root, "Pages$Page");
-                IModelUnit? found = null;
+                var pages = HostServices.UntypedModel.GetUnitsOfType("Pages$Page");
+                UntypedUnitDescriptor? found = null;
 
                 foreach (var pg in pages)
                 {
                     var pgName = pg.Name ?? "";
                     var pgQualified = pg.QualifiedName ?? "";
 
-                    if (!string.IsNullOrEmpty(targetModule))
-                    {
-                        if (!pgQualified.StartsWith(targetModule + ".", StringComparison.OrdinalIgnoreCase))
-                            continue;
-                    }
+                    if (!string.IsNullOrEmpty(targetModule) &&
+                        !pgQualified.StartsWith(targetModule + ".", StringComparison.OrdinalIgnoreCase))
+                        continue;
 
                     if (pgName.Equals(targetName, StringComparison.OrdinalIgnoreCase) ||
                         pgQualified.Equals(pageName, StringComparison.OrdinalIgnoreCase))
@@ -4617,184 +4379,51 @@ namespace Terminal.Spmcp.Tools
                 }
 
                 if (found == null)
-                    return JsonSerializer.Serialize(new { success = false, error = $"Page '{pageName}' not found" });
+                    return Task.FromResult(JsonSerializer.Serialize(new { success = false, error = $"Page '{pageName}' not found" }));
 
+                var qn = found.QualifiedName ?? "";
                 var result = new Dictionary<string, object?>();
                 result["success"] = true;
                 result["name"] = found.Name;
-                result["qualifiedName"] = found.QualifiedName;
-                result["module"] = found.QualifiedName?.Split('.').FirstOrDefault();
+                result["qualifiedName"] = qn;
+                result["module"] = qn.Split('.', 2).FirstOrDefault();
                 result["type"] = "Page";
 
-                // Basic properties
-                result["documentation"] = ReadPropValue(found, "documentation");
-                result["excluded"] = ReadPropValue(found, "excluded");
-                result["exportLevel"] = ReadPropValue(found, "exportLevel");
-                result["markAsUsed"] = ReadPropValue(found, "markAsUsed");
-                result["title"] = ReadPropValue(found, "title");
-                result["url"] = ReadPropValue(found, "url");
-                result["popupCloseAction"] = ReadPropValue(found, "popupCloseAction");
-                result["popupResizable"] = ReadPropValue(found, "popupResizable");
+                // Flat properties via ReadUnitProperty
+                result["documentation"] = HostServices.UntypedModel.ReadUnitProperty(qn, "documentation");
+                result["excluded"] = HostServices.UntypedModel.ReadUnitProperty(qn, "excluded");
+                result["exportLevel"] = HostServices.UntypedModel.ReadUnitProperty(qn, "exportLevel");
+                result["markAsUsed"] = HostServices.UntypedModel.ReadUnitProperty(qn, "markAsUsed");
+                result["title"] = HostServices.UntypedModel.ReadUnitProperty(qn, "title");
+                result["url"] = HostServices.UntypedModel.ReadUnitProperty(qn, "url");
+                result["popupCloseAction"] = HostServices.UntypedModel.ReadUnitProperty(qn, "popupCloseAction");
+                result["popupResizable"] = HostServices.UntypedModel.ReadUnitProperty(qn, "popupResizable");
 
-                // Layout info
+                // Full property dump for sub-element data (layoutCall, parameters, widgets)
+                // — deep sub-element traversal is not exposed on IUntypedModelHost.
                 try
                 {
-                    var layoutCallProp = found.GetProperty("layoutCall");
-                    if (layoutCallProp?.Value is IModelStructure layoutCall)
-                    {
-                        var layoutRef = ReadPropValue(layoutCall, "layout");
-                        result["layout"] = layoutRef;
-                    }
-                    else
-                    {
-                        result["layout"] = null;
-                    }
-                }
-                catch { result["layout"] = null; }
-
-                // Page parameters
-                var parameterList = new List<object>();
-                try
-                {
-                    var paramsProp = found.GetProperty("parameters");
-                    if (paramsProp != null && paramsProp.IsList)
-                    {
-                        var vals = paramsProp.GetValues();
-                        if (vals != null)
-                        {
-                            foreach (var v in vals)
-                            {
-                                if (v is not IModelStructure param) continue;
-                                var pName = param.Name ?? ReadPropValue(param, "name")?.ToString();
-                                var pType = "Unknown";
-                                try
-                                {
-                                    var ptProp = param.GetProperty("parameterType");
-                                    if (ptProp?.Value is IModelStructure ptEl)
-                                    {
-                                        pType = SimplifyDataType(ptEl);
-                                    }
-                                }
-                                catch { }
-                                parameterList.Add(new { name = pName, type = pType });
-                            }
-                        }
-                    }
-                }
-                catch { }
-                result["parameters"] = parameterList;
-                result["parameterCount"] = parameterList.Count;
-
-                // Flat element analysis — GetElements() returns ALL descendants,
-                // so we call it ONCE on the page unit and classify the flat list
-                var widgetTypeCounts = new Dictionary<string, int>();
-                var meaningfulWidgets = new List<object>();
-
-                try
-                {
-                    var allElements = found.GetElements();
-                    if (allElements != null)
-                    {
-                        foreach (var el in allElements)
-                        {
-                            var rawType = el.Type ?? "";
-                            var simplifiedType = SimplifyWidgetType(rawType);
-
-                            // Skip noise types for both counting and listing
-                            if (IsPageNoiseType(rawType))
-                                continue;
-
-                            widgetTypeCounts[simplifiedType] = widgetTypeCounts.GetValueOrDefault(simplifiedType) + 1;
-
-                            // Build detail for meaningful/interesting widget types
-                            if (IsInterestingWidget(rawType))
-                            {
-                                var widgetInfo = new Dictionary<string, object?>();
-                                widgetInfo["type"] = simplifiedType;
-
-                                var elName = el.Name;
-                                if (!string.IsNullOrEmpty(elName))
-                                    widgetInfo["name"] = elName;
-
-                                // Extract data source info for data-bound widgets
-                                if (rawType.Contains("DataView") || rawType.Contains("ListView") || rawType.Contains("DataGrid") || rawType.Contains("TemplateGrid"))
-                                {
-                                    ExtractDataSourceInfo(el, widgetInfo);
-                                }
-
-                                // Extract action info for buttons
-                                if (rawType.Contains("Button"))
-                                {
-                                    try
-                                    {
-                                        var actionProp = el.GetProperty("action");
-                                        if (actionProp?.Value is IModelStructure actionEl)
-                                        {
-                                            widgetInfo["actionType"] = SimplifyWidgetType(actionEl.Type ?? "");
-                                        }
-                                    }
-                                    catch { }
-                                }
-
-                                // Extract attribute reference for input widgets
-                                if (rawType.Contains("TextBox") || rawType.Contains("DatePicker") || rawType.Contains("CheckBox") ||
-                                    rawType.Contains("DropDown") || rawType.Contains("TextArea") || rawType.Contains("NumericInput") ||
-                                    rawType.Contains("RadioButtons") || rawType.Contains("ReferenceSelector"))
-                                {
-                                    var attrRef = ReadPropValue(el, "attributeRef");
-                                    if (attrRef != null)
-                                        widgetInfo["attributeRef"] = attrRef;
-                                }
-
-                                meaningfulWidgets.Add(widgetInfo);
-                            }
-                        }
-                    }
+                    result["propertiesJson"] = HostServices.UntypedModel.ReadUnitPropertiesAsJson(qn);
                 }
                 catch (Exception ex)
                 {
-                    result["widgetError"] = ex.Message;
+                    result["propertiesJsonError"] = ex.Message;
                 }
 
-                result["widgets"] = meaningfulWidgets;
-                result["widgetTypeSummary"] = widgetTypeCounts;
-                result["totalWidgets"] = widgetTypeCounts.Values.Sum();
+                result["note"] = "Deep sub-element traversal (parameters, widget tree, layoutCall resolution) " +
+                                 "not available via IUntypedModelHost. Use propertiesJson for raw property dump.";
 
-                return JsonSerializer.Serialize(result);
+                return Task.FromResult(JsonSerializer.Serialize(result));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error reading page details");
-                return JsonSerializer.Serialize(new { error = ex.Message });
+                return Task.FromResult(JsonSerializer.Serialize(new { error = ex.Message }));
             }
         }
 
-        private void ExtractDataSourceInfo(IModelStructure element, Dictionary<string, object?> node)
-        {
-            try
-            {
-                var dsProp = element.GetProperty("dataSource");
-                if (dsProp?.Value is IModelStructure ds)
-                {
-                    node["dataSourceType"] = SimplifyWidgetType(ds.Type ?? "");
-                    var entityRef = ReadPropValue(ds, "entityRef");
-                    if (entityRef != null)
-                        node["entity"] = entityRef;
-                    var entityPath = ReadPropValue(ds, "entityPath");
-                    if (entityPath != null)
-                        node["entityPath"] = entityPath;
-                    var mfRef = ReadPropValue(ds, "microflow");
-                    if (mfRef != null)
-                        node["dataSourceMicroflow"] = mfRef;
-                    var nfRef = ReadPropValue(ds, "nanoflow");
-                    if (nfRef != null)
-                        node["dataSourceNanoflow"] = nfRef;
-                }
-            }
-            catch { }
-        }
-
-        private string SimplifyWidgetType(string rawType)
+        /// <summary>Pure-string helper: strips Mendix namespace prefix (e.g. "Pages$Button" → "Button").</summary>
+        private static string SimplifyWidgetType(string rawType)
         {
             if (rawType.Contains("$"))
             {
@@ -4809,162 +4438,30 @@ namespace Terminal.Spmcp.Tools
             return rawType;
         }
 
-        private bool IsPageNoiseType(string rawType)
-        {
-            // Internal widget framework types that are not user-facing
-            return rawType.Contains("$Text") ||
-                   rawType.Contains("$Translation") ||
-                   rawType.Contains("$Appearance") ||
-                   rawType.Contains("$DesignPropertyValue") ||
-                   rawType.Contains("$OptionDesignPropertyValue") ||
-                   rawType.Contains("WidgetPropertyType") ||
-                   rawType.Contains("WidgetValueType") ||
-                   rawType.Contains("WidgetObjectType") ||
-                   rawType.Contains("WidgetEnumerationValue") ||
-                   rawType.Contains("WidgetReturnType") ||
-                   rawType.Contains("WidgetTranslation") ||
-                   rawType.Contains("WidgetObject$") ||
-                   rawType.Contains("$WidgetProperty") ||
-                   rawType.Contains("$WidgetValue") ||
-                   rawType.Contains("$NoClientAction") ||
-                   rawType.Contains("$ClientTemplate") ||
-                   rawType.Contains("CustomWidgetType") ||
-                   rawType.Contains("$IconCollectionIcon") ||
-                   rawType.Contains("$PageSettings") ||
-                   rawType.Contains("$DirectEntityRef") ||
-                   rawType.Contains("LayoutCallArgument") ||
-                   rawType.Contains("WebLayoutContent") ||
-                   rawType.Contains("NativeLayoutContent") ||
-                   rawType.Contains("$AttributeRef") ||
-                   rawType.Contains("$GridSortBar") ||
-                   rawType.Contains("ScrollContainerRegion");
-        }
-
-        private bool IsInterestingWidget(string rawType)
-        {
-            // User-facing widgets worth showing details for
-            return rawType.Contains("DataView") ||
-                   rawType.Contains("ListView") ||
-                   rawType.Contains("DataGrid") ||
-                   rawType.Contains("TemplateGrid") ||
-                   rawType.Contains("LayoutGrid") && !rawType.Contains("Row") && !rawType.Contains("Column") ||
-                   rawType.Contains("TabContainer") ||
-                   rawType.Contains("ActionButton") ||
-                   rawType.Contains("LinkButton") ||
-                   rawType.Contains("DynamicText") ||
-                   rawType.Contains("$CustomWidget") && !rawType.Contains("Type") && !rawType.Contains("XPath") ||
-                   rawType.Contains("GroupBox") ||
-                   rawType.Contains("ScrollContainer") && !rawType.Contains("Region") ||
-                   rawType.Contains("ReferenceSelector") ||
-                   rawType.Contains("TextBox") ||
-                   rawType.Contains("DatePicker") ||
-                   rawType.Contains("DropDown") ||
-                   rawType.Contains("CheckBox") ||
-                   rawType.Contains("TextArea") ||
-                   rawType.Contains("RadioButtons") ||
-                   rawType.Contains("NumericInput") ||
-                   rawType.Contains("DivContainer") ||
-                   rawType.Contains("SnippetCall");
-        }
-
-        private string SimplifyDataType(IModelStructure typeElement)
-        {
-            var type = typeElement.Type ?? "";
-            return type switch
-            {
-                "DataTypes$ObjectType" => ExtractEntityFromDataType(typeElement, "Object"),
-                "DataTypes$ListType" => ExtractEntityFromDataType(typeElement, "List"),
-                "DataTypes$BooleanType" => "Boolean",
-                "DataTypes$StringType" => "String",
-                "DataTypes$IntegerType" => "Integer",
-                "DataTypes$DecimalType" => "Decimal",
-                "DataTypes$DateTimeType" => "DateTime",
-                "DataTypes$EnumerationType" => ExtractEnumFromDataType(typeElement),
-                "DataTypes$VoidType" => "Void",
-                _ => type.Split('$').LastOrDefault() ?? "Unknown"
-            };
-        }
-
-        // Helper to get page summary for list_pages enhancement
-        private (int widgetCount, bool hasParameters, string? layoutName, string? documentation) GetPageUntypedInfo(IModelRoot root, string qualifiedName)
-        {
-            int widgetCount = 0;
-            bool hasParams = false;
-            string? layoutName = null;
-            string? doc = null;
-
-            try
-            {
-                var pages = GetUnitsWithFallback(root, "Pages$Page");
-                var found = pages.FirstOrDefault(p =>
-                    (p.QualifiedName ?? "").Equals(qualifiedName, StringComparison.OrdinalIgnoreCase));
-
-                if (found == null) return (0, false, null, null);
-
-                // Documentation
-                var docVal = ReadPropValue(found, "documentation")?.ToString();
-                if (!string.IsNullOrEmpty(docVal))
-                    doc = docVal.Length > 100 ? docVal.Substring(0, 100) + "..." : docVal;
-
-                // Parameters
-                try
-                {
-                    var paramsProp = found.GetProperty("parameters");
-                    if (paramsProp != null && paramsProp.IsList)
-                    {
-                        var vals = paramsProp.GetValues();
-                        hasParams = vals != null && vals.Any();
-                    }
-                }
-                catch { }
-
-                // Layout
-                try
-                {
-                    var layoutCallProp = found.GetProperty("layoutCall");
-                    if (layoutCallProp?.Value is IModelStructure layoutCall)
-                    {
-                        layoutName = ReadPropValue(layoutCall, "layout")?.ToString();
-                    }
-                }
-                catch { }
-
-                // Widget count — count non-noise elements from flat GetElements() list
-                try
-                {
-                    var allElements = found.GetElements();
-                    if (allElements != null)
-                    {
-                        widgetCount = allElements.Count(el => !IsPageNoiseType(el.Type ?? ""));
-                    }
-                }
-                catch { }
-            }
-            catch { }
-
-            return (widgetCount, hasParams, layoutName, doc);
-        }
-
         #endregion
 
         #region Phase 26: Workflow Introspection
 
-        public async Task<string> ListWorkflows(JsonObject parameters)
+        public Task<string> ListWorkflows(JsonObject parameters)
         {
             try
             {
-                var root = GetUntypedModelRoot();
-                if (root == null)
-                    return JsonSerializer.Serialize(new { error = "IUntypedModelAccessService is not available" });
+                if (!HostServices.UntypedModel.IsAvailable)
+                    return Task.FromResult(JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        available = false,
+                        message = "Untyped model service not available on this Studio Pro version."
+                    }));
 
                 var moduleName = parameters?["module_name"]?.ToString();
-                var workflows = GetUnitsWithFallback(root, "Workflows$Workflow");
+                var workflows = HostServices.UntypedModel.GetUnitsOfType("Workflows$Workflow");
 
                 var results = new List<object>();
                 foreach (var wf in workflows)
                 {
                     var qName = wf.QualifiedName ?? "";
-                    var wfModule = qName.Contains('.') ? qName.Split('.').First() : "";
+                    var wfModule = qName.Split('.', 2).FirstOrDefault() ?? "";
 
                     if (!string.IsNullOrEmpty(moduleName) &&
                         !wfModule.Equals(moduleName, StringComparison.OrdinalIgnoreCase))
@@ -4974,70 +4471,50 @@ namespace Terminal.Spmcp.Tools
                     info["name"] = wf.Name;
                     info["qualifiedName"] = qName;
                     info["module"] = wfModule;
+                    info["contextEntity"] = HostServices.UntypedModel.ReadUnitProperty(qName, "contextEntity");
 
-                    // Context entity
-                    try
-                    {
-                        var ctxProp = wf.GetProperty("contextEntity");
-                        if (ctxProp != null)
-                            info["contextEntity"] = ctxProp.Value?.ToString();
-                    }
-                    catch { }
-
-                    // Documentation (truncated)
-                    var doc = ReadPropValue(wf, "documentation")?.ToString();
+                    var doc = HostServices.UntypedModel.ReadUnitProperty(qName, "documentation");
                     if (!string.IsNullOrEmpty(doc))
                         info["documentation"] = doc.Length > 100 ? doc.Substring(0, 100) + "..." : doc;
 
-                    // Activity count from elements
-                    try
-                    {
-                        var elements = wf.GetElements();
-                        if (elements != null)
-                        {
-                            int actCount = 0;
-                            foreach (var el in elements)
-                            {
-                                var t = el.Type ?? "";
-                                if (IsWorkflowActivityType(t))
-                                    actCount++;
-                            }
-                            info["activityCount"] = actCount;
-                        }
-                    }
-                    catch { }
+                    // Activity count not available without sub-element traversal; surface note
+                    info["note"] = "Activity count not available via IUntypedModelHost (requires sub-element traversal). Use read_workflow_details for propertiesJson.";
 
                     results.Add(info);
                 }
 
-                return JsonSerializer.Serialize(new
+                return Task.FromResult(JsonSerializer.Serialize(new
                 {
                     success = true,
                     count = results.Count,
                     moduleName = moduleName ?? "(all)",
                     workflows = results
-                });
+                }));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error listing workflows");
-                return JsonSerializer.Serialize(new { error = ex.Message });
+                return Task.FromResult(JsonSerializer.Serialize(new { error = ex.Message }));
             }
         }
 
-        public async Task<string> ReadWorkflowDetails(JsonObject parameters)
+        public Task<string> ReadWorkflowDetails(JsonObject parameters)
         {
             try
             {
-                var root = GetUntypedModelRoot();
-                if (root == null)
-                    return JsonSerializer.Serialize(new { error = "IUntypedModelAccessService is not available" });
+                if (!HostServices.UntypedModel.IsAvailable)
+                    return Task.FromResult(JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        available = false,
+                        message = "Untyped model service not available on this Studio Pro version."
+                    }));
 
                 var workflowName = parameters?["workflow_name"]?.ToString();
                 var moduleName = parameters?["module_name"]?.ToString();
 
                 if (string.IsNullOrEmpty(workflowName))
-                    return JsonSerializer.Serialize(new { error = "workflow_name is required" });
+                    return Task.FromResult(JsonSerializer.Serialize(new { error = "workflow_name is required" }));
 
                 // Parse qualified name
                 string? targetModule = moduleName;
@@ -5049,19 +4526,17 @@ namespace Terminal.Spmcp.Tools
                     targetName = parts[1];
                 }
 
-                var workflows = GetUnitsWithFallback(root, "Workflows$Workflow");
-                IModelUnit? found = null;
+                var workflows = HostServices.UntypedModel.GetUnitsOfType("Workflows$Workflow");
+                UntypedUnitDescriptor? found = null;
 
                 foreach (var wf in workflows)
                 {
                     var wfName = wf.Name ?? "";
                     var wfQualified = wf.QualifiedName ?? "";
 
-                    if (!string.IsNullOrEmpty(targetModule))
-                    {
-                        if (!wfQualified.StartsWith(targetModule + ".", StringComparison.OrdinalIgnoreCase))
-                            continue;
-                    }
+                    if (!string.IsNullOrEmpty(targetModule) &&
+                        !wfQualified.StartsWith(targetModule + ".", StringComparison.OrdinalIgnoreCase))
+                        continue;
 
                     if (wfName.Equals(targetName, StringComparison.OrdinalIgnoreCase) ||
                         wfQualified.Equals(workflowName, StringComparison.OrdinalIgnoreCase))
@@ -5072,206 +4547,48 @@ namespace Terminal.Spmcp.Tools
                 }
 
                 if (found == null)
-                    return JsonSerializer.Serialize(new { success = false, error = $"Workflow '{workflowName}' not found" });
+                    return Task.FromResult(JsonSerializer.Serialize(new { success = false, error = $"Workflow '{workflowName}' not found" }));
 
+                var qn = found.QualifiedName ?? "";
                 var result = new Dictionary<string, object?>();
                 result["success"] = true;
                 result["name"] = found.Name;
-                result["qualifiedName"] = found.QualifiedName;
-                result["module"] = found.QualifiedName?.Split('.').FirstOrDefault();
+                result["qualifiedName"] = qn;
+                result["module"] = qn.Split('.', 2).FirstOrDefault();
                 result["type"] = "Workflow";
 
-                // Basic properties
-                result["documentation"] = ReadPropValue(found, "documentation");
-                result["excluded"] = ReadPropValue(found, "excluded");
-                result["exportLevel"] = ReadPropValue(found, "exportLevel");
-                result["markAsUsed"] = ReadPropValue(found, "markAsUsed");
+                // Flat properties via ReadUnitProperty
+                result["documentation"] = HostServices.UntypedModel.ReadUnitProperty(qn, "documentation");
+                result["excluded"] = HostServices.UntypedModel.ReadUnitProperty(qn, "excluded");
+                result["exportLevel"] = HostServices.UntypedModel.ReadUnitProperty(qn, "exportLevel");
+                result["markAsUsed"] = HostServices.UntypedModel.ReadUnitProperty(qn, "markAsUsed");
+                result["contextEntity"] = HostServices.UntypedModel.ReadUnitProperty(qn, "contextEntity");
+                result["adminPage"] = HostServices.UntypedModel.ReadUnitProperty(qn, "adminPage");
+                result["overviewPage"] = HostServices.UntypedModel.ReadUnitProperty(qn, "overviewPage");
+                result["workflowType"] = HostServices.UntypedModel.ReadUnitProperty(qn, "workflowType");
+                result["dueDate"] = HostServices.UntypedModel.ReadUnitProperty(qn, "dueDate");
 
-                // Context entity
+                // Full property dump — sub-element traversal (activities, roles, outcomes)
+                // not available on IUntypedModelHost.
                 try
                 {
-                    var ctxProp = found.GetProperty("contextEntity");
-                    if (ctxProp != null)
-                        result["contextEntity"] = ctxProp.Value?.ToString();
-                }
-                catch { }
-
-                // Admin/overview pages
-                result["adminPage"] = ReadPropValue(found, "adminPage");
-                result["overviewPage"] = ReadPropValue(found, "overviewPage");
-                result["workflowType"] = ReadPropValue(found, "workflowType");
-                result["dueDate"] = ReadPropValue(found, "dueDate");
-
-                // Security — allowedModuleRoles
-                try
-                {
-                    var rolesProp = found.GetProperty("allowedModuleRoles");
-                    if (rolesProp != null && rolesProp.IsList)
-                    {
-                        var roleValues = rolesProp.GetValues()?.Select(v => v?.ToString()).Where(v => v != null).ToList();
-                        result["allowedModuleRoles"] = roleValues;
-                        result["allowedRoleCount"] = roleValues?.Count ?? 0;
-                    }
-                    else
-                    {
-                        result["allowedModuleRoles"] = new List<string>();
-                        result["allowedRoleCount"] = 0;
-                    }
-                }
-                catch
-                {
-                    result["allowedModuleRoles"] = new List<string>();
-                    result["allowedRoleCount"] = 0;
-                }
-
-                // Elements — flat list analysis (same pattern as read_page_details)
-                var activityTypeCounts = new Dictionary<string, int>();
-                var activities = new List<object>();
-                int flowCount = 0;
-
-                try
-                {
-                    var allElements = found.GetElements();
-                    if (allElements != null)
-                    {
-                        foreach (var el in allElements)
-                        {
-                            var rawType = el.Type ?? "";
-                            var simplifiedType = SimplifyWidgetType(rawType);
-
-                            // Skip noise/internal types
-                            if (IsWorkflowNoiseType(rawType))
-                                continue;
-
-                            // Count flows separately
-                            if (rawType.Contains("Flow") || rawType.Contains("SequenceFlow"))
-                            {
-                                flowCount++;
-                                continue;
-                            }
-
-                            // Count activity types
-                            activityTypeCounts[simplifiedType] = activityTypeCounts.GetValueOrDefault(simplifiedType) + 1;
-
-                            // Build detail for interesting activity types
-                            if (IsWorkflowActivityType(rawType))
-                            {
-                                var actInfo = new Dictionary<string, object?>();
-                                actInfo["type"] = simplifiedType;
-
-                                var elName = el.Name;
-                                if (!string.IsNullOrEmpty(elName))
-                                    actInfo["name"] = elName;
-
-                                // Read common activity properties
-                                var caption = ReadPropValue(el, "caption");
-                                if (caption != null)
-                                    actInfo["caption"] = caption;
-
-                                var taskPage = ReadPropValue(el, "taskPage");
-                                if (taskPage != null)
-                                    actInfo["taskPage"] = taskPage;
-
-                                var microflow = ReadPropValue(el, "microflow");
-                                if (microflow != null)
-                                    actInfo["microflow"] = microflow;
-
-                                var documentation = ReadPropValue(el, "documentation");
-                                if (documentation != null && documentation.ToString() != "")
-                                    actInfo["documentation"] = documentation;
-
-                                // Outcomes for user tasks
-                                try
-                                {
-                                    var outcomesProp = el.GetProperty("outcomes");
-                                    if (outcomesProp != null && outcomesProp.IsList)
-                                    {
-                                        var outcomeVals = outcomesProp.GetValues();
-                                        if (outcomeVals != null)
-                                        {
-                                            var outcomeNames = new List<string>();
-                                            foreach (var o in outcomeVals)
-                                            {
-                                                if (o is IModelStructure os)
-                                                {
-                                                    var oName = os.Name ?? ReadPropValue(os, "name")?.ToString() ?? ReadPropValue(os, "caption")?.ToString();
-                                                    if (oName != null) outcomeNames.Add(oName);
-                                                }
-                                            }
-                                            if (outcomeNames.Count > 0)
-                                                actInfo["outcomes"] = outcomeNames;
-                                        }
-                                    }
-                                }
-                                catch { }
-
-                                activities.Add(actInfo);
-                            }
-                        }
-                    }
+                    result["propertiesJson"] = HostServices.UntypedModel.ReadUnitPropertiesAsJson(qn);
                 }
                 catch (Exception ex)
                 {
-                    result["elementError"] = ex.Message;
+                    result["propertiesJsonError"] = ex.Message;
                 }
 
-                result["activities"] = activities;
-                result["activityCount"] = activities.Count;
-                result["activityTypeSummary"] = activityTypeCounts;
-                result["flowCount"] = flowCount;
+                result["note"] = "Deep sub-element traversal (activities, outcomes, allowedModuleRoles) not available " +
+                                 "via IUntypedModelHost. Use propertiesJson for raw property dump.";
 
-                // Also dump all property names for discovery (helps refine in future)
-                try
-                {
-                    var props = found.GetProperties();
-                    if (props != null)
-                    {
-                        result["availableProperties"] = props.Select(p => new
-                        {
-                            name = p.Name,
-                            type = p.Type.ToString(),
-                            isList = p.IsList
-                        }).ToList();
-                    }
-                }
-                catch { }
-
-                return JsonSerializer.Serialize(result);
+                return Task.FromResult(JsonSerializer.Serialize(result));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error reading workflow details");
-                return JsonSerializer.Serialize(new { error = ex.Message });
+                return Task.FromResult(JsonSerializer.Serialize(new { error = ex.Message }));
             }
-        }
-
-        private bool IsWorkflowActivityType(string rawType)
-        {
-            return rawType.Contains("UserTask") ||
-                   rawType.Contains("SystemActivity") ||
-                   rawType.Contains("CallMicroflow") ||
-                   rawType.Contains("CallWorkflow") ||
-                   rawType.Contains("Decision") || rawType.Contains("ExclusiveSplit") ||
-                   rawType.Contains("ParallelSplit") ||
-                   rawType.Contains("JumpActivity") || rawType.Contains("Jump") ||
-                   rawType.Contains("EndActivity") || rawType.Contains("EndEvent") ||
-                   rawType.Contains("StartActivity") || rawType.Contains("StartEvent") ||
-                   rawType.Contains("Boundary") ||
-                   rawType.Contains("Timer") ||
-                   rawType.Contains("MultiUserTask") ||
-                   rawType.Contains("ScriptTask");
-        }
-
-        private bool IsWorkflowNoiseType(string rawType)
-        {
-            // Internal/structural types to skip from counting
-            return rawType.Contains("$Text") ||
-                   rawType.Contains("$Translation") ||
-                   rawType.Contains("$Appearance") ||
-                   rawType.Contains("DesignPropertyValue") ||
-                   rawType.Contains("OptionDesignPropertyValue") ||
-                   rawType.Contains("MicroflowParameterMapping") ||
-                   rawType.Contains("$Annotation");
         }
 
         #endregion
