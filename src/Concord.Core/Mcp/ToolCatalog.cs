@@ -60,3 +60,8 @@ public sealed class ToolCatalog
         return true;
     }
 }
+
+public static class ToolCatalogRegistry
+{
+    public static ToolCatalog? Active { get; set; }
+}

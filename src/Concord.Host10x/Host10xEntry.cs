@@ -37,5 +37,6 @@ public class Host10xEntry
         var catalog = new ToolCatalog(TargetMode.Studio10x);
         Spmcp.SpmcpToolBootstrap10x.Register(catalog);
         Catalog = catalog;
+        ToolCatalogRegistry.Active = catalog;
     }
 }
