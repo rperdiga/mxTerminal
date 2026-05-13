@@ -523,42 +523,44 @@ namespace Terminal.Spmcp.Tools
     {
         try
         {
-            if (_model == null)
-            {
-                var error = "IModel instance is null in ListMicroflows.";
-                _logger.LogError(error);
-                SetLastError(error);
-                return JsonSerializer.Serialize(new { error });
-            }
-
             var moduleName = arguments["module_name"]?.ToString();
 
-            var module = Utils.Utils.ResolveModule(_model, moduleName);
-            if (module == null)
+            ModuleId? moduleFilter = null;
+            if (!string.IsNullOrWhiteSpace(moduleName))
             {
-                var error = string.IsNullOrWhiteSpace(moduleName) ? "No module found in ListMicroflows." : $"Module '{moduleName}' not found.";
-                _logger.LogError(error);
-                SetLastError(error);
-                return JsonSerializer.Serialize(new { error });
+                moduleFilter = HostServices.Model.GetModuleByName(moduleName);
+                if (moduleFilter == null)
+                {
+                    var error = $"Module '{moduleName}' not found.";
+                    _logger.LogError(error);
+                    SetLastError(error);
+                    return JsonSerializer.Serialize(new { error });
+                }
             }
 
-                var microflows = module.GetDocuments()
-                    .OfType<IMicroflow>()
-                    .Select(mf => new
-                    {
-                        name = mf.Name,
-                        module = module.Name
-                    }).ToArray();
+            var microflowSummaries = HostServices.MicroflowAuthoring.ListMicroflows(moduleFilter);
 
-                return JsonSerializer.Serialize(new { microflows = microflows });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error listing microflows");
-                SetLastError("Error listing microflows", ex);
-                return JsonSerializer.Serialize(new { error = ex.Message });
-            }
+            var microflows = microflowSummaries
+                .Select(mf => new
+                {
+                    name = mf.Name,
+                    module = mf.Module,
+                    qualifiedName = mf.QualifiedName,
+                    parameterCount = mf.Parameters.Count,
+                    activityCount = mf.ActivityCount,
+                    returnType = mf.ReturnTypeQualifiedName,
+                    returnIsList = mf.ReturnIsList
+                }).ToArray();
+
+            return JsonSerializer.Serialize(new { microflows = microflows });
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing microflows");
+            SetLastError("Error listing microflows", ex);
+            return JsonSerializer.Serialize(new { error = ex.Message });
+        }
+    }
 
     private string FormatDataType(DataType? dt)
     {
@@ -572,278 +574,11 @@ namespace Terminal.Spmcp.Tools
         };
     }
 
-    private List<object> SerializeMemberChanges(IChangeMembersAction changeMembersAction)
-    {
-        var changes = new List<object>();
-        try
-        {
-            foreach (var item in changeMembersAction.GetItems())
-            {
-                string memberName = "unknown";
-                string memberKind = "unknown";
-                try
-                {
-                    if (item.MemberType is AttributeMemberChangeType attrChange)
-                    {
-                        memberName = attrChange.Attribute?.Name ?? "unknown";
-                        memberKind = "attribute";
-                    }
-                    else if (item.MemberType is AssociationMemberChangeType assocChange)
-                    {
-                        memberName = assocChange.Association?.Name ?? "unknown";
-                        memberKind = "association";
-                    }
-                }
-                catch { /* resilient to API quirks */ }
-
-                changes.Add(new
-                {
-                    type = item.Type.ToString(),
-                    member = memberName,
-                    memberKind = memberKind,
-                    value = item.Value?.Text
-                });
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not read member changes");
-        }
-        return changes;
-    }
-
-    private Dictionary<string, object?> SerializeActivityAction(IActionActivity activity)
-    {
-        var result = new Dictionary<string, object?>();
-        result["caption"] = activity.Caption;
-        result["disabled"] = activity.Disabled;
-
-        try
-        {
-            switch (activity.Action)
-            {
-                case ICreateObjectAction createObj:
-                    result["actionType"] = "create_object";
-                    result["entity"] = createObj.Entity?.FullName;
-                    result["outputVariable"] = createObj.OutputVariableName;
-                    result["commit"] = createObj.Commit.ToString();
-                    result["refreshInClient"] = createObj.RefreshInClient;
-                    result["memberChanges"] = SerializeMemberChanges(createObj);
-                    break;
-
-                case IChangeObjectAction changeObj:
-                    result["actionType"] = "change_object";
-                    result["changeVariable"] = changeObj.ChangeVariableName;
-                    result["commit"] = changeObj.Commit.ToString();
-                    result["refreshInClient"] = changeObj.RefreshInClient;
-                    result["memberChanges"] = SerializeMemberChanges(changeObj);
-                    break;
-
-                case IRetrieveAction retrieve:
-                    result["actionType"] = "retrieve";
-                    result["outputVariable"] = retrieve.OutputVariableName;
-                    if (retrieve.RetrieveSource is IDatabaseRetrieveSource dbSource)
-                    {
-                        result["source"] = "database";
-                        result["entity"] = dbSource.Entity?.FullName;
-                        result["xpathConstraint"] = dbSource.XPathConstraint;
-                        result["firstOnly"] = dbSource.RetrieveJustFirstItem;
-                        if (dbSource.Range != null)
-                        {
-                            result["rangeOffset"] = dbSource.Range.OffsetExpression?.Text;
-                            result["rangeAmount"] = dbSource.Range.AmountExpression?.Text;
-                        }
-                        try
-                        {
-                            var sorting = dbSource.AttributesToSortBy;
-                            if (sorting != null && sorting.Length > 0)
-                            {
-                                result["sortBy"] = sorting.Select(s => new
-                                {
-                                    attribute = s.Attribute?.Name,
-                                    descending = s.SortByDescending
-                                }).ToList();
-                            }
-                        }
-                        catch { /* sorting may not be available */ }
-                    }
-                    else if (retrieve.RetrieveSource is IAssociationRetrieveSource assocSource)
-                    {
-                        result["source"] = "association";
-                        result["association"] = assocSource.Association?.Name;
-                        result["startVariable"] = assocSource.StartVariableName;
-                    }
-                    break;
-
-                case ICreateListAction createList:
-                    result["actionType"] = "create_list";
-                    result["entity"] = createList.Entity?.FullName;
-                    result["outputVariable"] = createList.OutputVariableName;
-                    break;
-
-                case ICommitAction commit:
-                    result["actionType"] = "commit";
-                    result["commitVariable"] = commit.CommitVariableName;
-                    result["withEvents"] = commit.WithEvents;
-                    result["refreshInClient"] = commit.RefreshInClient;
-                    break;
-
-                case IRollbackAction rollback:
-                    result["actionType"] = "rollback";
-                    result["rollbackVariable"] = rollback.RollbackVariableName;
-                    result["refreshInClient"] = rollback.RefreshInClient;
-                    break;
-
-                case IDeleteAction delete:
-                    result["actionType"] = "delete";
-                    result["deleteVariable"] = delete.DeleteVariableName;
-                    break;
-
-                case IChangeListAction changeList:
-                    result["actionType"] = "change_list";
-                    result["changeVariable"] = changeList.ChangeVariableName;
-                    result["operation"] = changeList.Type.ToString();
-                    try { result["value"] = changeList.Value?.Text; } catch { }
-                    break;
-
-                case IListOperationAction listOp:
-                    result["actionType"] = "list_operation";
-                    result["outputVariable"] = listOp.OutputVariableName;
-                    var op = listOp.Operation;
-                    result["listVariable"] = op?.ListVariableName;
-                    if (op is ISort sort)
-                    {
-                        result["operationType"] = "sort";
-                        try
-                        {
-                            var sortAttrs = sort.AttributesToSortBy;
-                            if (sortAttrs != null && sortAttrs.Length > 0)
-                            {
-                                result["sortBy"] = sortAttrs.Select(s => new
-                                {
-                                    attribute = s.Attribute?.Name,
-                                    descending = s.SortByDescending
-                                }).ToList();
-                            }
-                        }
-                        catch { }
-                    }
-                    else if (op is IFilter filter)
-                    {
-                        result["operationType"] = "filter";
-                        result["expression"] = filter.Expression?.Text;
-                    }
-                    else if (op is IFindByExpression findByExpr)
-                    {
-                        result["operationType"] = "find_by_expression";
-                        result["expression"] = findByExpr.Expression?.Text;
-                    }
-                    else if (op is IFind find)
-                    {
-                        result["operationType"] = "find";
-                        result["expression"] = find.Expression?.Text;
-                    }
-                    else if (op is IBinaryListOperation binaryOp)
-                    {
-                        var rawName = op.GetType().Name.ToLowerInvariant().Replace("proxy", "");
-                        result["operationType"] = rawName;
-                        result["secondListVariable"] = binaryOp.SecondListOrObjectVariableName;
-                    }
-                    else
-                    {
-                        var rawName = op?.GetType().Name ?? "unknown";
-                        result["operationType"] = rawName.ToLowerInvariant().Replace("proxy", "");
-                    }
-                    break;
-
-                case IAggregateListAction aggregate:
-                    result["actionType"] = "aggregate_list";
-                    result["inputListVariable"] = aggregate.InputListVariableName;
-                    result["outputVariable"] = aggregate.OutputVariableName;
-                    result["function"] = aggregate.AggregateFunction.ToString();
-                    try
-                    {
-                        var aggFunc = aggregate.AggregateListFunction;
-                        if (aggFunc?.Expression != null)
-                            result["expression"] = aggFunc.Expression.Text;
-                        if (aggFunc?.Attribute != null)
-                            result["attribute"] = aggFunc.Attribute.Name;
-                        if (aggFunc?.ReduceListFunction != null)
-                        {
-                            result["reduceInitialValue"] = aggFunc.ReduceListFunction.InitialValueExpression?.Text;
-                            result["reduceDataType"] = FormatDataType(aggFunc.ReduceListFunction.DataType);
-                        }
-                    }
-                    catch { }
-                    break;
-
-                case IMicroflowCallAction mfCall:
-                    result["actionType"] = "microflow_call";
-                    result["calledMicroflow"] = mfCall.MicroflowCall?.Microflow?.FullName;
-                    result["outputVariable"] = mfCall.OutputVariableName;
-                    result["useReturnVariable"] = mfCall.UseReturnVariable;
-                    try
-                    {
-                        var mappings = mfCall.MicroflowCall?.GetParameterMappings();
-                        if (mappings != null && mappings.Count > 0)
-                        {
-                            result["parameterMappings"] = mappings.Select(m => new
-                            {
-                                parameter = m.Parameter?.FullName,
-                                argument = m.Argument?.Text
-                            }).ToList();
-                        }
-                    }
-                    catch { }
-                    break;
-
-                case IJavaActionCallAction javaCall:
-                    result["actionType"] = "java_action_call";
-                    result["javaAction"] = javaCall.JavaAction?.FullName;
-                    result["outputVariable"] = javaCall.OutputVariableName;
-                    result["useReturnVariable"] = javaCall.UseReturnVariable;
-                    try
-                    {
-                        var mappings = javaCall.GetParameterMappings();
-                        if (mappings != null && mappings.Count > 0)
-                        {
-                            result["parameterMappings"] = mappings.Select(m => new
-                            {
-                                parameter = m.ToString()
-                            }).ToList();
-                        }
-                    }
-                    catch { }
-                    break;
-
-                default:
-                    result["actionType"] = "unknown";
-                    result["typeName"] = activity.Action?.GetType().Name ?? "null";
-                    break;
-            }
-        }
-        catch (Exception ex)
-        {
-            result["actionType"] = "error";
-            result["error"] = ex.Message;
-            result["typeName"] = activity.Action?.GetType().Name ?? "null";
-        }
-
-        return result;
-    }
 
     public async Task<object> ReadMicroflowDetails(JsonObject arguments)
     {
         try
         {
-            if (_model == null)
-            {
-                var error = "IModel instance is null in ReadMicroflowDetails.";
-                _logger.LogError(error);
-                SetLastError(error);
-                return JsonSerializer.Serialize(new { error });
-            }
-
             var microflowName = arguments["microflow_name"]?.ToString();
             if (string.IsNullOrEmpty(microflowName))
             {
@@ -852,106 +587,73 @@ namespace Terminal.Spmcp.Tools
                 return JsonSerializer.Serialize(new { error });
             }
 
-            // Handle qualified names like "Module.MicroflowName"
+            // Build qualified name: if the argument already contains '.' treat it as
+            // fully-qualified; otherwise combine with module_name if supplied.
             var moduleName = arguments["module_name"]?.ToString();
-            if (microflowName.Contains('.') && string.IsNullOrWhiteSpace(moduleName))
+            string qualifiedName;
+            if (microflowName.Contains('.'))
             {
-                var parts = microflowName.Split('.', 2);
-                moduleName = parts[0];
-                microflowName = parts[1];
+                qualifiedName = microflowName;
+            }
+            else if (!string.IsNullOrWhiteSpace(moduleName))
+            {
+                qualifiedName = $"{moduleName}.{microflowName}";
+            }
+            else
+            {
+                qualifiedName = microflowName;
             }
 
-            var module = Utils.Utils.ResolveModule(_model, moduleName);
-            if (module == null)
+            var summary = HostServices.MicroflowAuthoring.ReadMicroflow(qualifiedName);
+            if (summary == null)
             {
-                var error = string.IsNullOrWhiteSpace(moduleName)
-                    ? "No module found in ReadMicroflowDetails."
-                    : $"Module '{moduleName}' not found.";
-                _logger.LogError(error);
+                var error = $"Microflow '{qualifiedName}' not found.";
                 SetLastError(error);
                 return JsonSerializer.Serialize(new { error });
             }
 
-            var microflow = module.GetDocuments()
-                .OfType<IMicroflow>()
-                .FirstOrDefault(mf => mf.Name.Equals(microflowName, StringComparison.OrdinalIgnoreCase));
-
-            if (microflow == null)
+            // --- Parameters (from MicroflowSummary.Parameters) ---
+            var parametersInfo = summary.Parameters.Select(p => new
             {
-                var error = $"Microflow '{microflowName}' not found in module '{module.Name}'";
-                SetLastError(error);
-                return JsonSerializer.Serialize(new { error });
+                name = p.Name,
+                type = p.TypeQualifiedName,
+                isList = p.IsList,
+                documentation = p.Documentation
+            }).ToList<object>();
+
+            // --- Activities (from ReadActivities) ---
+            IReadOnlyList<MicroflowActivitySummary> activitySummaries;
+            try
+            {
+                activitySummaries = HostServices.MicroflowAuthoring.ReadActivities(summary.QualifiedName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not retrieve activities for microflow '{QualifiedName}'", summary.QualifiedName);
+                activitySummaries = Array.Empty<MicroflowActivitySummary>();
             }
 
-            var microflowService = _serviceProvider?.GetService<IMicroflowService>();
-
-            // --- Parameters ---
-            var parametersInfo = new List<object>();
-            if (microflowService != null)
+            var activitiesInfo = activitySummaries.Select(a => (object)new
             {
-                try
-                {
-                    var parameters = microflowService.GetParameters(microflow);
-                    foreach (var param in parameters)
-                    {
-                        parametersInfo.Add(new
-                        {
-                            name = param.Name,
-                            type = FormatDataType(param.Type),
-                            documentation = string.IsNullOrEmpty(param.Documentation) ? null : param.Documentation
-                        });
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Could not retrieve parameters for microflow '{MicroflowName}'", microflowName);
-                }
-            }
-
-            // --- Activities ---
-            var activitiesInfo = new List<object>();
-            if (microflowService != null)
-            {
-                try
-                {
-                    var activities = microflowService.GetAllMicroflowActivities(microflow);
-                    for (int i = 0; i < activities.Count; i++)
-                    {
-                        var activity = activities[i];
-                        if (activity is IActionActivity actionActivity)
-                        {
-                            var details = SerializeActivityAction(actionActivity);
-                            details["position"] = i + 1;
-                            activitiesInfo.Add(details);
-                        }
-                        else
-                        {
-                            activitiesInfo.Add(new
-                            {
-                                position = i + 1,
-                                actionType = "non_action",
-                                typeName = activity.GetType().Name
-                            });
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Could not retrieve activities for microflow '{MicroflowName}'", microflowName);
-                }
-            }
-
-            // --- Return type ---
-            var returnType = FormatDataType(microflow.ReturnType);
+                position = a.Position,
+                actionType = a.ActivityType,
+                caption = a.Caption,
+                outputVariable = a.OutputVariable,
+                targetEntity = a.TargetEntity,
+                targetMicroflow = a.TargetMicroflow,
+                targetJavaAction = a.TargetJavaAction,
+                parameters = a.Parameters
+            }).ToList();
 
             var microflowInfo = new
             {
-                name = microflow.Name,
-                qualifiedName = microflow.QualifiedName?.FullName ?? "Unknown",
-                module = module.Name,
-                returnType = returnType,
-                returnVariableName = microflow.ReturnVariableName,
-                url = string.IsNullOrEmpty(microflow.Url) ? null : microflow.Url,
+                name = summary.Name,
+                qualifiedName = summary.QualifiedName,
+                module = summary.Module,
+                documentation = summary.Documentation,
+                accessLevel = summary.AccessLevel.ToString(),
+                returnType = summary.ReturnTypeQualifiedName,
+                returnIsList = summary.ReturnIsList,
                 parameterCount = parametersInfo.Count,
                 parameters = parametersInfo,
                 activityCount = activitiesInfo.Count,
@@ -7307,213 +7009,60 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                var root = GetUntypedModelRoot();
-                if (root == null)
-                    return JsonSerializer.Serialize(new { error = "IUntypedModelAccessService is not available" });
-
                 var nanoflowName = parameters?["nanoflow_name"]?.ToString();
                 var moduleName = parameters?["module_name"]?.ToString();
 
                 if (string.IsNullOrEmpty(nanoflowName))
                     return JsonSerializer.Serialize(new { error = "nanoflow_name is required" });
 
-                // Parse qualified name
-                string? targetModule = moduleName;
-                string targetName = nanoflowName;
+                // Build qualified name
+                string qualifiedName;
                 if (nanoflowName.Contains("."))
                 {
-                    var parts = nanoflowName.Split('.', 2);
-                    targetModule = parts[0];
-                    targetName = parts[1];
+                    qualifiedName = nanoflowName;
                 }
-
-                var nanoflows = GetUnitsWithFallback(root, "Microflows$Nanoflow");
-                IModelUnit? found = null;
-
-                foreach (var nf in nanoflows)
+                else if (!string.IsNullOrWhiteSpace(moduleName))
                 {
-                    var nfName = nf.Name ?? "";
-                    var nfQualified = nf.QualifiedName ?? "";
-
-                    if (!string.IsNullOrEmpty(targetModule))
-                    {
-                        if (!nfQualified.StartsWith(targetModule + ".", StringComparison.OrdinalIgnoreCase))
-                            continue;
-                    }
-
-                    if (nfName.Equals(targetName, StringComparison.OrdinalIgnoreCase) ||
-                        nfQualified.Equals(nanoflowName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        found = nf;
-                        break;
-                    }
+                    qualifiedName = $"{moduleName}.{nanoflowName}";
                 }
-
-                if (found == null)
-                    return JsonSerializer.Serialize(new { success = false, error = $"Nanoflow '{nanoflowName}' not found" });
-
-                var result = new Dictionary<string, object?>();
-                result["success"] = true;
-                result["name"] = found.Name;
-                result["qualifiedName"] = found.QualifiedName;
-                result["module"] = found.QualifiedName?.Split('.').FirstOrDefault();
-                result["type"] = "Nanoflow";
-
-                // Basic properties (camelCase)
-                result["documentation"] = ReadPropValue(found, "documentation");
-                result["excluded"] = ReadPropValue(found, "excluded");
-                result["exportLevel"] = ReadPropValue(found, "exportLevel");
-                result["markAsUsed"] = ReadPropValue(found, "markAsUsed");
-                result["returnVariableName"] = ReadPropValue(found, "returnVariableName");
-
-                // Return type
-                result["returnType"] = MapReturnType(found);
-
-                // Security — allowedModuleRoles
-                try
+                else
                 {
-                    var rolesProp = found.GetProperty("allowedModuleRoles");
-                    if (rolesProp != null && rolesProp.IsList)
-                    {
-                        var roleValues = rolesProp.GetValues()?.Select(v => v?.ToString()).Where(v => v != null).ToList();
-                        result["allowedModuleRoles"] = roleValues;
-                        result["allowedRoleCount"] = roleValues?.Count ?? 0;
-                    }
-                    else
-                    {
-                        result["allowedModuleRoles"] = new List<string>();
-                        result["allowedRoleCount"] = 0;
-                    }
-                }
-                catch
-                {
-                    result["allowedModuleRoles"] = new List<string>();
-                    result["allowedRoleCount"] = 0;
+                    qualifiedName = nanoflowName;
                 }
 
-                // Parameters and activities from objectCollection
-                var parameterList = new List<object>();
+                var summary = HostServices.MicroflowAuthoring.ReadNanoflow(qualifiedName);
+                if (summary == null)
+                    return JsonSerializer.Serialize(new { success = false, error = $"Nanoflow '{qualifiedName}' not found" });
+
+                // Parameters from NanoflowSummary.Parameters
+                var parameterList = summary.Parameters.Select(p => new
+                {
+                    name = p.Name,
+                    type = p.TypeQualifiedName,
+                    isList = p.IsList,
+                    documentation = p.Documentation
+                }).ToList<object>();
+
+                // Nanoflow activity detail is not available via the typed API.
+                // Return an empty list with an explanatory note per Task 13 gap guidance.
                 var activityList = new List<object>();
-                var activityTypeCounts = new Dictionary<string, int>();
-                int startEvents = 0, endEvents = 0;
 
-                try
+                var result = new Dictionary<string, object?>
                 {
-                    var objCollProp = found.GetProperty("objectCollection");
-                    if (objCollProp?.Value is IModelStructure objColl)
-                    {
-                        var objects = objColl.GetProperty("objects");
-                        if (objects != null && objects.IsList)
-                        {
-                            var vals = objects.GetValues();
-                            if (vals != null)
-                            {
-                                foreach (var v in vals)
-                                {
-                                    if (v is not IModelStructure obj) continue;
-                                    var typeName = obj.Type ?? "";
-
-                                    if (typeName.Contains("ParameterObject"))
-                                    {
-                                        // Extract parameter info
-                                        var paramName = obj.Name ?? ReadPropValue(obj, "name")?.ToString();
-                                        var paramType = "Unknown";
-                                        try
-                                        {
-                                            var vtProp = obj.GetProperty("variableType");
-                                            if (vtProp?.Value is IModelStructure vtEl)
-                                            {
-                                                paramType = vtEl.Type switch
-                                                {
-                                                    "DataTypes$ObjectType" => ExtractEntityFromDataType(vtEl, "Object"),
-                                                    "DataTypes$ListType" => ExtractEntityFromDataType(vtEl, "List"),
-                                                    "DataTypes$BooleanType" => "Boolean",
-                                                    "DataTypes$StringType" => "String",
-                                                    "DataTypes$IntegerType" => "Integer",
-                                                    "DataTypes$DecimalType" => "Decimal",
-                                                    "DataTypes$DateTimeType" => "DateTime",
-                                                    "DataTypes$EnumerationType" => ExtractEnumFromDataType(vtEl),
-                                                    _ => vtEl.Type?.Split('$').LastOrDefault() ?? "Unknown"
-                                                };
-                                            }
-                                        }
-                                        catch { }
-                                        parameterList.Add(new { name = paramName, type = paramType });
-                                    }
-                                    else if (typeName.Contains("StartEvent"))
-                                    {
-                                        startEvents++;
-                                    }
-                                    else if (typeName.Contains("EndEvent"))
-                                    {
-                                        endEvents++;
-                                    }
-                                    else
-                                    {
-                                        // Activity — classify by type
-                                        var activityType = typeName.Split('$').LastOrDefault() ?? typeName;
-
-                                        // For ActionActivity, dig into the action child to get specific action type
-                                        string? specificAction = null;
-                                        string? outputVar = null;
-                                        if (typeName.Contains("ActionActivity"))
-                                        {
-                                            try
-                                            {
-                                                var actionProp = obj.GetProperty("action");
-                                                if (actionProp?.Value is IModelStructure actionEl)
-                                                {
-                                                    specificAction = actionEl.Type?.Split('$').LastOrDefault();
-                                                    outputVar = ReadPropValue(actionEl, "outputVariableName")?.ToString();
-                                                }
-                                            }
-                                            catch { }
-                                        }
-
-                                        var displayType = specificAction ?? activityType;
-                                        activityTypeCounts[displayType] = activityTypeCounts.GetValueOrDefault(displayType) + 1;
-
-                                        var actInfo = new Dictionary<string, object?>();
-                                        actInfo["type"] = displayType;
-                                        if (specificAction != null)
-                                            actInfo["containerType"] = activityType;
-                                        if (outputVar != null)
-                                            actInfo["outputVariable"] = outputVar;
-                                        // Read caption/label if available
-                                        var caption = ReadPropValue(obj, "caption");
-                                        if (caption != null)
-                                            actInfo["caption"] = caption;
-
-                                        activityList.Add(actInfo);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    result["activityError"] = ex.Message;
-                }
-
-                result["parameters"] = parameterList;
-                result["parameterCount"] = parameterList.Count;
-                result["activities"] = activityList;
-                result["activityCount"] = activityList.Count;
-                result["activityTypeSummary"] = activityTypeCounts;
-                result["startEvents"] = startEvents;
-                result["endEvents"] = endEvents;
-
-                // Flow count
-                try
-                {
-                    var flowsProp = found.GetProperty("flows");
-                    if (flowsProp != null && flowsProp.IsList)
-                        result["flowCount"] = flowsProp.GetValues()?.Count() ?? 0;
-                    else
-                        result["flowCount"] = 0;
-                }
-                catch { result["flowCount"] = 0; }
+                    ["success"] = true,
+                    ["name"] = summary.Name,
+                    ["qualifiedName"] = summary.QualifiedName,
+                    ["module"] = summary.Module,
+                    ["type"] = "Nanoflow",
+                    ["documentation"] = summary.Documentation,
+                    ["returnType"] = summary.ReturnTypeQualifiedName,
+                    ["parameterCount"] = parameterList.Count,
+                    ["parameters"] = parameterList,
+                    ["activityCount"] = summary.ActivityCount,
+                    ["activities"] = activityList,
+                    ["activitiesNote"] = "Nanoflow activity details not available via typed API",
+                    ["allowedRoleCount"] = summary.AllowedRoleCount
+                };
 
                 return JsonSerializer.Serialize(result);
             }
@@ -7530,51 +7079,29 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                var root = GetUntypedModelRoot();
-                if (root == null)
-                    return JsonSerializer.Serialize(new { error = "IUntypedModelAccessService is not available" });
-
                 var moduleName = parameters?["module_name"]?.ToString();
-                var nanoflows = GetUnitsWithFallback(root, "Microflows$Nanoflow");
 
-                var result = nanoflows
-                    .Where(nf => string.IsNullOrEmpty(moduleName) ||
-                                 (nf.QualifiedName?.Contains(moduleName, StringComparison.OrdinalIgnoreCase) ?? false))
-                    .Select(nf =>
-                    {
-                        var info = new Dictionary<string, object?>
-                        {
-                            ["name"] = nf.Name,
-                            ["qualifiedName"] = nf.QualifiedName,
-                            ["module"] = nf.QualifiedName?.Split('.').FirstOrDefault(),
-                            ["returnType"] = MapReturnType(nf)
-                        };
+                ModuleId? moduleFilter = null;
+                if (!string.IsNullOrWhiteSpace(moduleName))
+                {
+                    moduleFilter = HostServices.Model.GetModuleByName(moduleName);
+                    if (moduleFilter == null)
+                        return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found." });
+                }
 
-                        // Activity/flow/param counts
-                        var (actCount, flowCount, paramCount) = CountFlowElements(nf);
-                        info["activityCount"] = actCount;
-                        info["flowCount"] = flowCount;
-                        info["parameterCount"] = paramCount;
+                var nanoflowSummaries = HostServices.MicroflowAuthoring.ListNanoflows(moduleFilter);
 
-                        // Role count
-                        try
-                        {
-                            var rolesProp = nf.GetProperty("allowedModuleRoles");
-                            if (rolesProp != null && rolesProp.IsList)
-                                info["allowedRoleCount"] = rolesProp.GetValues()?.Count() ?? 0;
-                            else
-                                info["allowedRoleCount"] = 0;
-                        }
-                        catch { info["allowedRoleCount"] = 0; }
-
-                        // Documentation (truncated)
-                        var doc = ReadPropValue(nf, "documentation")?.ToString();
-                        if (!string.IsNullOrEmpty(doc))
-                            info["documentation"] = doc.Length > 100 ? doc[..100] + "..." : doc;
-
-                        return (object)info;
-                    })
-                    .ToList();
+                var result = nanoflowSummaries.Select(nf => (object)new
+                {
+                    name = nf.Name,
+                    qualifiedName = nf.QualifiedName,
+                    module = nf.Module,
+                    documentation = nf.Documentation,
+                    returnType = nf.ReturnTypeQualifiedName,
+                    parameterCount = nf.Parameters.Count,
+                    activityCount = nf.ActivityCount,
+                    allowedRoleCount = nf.AllowedRoleCount
+                }).ToList();
 
                 return JsonSerializer.Serialize(new
                 {
