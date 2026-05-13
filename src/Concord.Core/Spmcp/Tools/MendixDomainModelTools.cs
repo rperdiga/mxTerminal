@@ -4,15 +4,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
-using Mendix.StudioPro.ExtensionsAPI.Model;
-using Mendix.StudioPro.ExtensionsAPI.Model.Projects;
-using Mendix.StudioPro.ExtensionsAPI.Model.DomainModels;
-using Mendix.StudioPro.ExtensionsAPI.Model.Constants;
-using Mendix.StudioPro.ExtensionsAPI.Model.DataTypes;
-using Mendix.StudioPro.ExtensionsAPI.Model.Enumerations;
-using Mendix.StudioPro.ExtensionsAPI.Model.Microflows;
-using Mendix.StudioPro.ExtensionsAPI.Model.Settings;
-using Mendix.StudioPro.ExtensionsAPI.Model.Texts;
 using Microsoft.Extensions.Logging;
 using Terminal.Interop;
 using Terminal.Spmcp.Utils;
@@ -273,18 +264,6 @@ namespace Terminal.Spmcp.Tools
             }
         }
 
-        private EventType MapEventType(string eventStr)
-        {
-            return eventStr.ToLowerInvariant().Trim() switch
-            {
-                "create" => EventType.Create,
-                "commit" => EventType.Commit,
-                "delete" => EventType.Delete,
-                "rollback" => EventType.RollBack,
-                _ => EventType.Commit
-            };
-        }
-
         /// <summary>
         /// Maps (moment, event) string pair to the interop <see cref="EventHandlerKind"/> enum.
         /// Returns null when either value is unrecognized.
@@ -485,136 +464,17 @@ namespace Terminal.Spmcp.Tools
             try
             {
                 var moduleName = parameters?["module_name"]?.ToString();
-                var errors = new List<object>();
-                var warnings = new List<object>();
-                var info = new List<object>();
+                var items = HostServices.DomainModel.CheckModel(string.IsNullOrWhiteSpace(moduleName) ? null : moduleName);
 
-                var modules = string.IsNullOrWhiteSpace(moduleName)
-                    ? Utils.Utils.GetAllNonAppStoreModules(_model).ToList()
-                    : new List<IModule> { Utils.Utils.GetModuleByName(_model, moduleName) }.Where(m => m != null).ToList()!;
-
-                if (!modules.Any())
-                {
-                    return JsonSerializer.Serialize(new { error = moduleName != null ? $"Module '{moduleName}' not found" : "No modules found" });
-                }
-
-                foreach (var module in modules)
-                {
-                    var entities = module.DomainModel?.GetEntities()?.ToList() ?? new List<IEntity>();
-
-                    foreach (var entity in entities)
-                    {
-                        // Check: Entity has no attributes (suspicious)
-                        var attrs = entity.GetAttributes();
-                        if (attrs == null || attrs.Count == 0)
-                        {
-                            warnings.Add(new { module = module.Name, entity = entity.Name, type = "no_attributes", message = $"Entity '{entity.Name}' has no attributes defined." });
-                        }
-
-                        // Check: Generalization points to a valid entity
-                        if (entity.Generalization is IGeneralization gen)
-                        {
-                            try
-                            {
-                                var parentEntity = gen.Generalization?.Resolve();
-                                if (parentEntity == null)
-                                {
-                                    errors.Add(new { module = module.Name, entity = entity.Name, type = "broken_generalization", message = $"Entity '{entity.Name}' has a generalization to '{gen.Generalization}' which cannot be resolved." });
-                                }
-                            }
-                            catch
-                            {
-                                errors.Add(new { module = module.Name, entity = entity.Name, type = "broken_generalization", message = $"Entity '{entity.Name}' has a generalization that cannot be resolved." });
-                            }
-                        }
-
-                        // Check: Event handlers point to valid microflows
-                        var handlers = entity.GetEventHandlers();
-                        if (handlers != null)
-                        {
-                            foreach (var handler in handlers)
-                            {
-                                if (handler.Microflow == null)
-                                {
-                                    errors.Add(new { module = module.Name, entity = entity.Name, type = "missing_event_microflow", message = $"Event handler on '{entity.Name}' ({handler.Moment} {handler.Event}) has no microflow assigned." });
-                                }
-                                else
-                                {
-                                    try
-                                    {
-                                        var mf = handler.Microflow.Resolve();
-                                        if (mf == null)
-                                        {
-                                            errors.Add(new { module = module.Name, entity = entity.Name, type = "broken_event_microflow", message = $"Event handler on '{entity.Name}' ({handler.Moment} {handler.Event}) references microflow '{handler.Microflow}' which cannot be resolved." });
-                                        }
-                                    }
-                                    catch
-                                    {
-                                        errors.Add(new { module = module.Name, entity = entity.Name, type = "broken_event_microflow", message = $"Event handler on '{entity.Name}' ({handler.Moment} {handler.Event}) references a microflow that cannot be resolved." });
-                                    }
-                                }
-                            }
-                        }
-
-                        // Check: Calculated attributes point to valid microflows
-                        foreach (var attr in attrs)
-                        {
-                            if (attr.Value is ICalculatedValue calcVal)
-                            {
-                                if (calcVal.Microflow == null)
-                                {
-                                    errors.Add(new { module = module.Name, entity = entity.Name, attribute = attr.Name, type = "missing_calc_microflow", message = $"Calculated attribute '{attr.Name}' on '{entity.Name}' has no microflow assigned." });
-                                }
-                                else
-                                {
-                                    try
-                                    {
-                                        var mf = calcVal.Microflow.Resolve();
-                                        if (mf == null)
-                                        {
-                                            errors.Add(new { module = module.Name, entity = entity.Name, attribute = attr.Name, type = "broken_calc_microflow", message = $"Calculated attribute '{attr.Name}' on '{entity.Name}' references microflow '{calcVal.Microflow}' which cannot be resolved." });
-                                        }
-                                    }
-                                    catch
-                                    {
-                                        errors.Add(new { module = module.Name, entity = entity.Name, attribute = attr.Name, type = "broken_calc_microflow", message = $"Calculated attribute '{attr.Name}' on '{entity.Name}' references a microflow that cannot be resolved." });
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Check: Associations are valid
-                    var associationCount = 0;
-                    var checkedAssociations = new HashSet<string>();
-                    foreach (var entity in entities)
-                    {
-                        try
-                        {
-                            var assocs = entity.GetAssociations(AssociationDirection.Both, null);
-                            foreach (var assocResult in assocs)
-                            {
-                                var assoc = assocResult.Association;
-                                if (checkedAssociations.Contains(assoc.Name)) continue;
-                                checkedAssociations.Add(assoc.Name);
-                                associationCount++;
-
-                                if (string.IsNullOrEmpty(assoc.Name))
-                                {
-                                    errors.Add(new { module = module.Name, entity = entity.Name, type = "unnamed_association", message = $"Entity '{entity.Name}' has an association with no name." });
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            warnings.Add(new { module = module.Name, entity = entity.Name, type = "association_read_error", message = $"Could not read associations for entity '{entity.Name}': {ex.Message}" });
-                        }
-                    }
-
-                    // Info: Module statistics
-                    var microflows = module.GetDocuments().OfType<IMicroflow>().Count();
-                    info.Add(new { module = module.Name, entities = entities.Count, associations = associationCount, microflows = microflows });
-                }
+                var errors   = items.Where(i => i.Severity == ModelCheckSeverity.Error)
+                                    .Select(i => new { module = i.ModuleName, entity = i.EntityName, code = i.Code, message = i.Message })
+                                    .ToList<object>();
+                var warnings = items.Where(i => i.Severity == ModelCheckSeverity.Warning)
+                                    .Select(i => new { module = i.ModuleName, entity = i.EntityName, code = i.Code, message = i.Message })
+                                    .ToList<object>();
+                var info     = items.Where(i => i.Severity == ModelCheckSeverity.Info)
+                                    .Select(i => new { module = i.ModuleName, entity = i.EntityName, code = i.Code, message = i.Message })
+                                    .ToList<object>();
 
                 var hasIssues = errors.Any() || warnings.Any();
                 return JsonSerializer.Serialize(new
@@ -623,15 +483,16 @@ namespace Terminal.Spmcp.Tools
                     healthy = !errors.Any(),
                     summary = new
                     {
-                        modulesChecked = modules.Count,
+                        totalItems = items.Count,
                         errorCount = errors.Count,
-                        warningCount = warnings.Count
+                        warningCount = warnings.Count,
+                        infoCount = info.Count
                     },
                     errors = errors.Any() ? errors : null,
                     warnings = warnings.Any() ? warnings : null,
-                    moduleStats = info,
+                    info = info.Any() ? info : null,
                     message = !hasIssues ? "Model is healthy. No issues found." : $"Found {errors.Count} error(s) and {warnings.Count} warning(s)."
-                });
+                }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true });
             }
             catch (Exception ex)
             {
@@ -1504,52 +1365,67 @@ namespace Terminal.Spmcp.Tools
                 var attributeName = parameters["attribute_name"]?.ToString();
                 var associationName = parameters["association_name"]?.ToString();
                 var documentName = parameters["document_name"]?.ToString() ?? elementName ?? entityName;
+                var moduleName = parameters["module_name"]?.ToString();
 
                 if (string.IsNullOrEmpty(elementType))
-                {
                     return JsonSerializer.Serialize(new { error = "Element type is required" });
-                }
-
-                var moduleName = parameters["module_name"]?.ToString();
-                var module = Utils.Utils.ResolveModule(_model, moduleName);
-                if (module == null)
-                {
-                    var available = Utils.Utils.ListUserModules(_model);
-                    var msg = string.IsNullOrWhiteSpace(moduleName)
-                        ? $"No user module found. Available modules: {available}"
-                        : $"Module '{moduleName}' not found. Available user modules: {available}";
-                    return JsonSerializer.Serialize(new { error = msg });
-                }
 
                 switch (elementType.ToLower())
                 {
                     case "entity":
+                    {
                         if (string.IsNullOrEmpty(entityName))
                             return JsonSerializer.Serialize(new { error = "entity_name is required for entity deletion" });
-                        if (module.DomainModel == null)
-                            return JsonSerializer.Serialize(new { error = "No domain model found" });
-                        return DeleteEntity(module.DomainModel, entityName);
+                        var entityRef = ResolveEntityRef(entityName, moduleName);
+                        if (entityRef == null)
+                            return JsonSerializer.Serialize(new { error = $"Entity '{entityName}' not found{(moduleName != null ? $" in module '{moduleName}'" : "")}" });
+                        HostServices.DomainModel.DeleteEntity(entityRef.Value);
+                        _logger.LogInformation($"Deleted entity '{entityRef.Value.QualifiedName}'");
+                        return JsonSerializer.Serialize(new { success = true, message = $"Entity '{entityRef.Value.QualifiedName}' and its owned associations deleted successfully" });
+                    }
 
                     case "attribute":
+                    {
                         if (string.IsNullOrEmpty(entityName) || string.IsNullOrEmpty(attributeName))
                             return JsonSerializer.Serialize(new { error = "entity_name and attribute_name are required for attribute deletion" });
-                        if (module.DomainModel == null)
-                            return JsonSerializer.Serialize(new { error = "No domain model found" });
-                        return DeleteAttribute(module.DomainModel, entityName, attributeName);
+                        var entityRef = ResolveEntityRef(entityName, moduleName);
+                        if (entityRef == null)
+                            return JsonSerializer.Serialize(new { error = $"Entity '{entityName}' not found{(moduleName != null ? $" in module '{moduleName}'" : "")}" });
+                        var shape = HostServices.DomainModel.ReadEntity(entityRef.Value);
+                        var attrRef = shape.Attributes.FirstOrDefault(a => a.Name.Equals(attributeName, StringComparison.OrdinalIgnoreCase));
+                        if (attrRef.Name == null)
+                            return JsonSerializer.Serialize(new { error = $"Attribute '{attributeName}' not found on entity '{entityRef.Value.QualifiedName}'" });
+                        HostServices.DomainModel.DeleteAttribute(entityRef.Value, attrRef);
+                        _logger.LogInformation($"Deleted attribute '{attributeName}' from entity '{entityRef.Value.QualifiedName}'");
+                        return JsonSerializer.Serialize(new { success = true, message = $"Attribute '{attributeName}' deleted successfully from entity '{entityRef.Value.QualifiedName}'" });
+                    }
 
                     case "association":
-                        if (string.IsNullOrEmpty(entityName) || string.IsNullOrEmpty(associationName))
-                            return JsonSerializer.Serialize(new { error = "entity_name and association_name are required for association deletion" });
-                        if (module.DomainModel == null)
-                            return JsonSerializer.Serialize(new { error = "No domain model found" });
-                        return DeleteAssociation(module.DomainModel, entityName, associationName);
+                    {
+                        if (string.IsNullOrEmpty(associationName))
+                            return JsonSerializer.Serialize(new { error = "association_name is required for association deletion" });
+                        var (assocRef, foundModuleName) = ResolveAssociationRef(associationName, moduleName);
+                        if (assocRef == null)
+                            return JsonSerializer.Serialize(new { error = $"Association '{associationName}' not found{(moduleName != null ? $" in module '{moduleName}'" : "")}" });
+                        HostServices.DomainModel.DeleteAssociation(assocRef.Value);
+                        _logger.LogInformation($"Deleted association '{associationName}'");
+                        return JsonSerializer.Serialize(new { success = true, message = $"Association '{associationName}' deleted successfully" });
+                    }
+
+                    case "module":
+                        return JsonSerializer.Serialize(new
+                        {
+                            success = false,
+                            escalation = "manual",
+                            message = "Module deletion is not exposed on the Core Interop surface (IDomainModelHost.DeleteModule deferred). Delete the module in Studio Pro directly."
+                        });
 
                     case "microflow":
                         return JsonSerializer.Serialize(new
                         {
                             error = "delete_model_element does not support microflow deletion. Use the delete_document tool instead.",
-                            suggestion = "Call delete_document with: document_name='" + (documentName ?? "<microflow_name>") + "', module_name='" + module.Name + "', document_type='microflow'",
-                            example = new { tool = "delete_document", document_name = documentName ?? "<microflow_name>", module_name = module.Name, document_type = "microflow" }
+                            suggestion = "Call delete_document with: document_name='" + (documentName ?? "<microflow_name>") + "'" + (moduleName != null ? $", module_name='{moduleName}'" : "") + ", document_type='microflow'",
+                            example = new { tool = "delete_document", document_name = documentName ?? "<microflow_name>", module_name = moduleName ?? "<module_name>", document_type = "microflow" }
                         });
 
                     case "nanoflow":
@@ -1560,17 +1436,23 @@ namespace Terminal.Spmcp.Tools
                         });
 
                     case "constant":
-                        if (string.IsNullOrEmpty(documentName))
-                            return JsonSerializer.Serialize(new { error = "document_name (or entity_name) is required for constant deletion" });
-                        return DeleteConstant(module, documentName);
+                        return JsonSerializer.Serialize(new
+                        {
+                            success = false,
+                            escalation = "manual",
+                            message = "Constant deletion is not exposed on the Core Interop surface. Delete the constant in Studio Pro directly, or use the delete_document tool if available."
+                        });
 
                     case "enumeration":
-                        if (string.IsNullOrEmpty(documentName))
-                            return JsonSerializer.Serialize(new { error = "document_name (or entity_name) is required for enumeration deletion" });
-                        return DeleteDocument<IEnumeration>(module, documentName, "Enumeration");
+                        return JsonSerializer.Serialize(new
+                        {
+                            success = false,
+                            escalation = "manual",
+                            message = "Enumeration deletion is not exposed on the Core Interop surface. Delete the enumeration in Studio Pro directly."
+                        });
 
                     default:
-                        return JsonSerializer.Serialize(new { error = $"Unknown deletion type: {elementType}. Supported: entity, attribute, association, microflow, constant, enumeration" });
+                        return JsonSerializer.Serialize(new { error = $"Unknown deletion type: {elementType}. Supported: entity, attribute, association, microflow, module, constant, enumeration" });
                 }
             }
             catch (Exception ex)
@@ -1586,37 +1468,54 @@ namespace Terminal.Spmcp.Tools
             try
             {
                 var moduleName = parameters?["module_name"]?.ToString();
-                var module = Utils.Utils.ResolveModule(_model, moduleName);
-                if (module == null)
+
+                // Resolve the module(s) to inspect
+                IReadOnlyList<ModuleId> moduleIds;
+                if (!string.IsNullOrWhiteSpace(moduleName))
                 {
-                    return JsonSerializer.Serialize(new { error = string.IsNullOrWhiteSpace(moduleName) ? "Module not found" : $"Module '{moduleName}' not found" });
+                    var mid = HostServices.Model.GetModuleByName(moduleName);
+                    if (mid == null)
+                        return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" });
+                    moduleIds = new[] { mid.Value };
+                }
+                else
+                {
+                    moduleIds = HostServices.Model.ListModules();
                 }
 
-                var domainModel = module.DomainModel;
-                var entities = domainModel.GetEntities().ToList();
+                var entityNames = new List<string>();
                 var allAssociations = new List<object>();
+                var seenAssocNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                // Collect associations with detailed information
-                foreach (var entity in entities)
+                foreach (var moduleId in moduleIds)
                 {
-                    var associations = entity.GetAssociations(AssociationDirection.Both, null).ToList();
-                    foreach (var association in associations)
+                    var entityRefs = HostServices.DomainModel.ListEntities(moduleId);
+                    foreach (var entityRef in entityRefs)
                     {
-                        allAssociations.Add(new
+                        entityNames.Add(entityRef.QualifiedName);
+                        var shape = HostServices.DomainModel.ReadEntity(entityRef);
+
+                        foreach (var assocRef in shape.OutgoingAssociations)
                         {
-                            Name = association.Association.Name,
-                            Parent = association.Parent.Name,
-                            Child = association.Child.Name,
-                            Type = association.Association.Type.ToString(),
-                            MappedType = association.Association.Type == AssociationType.Reference ? "one-to-many" : "many-to-many"
-                        });
+                            if (seenAssocNames.Add(assocRef.Name))
+                            {
+                                allAssociations.Add(new
+                                {
+                                    Name = assocRef.Name,
+                                    Parent = assocRef.ParentEntityQualifiedName,
+                                    Child = assocRef.ChildEntityQualifiedName,
+                                    Type = assocRef.Type == AssociationType.ReferenceSet ? "ReferenceSet" : "Reference",
+                                    MappedType = assocRef.Type == AssociationType.ReferenceSet ? "many-to-many" : "one-to-many"
+                                });
+                            }
+                        }
                     }
                 }
 
                 var result = new
                 {
-                    entities = entities.Select(e => e.Name).ToList(),
-                    entityCount = entities.Count,
+                    entities = entityNames,
+                    entityCount = entityNames.Count,
                     associations = allAssociations,
                     associationCount = allAssociations.Count,
                     status = "Domain model diagnosed successfully",
@@ -1991,6 +1890,19 @@ namespace Terminal.Spmcp.Tools
         /// HostServices.DomainModel. Searches all outgoing associations across entities.
         /// Returns null when not found.
         /// </summary>
+        private static AssociationType MapAssociationType(string type)
+        {
+            if (string.IsNullOrEmpty(type))
+                return AssociationType.Reference;
+
+            return type.ToLowerInvariant().Trim() switch
+            {
+                "one-to-many" or "reference" => AssociationType.Reference,
+                "many-to-many" or "referenceset" or "reference_set" => AssociationType.ReferenceSet,
+                _ => AssociationType.Reference
+            };
+        }
+
         private (AssociationRef? Ref, string? ModuleName) ResolveAssociationRef(string associationName, string? moduleName)
         {
             var moduleIds = string.IsNullOrEmpty(moduleName)
@@ -2015,266 +1927,6 @@ namespace Terminal.Spmcp.Tools
 
         #endregion
 
-        #region Helper Methods
-
-        private List<object> GetEntityAttributes(IEntity entity)
-        {
-            return entity.GetAttributes()
-                .Where(attr => attr != null)
-                .Select(attr =>
-                {
-                    var typeName = attr.Type?.GetType().Name ?? "Unknown";
-                    typeName = typeName.Replace("AttributeTypeProxy", "");
-
-                    // Handle Enumerations specially
-                    if (attr.Type is IEnumerationAttributeType enumType)
-                    {
-                        var enumeration = enumType.Enumeration.Resolve();
-                        var enumValues = enumeration.GetValues()
-                            .Select(v => v.Name)
-                            .ToList();
-                        typeName = $"Enumeration ({string.Join("/", enumValues)})";
-                    }
-
-                    // Determine value type and default
-                    string? valueType = null;
-                    string? defaultValue = null;
-                    string? calculatedMicroflow = null;
-
-                    if (attr.Value is IStoredValue storedValue)
-                    {
-                        valueType = "stored";
-                        defaultValue = string.IsNullOrEmpty(storedValue.DefaultValue) ? null : storedValue.DefaultValue;
-                    }
-                    else if (attr.Value is ICalculatedValue calcValue)
-                    {
-                        valueType = "calculated";
-                        calculatedMicroflow = calcValue.Microflow?.ToString();
-                    }
-
-                    return (object)new
-                    {
-                        name = attr.Name,
-                        type = typeName,
-                        valueType = valueType,
-                        defaultValue = defaultValue,
-                        calculatedMicroflow = calculatedMicroflow
-                    };
-                })
-                .ToList();
-        }
-
-        private object? GetGeneralizationInfo(IEntity entity)
-        {
-            if (entity.Generalization is IGeneralization gen)
-            {
-                return new
-                {
-                    hasGeneralization = true,
-                    parent = gen.Generalization?.ToString()
-                };
-            }
-            return null;
-        }
-
-        private List<object>? GetEventHandlerInfo(IEntity entity)
-        {
-            var handlers = entity.GetEventHandlers();
-            if (handlers == null || handlers.Count == 0)
-                return null;
-
-            return handlers.Select(h => (object)new
-            {
-                moment = h.Moment.ToString().ToLowerInvariant(),
-                @event = h.Event.ToString().ToLowerInvariant(),
-                microflow = h.Microflow?.ToString(),
-                raiseErrorOnFalse = h.RaiseErrorOnFalse,
-                passEventObject = h.PassEventObject
-            }).ToList();
-        }
-
-        private List<Association> GetEntityAssociations(IEntity entity, IModule module)
-        {
-            var entityAssociations = new List<Association>();
-            var associations = entity.GetAssociations(AssociationDirection.Both, null);
-
-            foreach (var association in associations)
-            {
-                var associationType = association.Association.Type.ToString();
-                var mappedType = associationType switch
-                {
-                    "Reference" => "one-to-many",
-                    "ReferenceSet" => "many-to-many",
-                    _ => "one-to-many"
-                };
-
-                // FIXED: For Reference associations, we need to swap parent/child to match business semantics
-                // In Mendix: association.Parent is the entity that owns the reference (the "many" side)
-                //           association.Child is the entity being referenced (the "one" side)
-                // In business terms: we want "one" side as parent, "many" side as child
-                string parentName, childName;
-                
-                if (associationType == "Reference")
-                {
-                    // Swap: Mendix parent becomes our child, Mendix child becomes our parent
-                    parentName = association.Child.Name;  // The "one" side (being referenced)
-                    childName = association.Parent.Name;  // The "many" side (owns the reference)
-                }
-                else
-                {
-                    // For many-to-many, keep original direction
-                    parentName = association.Parent.Name;
-                    childName = association.Child.Name;
-                }
-
-                var associationModel = new Association
-                {
-                    Name = association.Association.Name,
-                    Parent = parentName,
-                    Child = childName,
-                    Type = mappedType,
-                    ParentDeleteBehavior = FormatDeletingBehavior(association.Association.ParentDeleteBehavior),
-                    ChildDeleteBehavior = FormatDeletingBehavior(association.Association.ChildDeleteBehavior),
-                    Owner = association.Association.Owner.ToString()
-                };
-
-                entityAssociations.Add(associationModel);
-            }
-
-            return entityAssociations;
-        }
-
-        private IAttributeType CreateAttributeType(IModel model, string attributeType)
-        {
-            switch (attributeType.ToLowerInvariant())
-            {
-                case "decimal":
-                    return model.Create<IDecimalAttributeType>();
-                case "integer":
-                    return model.Create<IIntegerAttributeType>();
-                case "long":
-                    return model.Create<ILongAttributeType>();
-                case "string":
-                    return model.Create<IStringAttributeType>();
-                case "boolean":
-                    return model.Create<IBooleanAttributeType>();
-                case "datetime":
-                    return model.Create<IDateTimeAttributeType>();
-                case "autonumber":
-                    return model.Create<IAutoNumberAttributeType>();
-                case "binary":
-                    return model.Create<IBinaryAttributeType>();
-                case "hashedstring":
-                    return model.Create<IHashedStringAttributeType>();
-                default:
-                    return model.Create<IStringAttributeType>();
-            }
-        }
-
-        private IEnumerationAttributeType CreateEnumerationType(IModel model, string attributeName, List<string> enumValues, IModule module)
-        {
-            var attributeEnum = model.Create<IEnumerationAttributeType>();
-            var enumDoc = model.Create<IEnumeration>();
-            enumDoc.Name = GetUniqueName(attributeName + "Enum");
-
-            foreach (var value in enumValues)
-            {
-                var enumValue = model.Create<IEnumerationValue>();
-                enumValue.Name = value;
-                
-                var captionText = model.Create<IText>();
-                captionText.AddOrUpdateTranslation("en_US", value);
-                enumValue.Caption = captionText;
-                
-                enumDoc.AddValue(enumValue);
-            }
-
-            module.AddDocument(enumDoc);
-            attributeEnum.Enumeration = enumDoc.QualifiedName;
-            return attributeEnum;
-        }
-
-        private IEnumeration? FindExistingEnumeration(string enumName)
-        {
-            foreach (var mod in Utils.Utils.GetAllNonAppStoreModules(_model))
-            {
-                var candidate = _model.Root.GetModuleDocuments<IEnumeration>(mod)
-                    .FirstOrDefault(e =>
-                        e.Name.Equals(enumName, StringComparison.OrdinalIgnoreCase) ||
-                        (e.QualifiedName?.ToString() ?? "").Equals(enumName, StringComparison.OrdinalIgnoreCase));
-                if (candidate != null)
-                    return candidate;
-            }
-            return null;
-        }
-
-        private AssociationType MapAssociationType(string type)
-        {
-            if (string.IsNullOrEmpty(type))
-            {
-                return AssociationType.Reference;
-            }
-
-            var normalizedType = type.ToLowerInvariant().Trim();
-
-            switch (normalizedType)
-            {
-                case "one-to-many":
-                case "reference":
-                    return AssociationType.Reference;
-                case "many-to-many":
-                case "referenceset":  // FIXED: ReferenceSet should create many-to-many
-                    return AssociationType.ReferenceSet;
-                default:
-                    return AssociationType.Reference;
-            }
-        }
-
-        private DeletingBehavior MapDeletingBehavior(string behavior)
-        {
-            if (string.IsNullOrEmpty(behavior))
-                return DeletingBehavior.DeleteMeButKeepReferences;
-
-            // BUG-001 fix: Support all common aliases for delete behaviors
-            return behavior.ToLowerInvariant().Trim() switch
-            {
-                "delete_me_and_references" or "cascade" or "delete_me_too" or "delete_referencing" => DeletingBehavior.DeleteMeAndReferences,
-                "delete_me_if_no_references" or "prevent" or "keep_if_referenced" => DeletingBehavior.DeleteMeIfNoReferences,
-                "delete_me_but_keep_references" or "default" or "keep_references" => DeletingBehavior.DeleteMeButKeepReferences,
-                _ => DeletingBehavior.DeleteMeButKeepReferences
-            };
-        }
-
-        private string FormatDeletingBehavior(DeletingBehavior behavior)
-        {
-            return behavior switch
-            {
-                DeletingBehavior.DeleteMeAndReferences => "delete_me_and_references",
-                DeletingBehavior.DeleteMeIfNoReferences => "delete_me_if_no_references",
-                DeletingBehavior.DeleteMeButKeepReferences => "delete_me_but_keep_references",
-                _ => "delete_me_but_keep_references"
-            };
-        }
-
-        private void PositionEntity(IEntity entity, int entityCount)
-        {
-            const int EntityWidth = 150;
-            const int EntityHeight = 75;
-            const int SpacingX = 200;
-            const int SpacingY = 150;
-            const int StartX = 20;
-            const int StartY = 20;
-            const int MaxColumns = 5;
-
-            int column = entityCount % MaxColumns;
-            int row = entityCount / MaxColumns;
-
-            int x = StartX + (column * SpacingX);
-            int y = StartY + (row * SpacingY);
-
-            entity.Location = new Location(x, y);
-        }
-
         #region Smart Domain Model Layout
 
         public async Task<string> ArrangeDomainModel(JsonObject parameters)
@@ -2286,16 +1938,17 @@ namespace Terminal.Spmcp.Tools
                 if (string.IsNullOrEmpty(moduleName))
                     return JsonSerializer.Serialize(new { success = false, error = "module_name is required" });
 
-                var module = Utils.Utils.ResolveModule(_model, moduleName);
-                if (module == null)
-                    return JsonSerializer.Serialize(new { success = false, error = $"Module '{moduleName}' not found" });
+                var request = new ArrangeDomainModelRequest(moduleName, rootEntity);
+                HostServices.DomainModel.ArrangeDomainModel(request);
 
-                using (var transaction = _model.StartTransaction("arrange domain model"))
+                _logger.LogInformation($"Arranged domain model for module '{moduleName}'");
+                return JsonSerializer.Serialize(new
                 {
-                    var result = ArrangeDomainModelInternal(module, rootEntity);
-                    transaction.Commit();
-                    return JsonSerializer.Serialize(result);
-                }
+                    success = true,
+                    message = $"Domain model for module '{moduleName}' arranged successfully",
+                    module = moduleName,
+                    rootEntity
+                });
             }
             catch (Exception ex)
             {
@@ -2304,1013 +1957,9 @@ namespace Terminal.Spmcp.Tools
             }
         }
 
-        /// <summary>
-        /// Core layout algorithm — Sugiyama-style layered graph layout with crossing minimization.
-        /// Handles 20+ entity models efficiently. Can be called internally after bulk entity creation.
-        /// </summary>
-        internal object ArrangeDomainModelInternal(IModule module, string? rootEntity = null)
-        {
-            var entities = module.DomainModel.GetEntities().ToList();
-            if (entities.Count == 0)
-                return new { success = true, message = "No entities to arrange", entities_arranged = 0 };
-
-            // Layout constants (tuned for large models)
-            const int ENTITY_WIDTH = 200;
-            const int H_GAP = 50;             // minimum horizontal gap between entities in same layer
-            const int V_SPACING = 120;        // vertical spacing between layers
-            const int START_X = 50;
-            const int START_Y = 50;
-            const int ATTR_LINE_HEIGHT = 15;
-            const int ATTR_PADDING = 10;
-            const int MIN_ATTRS = 4;
-            const int BARYCENTER_ITERATIONS = 4;
-
-            // ── Entity lookup ──
-            var entityByName = new Dictionary<string, IEntity>();
-            foreach (var e in entities)
-                entityByName[e.Name] = e;
-
-            // ── Phase A: Build UNDIRECTED graph from associations ──
-            // Mendix assoc.Parent/Child direction is inconsistent between UI-created and
-            // tool-created associations, so we treat all edges as undirected and use
-            // degree-based root selection for a consistent hierarchical layout.
-            var neighbors = new Dictionary<string, HashSet<string>>();
-            var edgeSet = new HashSet<(string, string)>();
-
-            foreach (var e in entities)
-                neighbors[e.Name] = new HashSet<string>();
-
-            foreach (var entity in entities)
-            {
-                var associations = entity.GetAssociations(AssociationDirection.Both, null);
-                if (associations == null) continue;
-
-                foreach (var assoc in associations)
-                {
-                    string? nameA = null, nameB = null;
-                    try
-                    {
-                        var parentEntity = assoc.Parent;
-                        var childEntity = assoc.Child;
-                        if (parentEntity != null && childEntity != null)
-                        {
-                            nameA = parentEntity.Name;
-                            nameB = childEntity.Name;
-                        }
-                    }
-                    catch { continue; }
-
-                    if (nameA == null || nameB == null) continue;
-                    if (!entityByName.ContainsKey(nameA) || !entityByName.ContainsKey(nameB)) continue;
-                    if (nameA == nameB) continue;
-
-                    // Undirected: add both directions to neighbor sets
-                    neighbors[nameA].Add(nameB);
-                    neighbors[nameB].Add(nameA);
-
-                    // Canonical edge for crossing minimization (alphabetical order for dedup)
-                    var canonical = string.Compare(nameA, nameB, StringComparison.Ordinal) < 0
-                        ? (nameA, nameB) : (nameB, nameA);
-                    edgeSet.Add(canonical);
-                }
-            }
-
-            // ── Phase B: Layer assignment (BFS from highest-degree roots per component) ──
-            // Find connected components, pick root = highest degree entity in each
-            var visited = new HashSet<string>();
-            var rootNames = new List<string>();
-
-            // For each connected component: find hub (highest degree), then pick the node
-            // farthest from hub as root. In hierarchical domain models, the farthest node
-            // from the hub is typically a top-level entity (e.g., Company) or a leaf entity.
-            // Picking the lower-degree endpoint of the graph diameter produces the best hierarchy.
-            var byDegree = entities.OrderByDescending(e => neighbors[e.Name].Count).Select(e => e.Name).ToList();
-            foreach (var name in byDegree)
-            {
-                if (visited.Contains(name)) continue;
-                if (neighbors[name].Count == 0) continue; // orphan — skip
-
-                // Flood-fill to collect entire component
-                var component = new List<string>();
-                var flood = new Queue<string>();
-                flood.Enqueue(name);
-                visited.Add(name);
-                while (flood.Count > 0)
-                {
-                    var n = flood.Dequeue();
-                    component.Add(n);
-                    foreach (var nb in neighbors[n])
-                    {
-                        if (!visited.Contains(nb))
-                        {
-                            visited.Add(nb);
-                            flood.Enqueue(nb);
-                        }
-                    }
-                }
-
-                // name = hub (highest degree, first entry). BFS from hub to find farthest node A.
-                string farthestA = name;
-                {
-                    var dist = new Dictionary<string, int> { [name] = 0 };
-                    var q = new Queue<string>();
-                    q.Enqueue(name);
-                    int maxDist = 0;
-                    while (q.Count > 0)
-                    {
-                        var cur = q.Dequeue();
-                        foreach (var nb in neighbors[cur])
-                        {
-                            if (!dist.ContainsKey(nb))
-                            {
-                                dist[nb] = dist[cur] + 1;
-                                q.Enqueue(nb);
-                                if (dist[nb] > maxDist)
-                                {
-                                    maxDist = dist[nb];
-                                    farthestA = nb;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // BFS from A to find farthest node B (diameter endpoint)
-                string farthestB = farthestA;
-                {
-                    var dist = new Dictionary<string, int> { [farthestA] = 0 };
-                    var q = new Queue<string>();
-                    q.Enqueue(farthestA);
-                    int maxDist = 0;
-                    while (q.Count > 0)
-                    {
-                        var cur = q.Dequeue();
-                        foreach (var nb in neighbors[cur])
-                        {
-                            if (!dist.ContainsKey(nb))
-                            {
-                                dist[nb] = dist[cur] + 1;
-                                q.Enqueue(nb);
-                                if (dist[nb] > maxDist)
-                                {
-                                    maxDist = dist[nb];
-                                    farthestB = nb;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // If user specified a root entity and it's in this component, use it
-                if (!string.IsNullOrEmpty(rootEntity) && component.Contains(rootEntity))
-                {
-                    rootNames.Add(rootEntity);
-                }
-                else
-                {
-                    // Pick the diameter endpoint with lower degree as root (peripheral/top-level entity)
-                    var root = neighbors[farthestA].Count <= neighbors[farthestB].Count ? farthestA : farthestB;
-                    rootNames.Add(root);
-                }
-            }
-
-            // BFS layer assignment from roots (undirected — visited set prevents backtracking)
-            var layerOf = new Dictionary<string, int>();
-            var bfsChildren = new Dictionary<string, List<string>>();
-            foreach (var e in entities)
-                bfsChildren[e.Name] = new List<string>();
-
-            var bfsQueue = new Queue<string>();
-            foreach (var r in rootNames)
-            {
-                layerOf[r] = 0;
-                bfsQueue.Enqueue(r);
-            }
-
-            while (bfsQueue.Count > 0)
-            {
-                var node = bfsQueue.Dequeue();
-                var nodeLayer = layerOf[node];
-                foreach (var nb in neighbors[node])
-                {
-                    if (!layerOf.ContainsKey(nb))
-                    {
-                        layerOf[nb] = nodeLayer + 1;
-                        bfsChildren[node].Add(nb);
-                        bfsQueue.Enqueue(nb);
-                    }
-                }
-            }
-
-            // Orphans: entities with no associations at all
-            var orphanNames = new List<string>();
-            foreach (var e in entities)
-            {
-                if (!layerOf.ContainsKey(e.Name))
-                    orphanNames.Add(e.Name);
-            }
-
-            // Build layers dictionary: layer number → ordered list of entity names
-            var maxLayer = layerOf.Values.Any() ? layerOf.Values.Max() : 0;
-            var layers = new Dictionary<int, List<string>>();
-            for (int i = 0; i <= maxLayer; i++)
-                layers[i] = new List<string>();
-            foreach (var kvp in layerOf)
-                layers[kvp.Value].Add(kvp.Key);
-
-            // ── Phase C: Crossing minimization (Barycenter heuristic) ──
-            // Edge set uses canonical (alphabetical) ordering, so check both permutations
-            double Barycenter(string node, List<string> referenceLayer, HashSet<(string, string)> edges)
-            {
-                var refIndices = new List<int>();
-                for (int i = 0; i < referenceLayer.Count; i++)
-                {
-                    var refNode = referenceLayer[i];
-                    if (edges.Contains((node, refNode)) || edges.Contains((refNode, node)))
-                        refIndices.Add(i);
-                }
-                return refIndices.Count > 0 ? refIndices.Average() : double.MaxValue;
-            }
-
-            for (int iter = 0; iter < BARYCENTER_ITERATIONS; iter++)
-            {
-                // Top-down sweep: fix layer i, reorder layer i+1
-                for (int i = 0; i < maxLayer; i++)
-                {
-                    var fixedLayer = layers[i];
-                    var freeLayer = layers[i + 1];
-                    if (freeLayer.Count <= 1) continue;
-
-                    var sorted = freeLayer
-                        .Select(n => (name: n, bc: Barycenter(n, fixedLayer, edgeSet)))
-                        .OrderBy(x => x.bc)
-                        .Select(x => x.name)
-                        .ToList();
-                    layers[i + 1] = sorted;
-                }
-
-                // Bottom-up sweep: fix layer i+1, reorder layer i
-                for (int i = maxLayer; i > 0; i--)
-                {
-                    var fixedLayer = layers[i];
-                    var freeLayer = layers[i - 1];
-                    if (freeLayer.Count <= 1) continue;
-
-                    var sorted = freeLayer
-                        .Select(n => (name: n, bc: Barycenter(n, fixedLayer, edgeSet)))
-                        .OrderBy(x => x.bc)
-                        .Select(x => x.name)
-                        .ToList();
-                    layers[i - 1] = sorted;
-                }
-            }
-
-            // ── Phase D: Coordinate assignment ──
-            int EstimateHeight(IEntity e)
-            {
-                var attrCount = Math.Max(MIN_ATTRS, e.GetAttributes().Count());
-                return (int)(attrCount * ATTR_LINE_HEIGHT + ATTR_PADDING);
-            }
-
-            // Find the widest layer to determine total canvas width
-            int maxLayerCount = layers.Values.Any() ? layers.Values.Max(l => l.Count) : 1;
-            int layerTotalWidth = maxLayerCount * ENTITY_WIDTH + (maxLayerCount - 1) * H_GAP;
-
-            var positions = new Dictionary<string, (int x, int y)>();
-            int currentY = START_Y;
-
-            for (int layer = 0; layer <= maxLayer; layer++)
-            {
-                var layerNodes = layers[layer];
-                if (layerNodes.Count == 0) continue;
-
-                // Calculate this layer's width and center it relative to the widest layer
-                int thisLayerWidth = layerNodes.Count * ENTITY_WIDTH + (layerNodes.Count - 1) * H_GAP;
-                int offsetX = START_X + (layerTotalWidth - thisLayerWidth) / 2;
-
-                // Find max entity height in this layer for uniform vertical spacing
-                int maxHeight = 0;
-                for (int i = 0; i < layerNodes.Count; i++)
-                {
-                    var x = offsetX + i * (ENTITY_WIDTH + H_GAP);
-                    positions[layerNodes[i]] = (x, currentY);
-
-                    if (entityByName.TryGetValue(layerNodes[i], out var ent))
-                    {
-                        var h = EstimateHeight(ent);
-                        if (h > maxHeight) maxHeight = h;
-                    }
-                }
-
-                currentY += (maxHeight > 0 ? maxHeight : 80) + V_SPACING;
-            }
-
-            // ── Phase D2: Parent centering post-pass ──
-            // Shift each parent toward the center of its children (within layer bounds)
-            for (int layer = 0; layer <= maxLayer - 1; layer++)
-            {
-                var layerNodes = layers[layer];
-                foreach (var node in layerNodes)
-                {
-                    var nodeChildren = bfsChildren[node].Where(c => layerOf.ContainsKey(c) && layerOf[c] == layer + 1).ToList();
-                    if (nodeChildren.Count < 2) continue;
-
-                    var childPositions = nodeChildren.Where(c => positions.ContainsKey(c)).Select(c => positions[c].x).ToList();
-                    if (childPositions.Count < 2) continue;
-
-                    int childCenter = (childPositions.Min() + childPositions.Max() + ENTITY_WIDTH) / 2 - ENTITY_WIDTH / 2;
-                    var currentPos = positions[node];
-
-                    // Only shift if it doesn't overlap siblings
-                    var siblings = layerNodes.Where(n => n != node && positions.ContainsKey(n)).ToList();
-                    bool canShift = true;
-                    foreach (var sib in siblings)
-                    {
-                        var sibX = positions[sib].x;
-                        if (Math.Abs(childCenter - sibX) < ENTITY_WIDTH + H_GAP / 2)
-                        {
-                            canShift = false;
-                            break;
-                        }
-                    }
-
-                    if (canShift)
-                        positions[node] = (childCenter, currentPos.y);
-                }
-            }
-
-            // ── Phase E: Orphan placement (adaptive grid) ──
-            int orphanCount = 0;
-            if (orphanNames.Count > 0)
-            {
-                int orphanCols = Math.Min(6, (int)Math.Ceiling(Math.Sqrt(orphanNames.Count)));
-                int orphanY = positions.Values.Any()
-                    ? positions.Values.Max(p => p.y) + 150 + V_SPACING
-                    : START_Y;
-                int orphanX = START_X;
-                int col = 0;
-
-                foreach (var orphanName in orphanNames)
-                {
-                    positions[orphanName] = (orphanX, orphanY);
-                    orphanCount++;
-                    col++;
-
-                    if (col >= orphanCols)
-                    {
-                        col = 0;
-                        orphanX = START_X;
-                        orphanY += (entityByName.ContainsKey(orphanName) ? EstimateHeight(entityByName[orphanName]) : 80) + V_SPACING;
-                    }
-                    else
-                    {
-                        orphanX += ENTITY_WIDTH + H_GAP;
-                    }
-                }
-            }
-
-            // ── Apply positions to entities ──
-            foreach (var kvp in positions)
-            {
-                if (entityByName.TryGetValue(kvp.Key, out var entity))
-                    entity.Location = new Location(kvp.Value.x, kvp.Value.y);
-            }
-
-            // ── Calculate bounding box ──
-            int minX = positions.Values.Min(p => p.x);
-            int minY = positions.Values.Min(p => p.y);
-            int maxXFinal = positions.Values.Max(p => p.x) + ENTITY_WIDTH;
-            int maxYFinal = positions.Values.Max(p => p.y) + 150;
-
-            int treeCount = rootNames.Count;
-
-            return new
-            {
-                success = true,
-                entities_arranged = positions.Count,
-                trees = treeCount,
-                orphans = orphanCount,
-                bounding_box = new { x = minX, y = minY, width = maxXFinal - minX, height = maxYFinal - minY },
-                layout = positions.Select(p => new { entity = p.Key, x = p.Value.x, y = p.Value.y }).ToList()
-            };
-        }
 
         #endregion
 
-        private static readonly HashSet<string> UsedNames = new HashSet<string>();
-
-        private string GetUniqueName(string baseName)
-        {
-            if (!UsedNames.Contains(baseName))
-            {
-                UsedNames.Add(baseName);
-                return baseName;
-            }
-
-            int counter = 1;
-            string uniqueName;
-            do
-            {
-                uniqueName = $"{baseName}{counter}";
-                counter++;
-            } while (UsedNames.Contains(uniqueName));
-
-            UsedNames.Add(uniqueName);
-            return uniqueName;
-        }
-
-        private string DeleteDocument<T>(IModule module, string documentName, string typeName) where T : class, IDocument
-        {
-            using (var transaction = _model.StartTransaction($"Delete {typeName}"))
-            {
-                var document = module.GetDocuments().OfType<T>()
-                    .FirstOrDefault(d => d.Name.Equals(documentName, StringComparison.OrdinalIgnoreCase));
-
-                if (document == null)
-                {
-                    return JsonSerializer.Serialize(new { error = $"{typeName} '{documentName}' not found in module '{module.Name}'" });
-                }
-
-                module.RemoveDocument(document);
-                transaction.Commit();
-
-                _logger.LogInformation($"Deleted {typeName} '{documentName}' from module '{module.Name}'");
-                return JsonSerializer.Serialize(new { success = true, message = $"{typeName} '{documentName}' deleted successfully from module '{module.Name}'" });
-            }
-        }
-
-        private string DeleteConstant(IModule module, string constantName)
-        {
-            using (var transaction = _model.StartTransaction($"Delete Constant '{constantName}'"))
-            {
-                var constant = module.GetDocuments().OfType<IConstant>()
-                    .FirstOrDefault(d => d.Name.Equals(constantName, StringComparison.OrdinalIgnoreCase));
-
-                if (constant == null)
-                {
-                    return JsonSerializer.Serialize(new { error = $"Constant '{constantName}' not found in module '{module.Name}'" });
-                }
-
-                // Clean up configuration constant value references before deleting
-                var constantQualifiedName = constant.QualifiedName?.FullName;
-                if (!string.IsNullOrEmpty(constantQualifiedName))
-                {
-                    try
-                    {
-                        var project = _model.Root as IProject;
-                        var settings = project?.GetProjectDocuments().OfType<IProjectSettings>().FirstOrDefault();
-                        var configSettings = settings?.GetSettingsParts().OfType<IConfigurationSettings>().FirstOrDefault();
-                        if (configSettings != null)
-                        {
-                            foreach (var config in configSettings.GetConfigurations())
-                            {
-                                var orphanedValues = config.GetConstantValues()
-                                    .Where(cv => cv.Constant?.FullName == constantQualifiedName)
-                                    .ToList();
-                                foreach (var orphan in orphanedValues)
-                                {
-                                    config.RemoveConstantValue(orphan);
-                                    _logger.LogInformation($"Removed constant value reference for '{constantQualifiedName}' from configuration '{config.Name}'");
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning($"Could not clean up configuration references for constant '{constantName}': {ex.Message}");
-                    }
-                }
-
-                module.RemoveDocument(constant);
-                transaction.Commit();
-
-                _logger.LogInformation($"Deleted Constant '{constantName}' from module '{module.Name}'");
-                return JsonSerializer.Serialize(new { success = true, message = $"Constant '{constantName}' deleted successfully from module '{module.Name}'" });
-            }
-        }
-
-        private string DeleteEntity(IDomainModel domainModel, string entityName)
-        {
-            using (var transaction = _model.StartTransaction("Delete Entity"))
-            {
-                var entity = domainModel.GetEntities().FirstOrDefault(e => e.Name == entityName);
-                if (entity == null)
-                {
-                    return JsonSerializer.Serialize(new { error = $"Entity '{entityName}' not found" });
-                }
-
-                // Delete all associations first
-                var entityAssociations = entity.GetAssociations(AssociationDirection.Both, null).ToList();
-                foreach (var entityAssociation in entityAssociations)
-                {
-                    var association = entityAssociation.Association;
-                    entity.DeleteAssociation(association);
-                }
-
-                domainModel.RemoveEntity(entity);
-                transaction.Commit();
-
-                return JsonSerializer.Serialize(new 
-                { 
-                    success = true, 
-                    message = $"Entity '{entityName}' and its associations deleted successfully" 
-                });
-            }
-        }
-
-        private string DeleteAttribute(IDomainModel domainModel, string entityName, string attributeName)
-        {
-            using (var transaction = _model.StartTransaction("Delete Attribute"))
-            {
-                var entity = domainModel.GetEntities().FirstOrDefault(e => e.Name == entityName);
-                if (entity == null)
-                {
-                    return JsonSerializer.Serialize(new { error = $"Entity '{entityName}' not found" });
-                }
-
-                var attribute = entity.GetAttributes().FirstOrDefault(a => a.Name == attributeName);
-                if (attribute == null)
-                {
-                    return JsonSerializer.Serialize(new { error = $"Attribute '{attributeName}' not found in entity '{entityName}'" });
-                }
-
-                entity.RemoveAttribute(attribute);
-                transaction.Commit();
-
-                return JsonSerializer.Serialize(new 
-                { 
-                    success = true, 
-                    message = $"Attribute '{attributeName}' deleted successfully from entity '{entityName}'" 
-                });
-            }
-        }
-
-        private string DeleteAssociation(IDomainModel domainModel, string entityName, string associationName)
-        {
-            using (var transaction = _model.StartTransaction("Delete Association"))
-            {
-                var entity = domainModel.GetEntities().FirstOrDefault(e => e.Name == entityName);
-                if (entity == null)
-                {
-                    return JsonSerializer.Serialize(new { error = $"Entity '{entityName}' not found" });
-                }
-
-                var entityAssociation = entity.GetAssociations(AssociationDirection.Both, null)
-                    .FirstOrDefault(a => a.Association.Name == associationName);
-                if (entityAssociation == null)
-                {
-                    return JsonSerializer.Serialize(new { error = $"Association '{associationName}' not found" });
-                }
-
-                var association = entityAssociation.Association;
-                entity.DeleteAssociation(association);
-                transaction.Commit();
-
-                return JsonSerializer.Serialize(new 
-                { 
-                    success = true, 
-                    message = $"Association '{associationName}' deleted successfully" 
-                });
-            }
-        }
-
-        #region Entity Template Methods
-
-        /// <summary>
-        /// Finds the template non-persistent entity (AIExtension.NPE) for copying
-        /// </summary>
-        /// <returns>The template entity if found, null otherwise</returns>
-        private IEntity? FindNonPersistentTemplate()
-        {
-            return FindTemplateEntity("NPE", "non-persistent");
-        }
-
-        /// <summary>
-        /// Finds the template FileDocument entity (AIExtension.FileDocument) for copying
-        /// </summary>
-        /// <returns>The template entity if found, null otherwise</returns>
-        private IEntity? FindFileDocumentTemplate()
-        {
-            return FindTemplateEntity("FileDocument", "FileDocument");
-        }
-
-        /// <summary>
-        /// Finds the template Image entity (AIExtension.Image) for copying
-        /// </summary>
-        /// <returns>The template entity if found, null otherwise</returns>
-        private IEntity? FindImageTemplate()
-        {
-            return FindTemplateEntity("Image", "Image");
-        }
-
-        /// <summary>
-        /// Finds the template StoreCreatedDate entity (AIExtension.StoreCreatedDate) for copying
-        /// </summary>
-        /// <returns>The template entity if found, null otherwise</returns>
-        private IEntity? FindStoreCreatedDateTemplate()
-        {
-            return FindTemplateEntity("StoreCreatedDate", "StoreCreatedDate");
-        }
-
-        /// <summary>
-        /// Finds the template StoreChangeDate entity (AIExtension.StoreChangeDate) for copying
-        /// </summary>
-        /// <returns>The template entity if found, null otherwise</returns>
-        private IEntity? FindStoreChangeDateTemplate()
-        {
-            return FindTemplateEntity("StoreChangeDate", "StoreChangeDate");
-        }
-
-        /// <summary>
-        /// Finds the template StoreCreatedChangeDate entity (AIExtension.StoreCreatedChangeDate) for copying
-        /// </summary>
-        /// <returns>The template entity if found, null otherwise</returns>
-        private IEntity? FindStoreCreatedChangeDateTemplate()
-        {
-            return FindTemplateEntity("StoreCreatedChangeDate", "StoreCreatedChangeDate");
-        }
-
-        /// <summary>
-        /// Finds the template StoreOwner entity (AIExtension.StoreOwner) for copying
-        /// </summary>
-        /// <returns>The template entity if found, null otherwise</returns>
-        private IEntity? FindStoreOwnerTemplate()
-        {
-            return FindTemplateEntity("StoreOwner", "StoreOwner");
-        }
-
-        /// <summary>
-        /// Finds the template StoreChangeBy entity (AIExtension.StoreChangeBy) for copying
-        /// </summary>
-        /// <returns>The template entity if found, null otherwise</returns>
-        private IEntity? FindStoreChangeByTemplate()
-        {
-            return FindTemplateEntity("StoreChangeBy", "StoreChangeBy");
-        }
-
-        /// <summary>
-        /// Generic method to find template entities in the AIExtension module
-        /// </summary>
-        /// <param name="templateName">Name of the template entity to find</param>
-        /// <param name="templateType">Type description for logging purposes</param>
-        /// <returns>The template entity if found, null otherwise</returns>
-        private IEntity? FindTemplateEntity(string templateName, string templateType)
-        {
-            try
-            {
-                // Use the same module access pattern as the rest of the codebase
-                // Find all modules the safe way
-                var modules = _model.Root.GetModules();
-                
-                // Look specifically for AIExtension module
-                var aiExtensionModule = modules.FirstOrDefault(m => m?.Name == "AIExtension");
-
-                if (aiExtensionModule?.DomainModel == null)
-                {
-                    _logger.LogWarning($"AIExtension module or its domain model not found for {templateType} template");
-                    return null;
-                }
-
-                // Find the specified entity in AIExtension
-                var templateEntity = aiExtensionModule.DomainModel.GetEntities()
-                    .FirstOrDefault(e => e?.Name == templateName);
-
-                if (templateEntity == null)
-                {
-                    _logger.LogWarning($"{templateName} template entity not found in AIExtension module");
-                    return null;
-                }
-
-                _logger.LogInformation($"Found {templateType} template entity: AIExtension.{templateName}");
-                return templateEntity;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error finding {templateType} template entity");
-                return null;
-            }
-        }        /// <summary>
-        /// Creates an entity by copying from a template based on entity type
-        /// </summary>
-        /// <param name="targetModule">Module where the new entity will be created</param>
-        /// <param name="entityName">Name for the new entity</param>
-        /// <param name="attributesArray">Attributes to add to the entity</param>
-        /// <param name="entityType">Type of entity: "persistent", "non-persistent", "filedocument", "image"</param>
-        /// <returns>The created entity if successful, null otherwise</returns>
-        private IEntity? CreateEntityFromTemplate(IModule targetModule, string entityName, JsonArray? attributesArray, string entityType = "persistent")
-        {
-            try
-            {
-                IEntity? templateEntity = null;
-                string templateDescription = "";
-
-                // Find the appropriate template based on entity type
-                switch (entityType.ToLower())
-                {
-                    case "non-persistent":
-                        templateEntity = FindNonPersistentTemplate();
-                        templateDescription = "non-persistent";
-                        break;
-                    case "filedocument":
-                        templateEntity = FindFileDocumentTemplate();
-                        templateDescription = "FileDocument";
-                        break;
-                    case "image":
-                        templateEntity = FindImageTemplate();
-                        templateDescription = "Image";
-                        break;
-                    case "storecreateddate":
-                        templateEntity = FindStoreCreatedDateTemplate();
-                        templateDescription = "StoreCreatedDate";
-                        break;
-                    case "storechangedate":
-                        templateEntity = FindStoreChangeDateTemplate();
-                        templateDescription = "StoreChangeDate";
-                        break;
-                    case "storecreatedchangedate":
-                        templateEntity = FindStoreCreatedChangeDateTemplate();
-                        templateDescription = "StoreCreatedChangeDate";
-                        break;
-                    case "storeowner":
-                        templateEntity = FindStoreOwnerTemplate();
-                        templateDescription = "StoreOwner";
-                        break;
-                    case "storechangeby":
-                        templateEntity = FindStoreChangeByTemplate();
-                        templateDescription = "StoreChangeBy";
-                        break;
-                    case "persistent":
-                    default:
-                        // For persistent entities, create normally without template
-                        return CreatePersistentEntity(targetModule, entityName, attributesArray);
-                }
-
-                if (templateEntity == null)
-                {
-                    _logger.LogError($"Cannot create {templateDescription} entity: template not found");
-                    return null;
-                }
-
-                // Copy the template entity (this preserves the special properties)
-                var newEntity = _model.Copy(templateEntity);
-
-                // Rename the entity
-                newEntity.Name = entityName;
-
-                // Add the desired attributes
-                if (attributesArray != null)
-                {
-                    foreach (var attrNode in attributesArray)
-                    {
-                        var attrObj = attrNode?.AsObject();
-                        if (attrObj == null) continue;
-
-                        var attrName = attrObj["name"]?.ToString();
-                        var attrType = attrObj["type"]?.ToString();
-
-                        if (string.IsNullOrEmpty(attrName) || string.IsNullOrEmpty(attrType)) continue;
-
-                        var mxAttribute = _model.Create<IAttribute>();
-                        mxAttribute.Name = attrName;
-
-                        if (attrType.StartsWith("Enumeration:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            // "Enumeration:EnumName" syntax — link to existing enumeration
-                            var enumName = attrType.Substring("Enumeration:".Length).Trim();
-                            var explicitEnumName = attrObj["enumeration_name"]?.ToString();
-                            if (!string.IsNullOrEmpty(explicitEnumName))
-                                enumName = explicitEnumName;
-
-                            var foundEnum = FindExistingEnumeration(enumName);
-                            if (foundEnum != null)
-                            {
-                                var enumTypeInstance = _model.Create<IEnumerationAttributeType>();
-                                enumTypeInstance.Enumeration = foundEnum.QualifiedName;
-                                mxAttribute.Type = enumTypeInstance;
-                            }
-                            else
-                            {
-                                _logger.LogWarning($"Enumeration '{enumName}' not found — skipping attribute '{attrName}'");
-                                continue;
-                            }
-                        }
-                        else if (attrType.Equals("Enumeration", StringComparison.OrdinalIgnoreCase))
-                        {
-                            // Plain "Enumeration" type — check enumeration_name or enumerationValues
-                            var explicitEnumName = attrObj["enumeration_name"]?.ToString();
-                            if (!string.IsNullOrEmpty(explicitEnumName))
-                            {
-                                var foundEnum = FindExistingEnumeration(explicitEnumName);
-                                if (foundEnum != null)
-                                {
-                                    var enumTypeInstance = _model.Create<IEnumerationAttributeType>();
-                                    enumTypeInstance.Enumeration = foundEnum.QualifiedName;
-                                    mxAttribute.Type = enumTypeInstance;
-                                }
-                                else
-                                {
-                                    _logger.LogWarning($"Enumeration '{explicitEnumName}' not found — skipping attribute '{attrName}'");
-                                    continue;
-                                }
-                            }
-                            else
-                            {
-                                var enumValues = attrObj["enumerationValues"]?.AsArray()
-                                    ?.Select(v => v?.ToString())
-                                    ?.Where(v => !string.IsNullOrEmpty(v))
-                                    ?.ToList();
-
-                                if (enumValues != null && enumValues.Any())
-                                {
-                                    var enumTypeInstance = CreateEnumerationType(_model, attrName, enumValues, targetModule);
-                                    mxAttribute.Type = enumTypeInstance;
-                                }
-                                else
-                                {
-                                    _logger.LogWarning($"Enumeration attribute '{attrName}' requires 'enumeration_name' or 'enumerationValues' — skipping");
-                                    continue;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            var attributeType = CreateAttributeType(_model, attrType);
-                            mxAttribute.Type = attributeType;
-                        }
-
-                        // Set default value if provided
-                        var defaultVal = attrObj["default_value"]?.ToString();
-                        if (!string.IsNullOrEmpty(defaultVal))
-                        {
-                            var storedValue = _model.Create<IStoredValue>();
-                            storedValue.DefaultValue = defaultVal;
-                            mxAttribute.Value = storedValue;
-                        }
-
-                        newEntity.AddAttribute(mxAttribute);
-                    }
-                }
-
-                // Add the entity to the target module
-                targetModule.DomainModel.AddEntity(newEntity);
-
-                // Position the entity
-                PositionEntity(newEntity, targetModule.DomainModel.GetEntities().Count());
-
-                _logger.LogInformation($"Successfully created {templateDescription} entity '{entityName}' from template");
-                return newEntity;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error creating entity '{entityName}' from template");
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Creates a regular persistent entity without using templates
-        /// </summary>
-        /// <param name="targetModule">Module where the new entity will be created</param>
-        /// <param name="entityName">Name for the new entity</param>
-        /// <param name="attributesArray">Attributes to add to the entity</param>
-        /// <returns>The created entity if successful, null otherwise</returns>
-        private IEntity? CreatePersistentEntity(IModule targetModule, string entityName, JsonArray? attributesArray)
-        {
-            try
-            {
-                // Create regular persistent entity
-                var mxEntity = _model.Create<IEntity>();
-                mxEntity.Name = entityName;
-                targetModule.DomainModel.AddEntity(mxEntity);
-
-                // Add attributes if provided
-                if (attributesArray != null)
-                {
-                    foreach (var attrNode in attributesArray)
-                    {
-                        var attrObj = attrNode?.AsObject();
-                        if (attrObj == null) continue;
-
-                        var attrName = attrObj["name"]?.ToString();
-                        var attrType = attrObj["type"]?.ToString();
-
-                        if (string.IsNullOrEmpty(attrName) || string.IsNullOrEmpty(attrType)) continue;
-
-                        var mxAttribute = _model.Create<IAttribute>();
-                        mxAttribute.Name = attrName;
-
-                        if (attrType.StartsWith("Enumeration:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            // "Enumeration:EnumName" syntax — link to existing enumeration
-                            var enumName = attrType.Substring("Enumeration:".Length).Trim();
-                            var explicitEnumName = attrObj["enumeration_name"]?.ToString();
-                            if (!string.IsNullOrEmpty(explicitEnumName))
-                                enumName = explicitEnumName;
-
-                            var foundEnum = FindExistingEnumeration(enumName);
-                            if (foundEnum != null)
-                            {
-                                var enumTypeInstance = _model.Create<IEnumerationAttributeType>();
-                                enumTypeInstance.Enumeration = foundEnum.QualifiedName;
-                                mxAttribute.Type = enumTypeInstance;
-                            }
-                            else
-                            {
-                                _logger.LogWarning($"Enumeration '{enumName}' not found — skipping attribute '{attrName}'");
-                                continue;
-                            }
-                        }
-                        else if (attrType.Equals("Enumeration", StringComparison.OrdinalIgnoreCase))
-                        {
-                            // Plain "Enumeration" type — check enumeration_name or enumerationValues
-                            var explicitEnumName = attrObj["enumeration_name"]?.ToString();
-                            if (!string.IsNullOrEmpty(explicitEnumName))
-                            {
-                                var foundEnum = FindExistingEnumeration(explicitEnumName);
-                                if (foundEnum != null)
-                                {
-                                    var enumTypeInstance = _model.Create<IEnumerationAttributeType>();
-                                    enumTypeInstance.Enumeration = foundEnum.QualifiedName;
-                                    mxAttribute.Type = enumTypeInstance;
-                                }
-                                else
-                                {
-                                    _logger.LogWarning($"Enumeration '{explicitEnumName}' not found — skipping attribute '{attrName}'");
-                                    continue;
-                                }
-                            }
-                            else
-                            {
-                                var enumValues = attrObj["enumerationValues"]?.AsArray()
-                                    ?.Select(v => v?.ToString())
-                                    ?.Where(v => !string.IsNullOrEmpty(v))
-                                    ?.ToList();
-
-                                if (enumValues != null && enumValues.Any())
-                                {
-                                    var enumTypeInstance = CreateEnumerationType(_model, attrName, enumValues, targetModule);
-                                    mxAttribute.Type = enumTypeInstance;
-                                }
-                                else
-                                {
-                                    _logger.LogWarning($"Enumeration attribute '{attrName}' requires 'enumeration_name' or 'enumerationValues' — skipping");
-                                    continue;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            var attributeType = CreateAttributeType(_model, attrType);
-                            mxAttribute.Type = attributeType;
-                        }
-
-                        // Set default value if provided
-                        var defaultVal = attrObj["default_value"]?.ToString();
-                        if (!string.IsNullOrEmpty(defaultVal))
-                        {
-                            var storedValue = _model.Create<IStoredValue>();
-                            storedValue.DefaultValue = defaultVal;
-                            mxAttribute.Value = storedValue;
-                        }
-
-                        mxEntity.AddAttribute(mxAttribute);
-                    }
-                }
-
-                // Position entity
-                PositionEntity(mxEntity, targetModule.DomainModel.GetEntities().Count());
-
-                return mxEntity;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error creating persistent entity '{entityName}'");
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Gets the template name for a given entity type
-        /// </summary>
-        /// <param name="entityType">The entity type</param>
-        /// <returns>The template name</returns>
-        private static string GetTemplateName(string entityType)
-        {
-            return entityType.ToLower() switch
-            {
-                "non-persistent" => "NPE",
-                "filedocument" => "FileDocument",
-                "image" => "Image",
-                "storecreateddate" => "StoreCreatedDate",
-                "storechangedate" => "StoreChangeDate",
-                "storecreatedchangedate" => "StoreCreatedChangeDate",
-                "storeowner" => "StoreOwner",
-                "storechangeby" => "StoreChangeBy",
-                _ => "Unknown"
-            };
-        }
-
-        #endregion
 
         #region Phase 9: Entity Configuration & Module Organization
 
@@ -3480,67 +2129,6 @@ namespace Terminal.Spmcp.Tools
             }
         }
 
-        private string ListFoldersRecursive(IModule module)
-        {
-            var result = new List<object>();
-            CollectFolders(module, "", result);
-            return JsonSerializer.Serialize(new { success = true, module = module.Name, folders = result, rootDocuments = module.GetDocuments().Select(d => d.Name).ToList() });
-        }
-
-        private void CollectFolders(IFolderBase parent, string path, List<object> result)
-        {
-            foreach (var folder in parent.GetFolders())
-            {
-                var folderPath = string.IsNullOrEmpty(path) ? folder.Name : $"{path}/{folder.Name}";
-                result.Add(new
-                {
-                    name = folder.Name,
-                    path = folderPath,
-                    documentCount = folder.GetDocuments().Count,
-                    documents = folder.GetDocuments().Select(d => d.Name).ToList(),
-                    subfolderCount = folder.GetFolders().Count
-                });
-                CollectFolders(folder, folderPath, result);
-            }
-        }
-
-        private IFolder? FindFolderRecursive(IFolderBase parent, string folderName)
-        {
-            foreach (var folder in parent.GetFolders())
-            {
-                if (folder.Name.Equals(folderName, StringComparison.OrdinalIgnoreCase))
-                    return folder;
-                var found = FindFolderRecursive(folder, folderName);
-                if (found != null)
-                    return found;
-            }
-            return null;
-        }
-
-        private IDocument? FindDocumentRecursive(IFolderBase parent, string documentName)
-        {
-            foreach (var folder in parent.GetFolders())
-            {
-                var doc = folder.GetDocuments().FirstOrDefault(d => d.Name.Equals(documentName, StringComparison.OrdinalIgnoreCase));
-                if (doc != null) return doc;
-                var found = FindDocumentRecursive(folder, documentName);
-                if (found != null) return found;
-            }
-            return null;
-        }
-
-        private (IDocument? doc, IFolderBase? parent) FindDocumentWithParent(IFolderBase parent, string documentName)
-        {
-            foreach (var folder in parent.GetFolders())
-            {
-                var doc = folder.GetDocuments().FirstOrDefault(d => d.Name.Equals(documentName, StringComparison.OrdinalIgnoreCase));
-                if (doc != null) return (doc, folder);
-                var result = FindDocumentWithParent(folder, documentName);
-                if (result.doc != null) return result;
-            }
-            return (null, null);
-        }
-
         public async Task<string> ValidateName(JsonObject parameters)
         {
             try
@@ -3549,25 +2137,19 @@ namespace Terminal.Spmcp.Tools
                 if (string.IsNullOrEmpty(name))
                     return JsonSerializer.Serialize(new { error = "name is required" });
 
-                if (_nameValidationService == null)
-                    return JsonSerializer.Serialize(new { error = "INameValidationService is not available" });
-
-                var validationResult = _nameValidationService.IsNameValid(name);
                 var autoFix = parameters["auto_fix"]?.GetValue<bool>() ?? false;
+                var result = HostServices.DomainModel.ValidateName(name, autoFix);
 
-                string? fixedName = null;
-                if (!validationResult.IsValid && autoFix)
-                {
-                    fixedName = _nameValidationService.GetValidName(name);
-                }
+                if (result == null)
+                    return JsonSerializer.Serialize(new { error = "INameValidationService is not available on the active host" });
 
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
                     name,
-                    isValid = validationResult.IsValid,
-                    errorMessage = validationResult.IsValid ? null : validationResult.ErrorMessage,
-                    fixedName
+                    isValid = result.IsValid,
+                    errorMessage = result.IsValid ? null : result.ErrorMessage,
+                    fixedName = result.SuggestedFix
                 });
             }
             catch (Exception ex)
@@ -3642,31 +2224,28 @@ namespace Terminal.Spmcp.Tools
                 if (string.IsNullOrEmpty(newName))
                     return JsonSerializer.Serialize(new { error = "new_name is required" });
 
-                if (_nameValidationService != null)
-                {
-                    var validation = _nameValidationService.IsNameValid(newName);
-                    if (!validation.IsValid)
-                        return JsonSerializer.Serialize(new { error = $"Invalid name '{newName}': {validation.ErrorMessage}" });
-                }
+                // Validate new name via HostServices
+                var validation = HostServices.DomainModel.ValidateName(newName);
+                if (validation != null && !validation.IsValid)
+                    return JsonSerializer.Serialize(new { error = $"Invalid name '{newName}': {validation.ErrorMessage}" });
 
-                var (entity, module) = Utils.Utils.FindEntityAcrossModules(_model, entityName, moduleName);
-                if (entity == null)
+                var entityRef = ResolveEntityRef(entityName, moduleName);
+                if (entityRef == null)
                     return JsonSerializer.Serialize(new { error = $"Entity '{entityName}' not found{(moduleName != null ? $" in module '{moduleName}'" : "")}" });
 
-                var oldName = entity.Name;
-                using var transaction = _model.StartTransaction($"Rename entity '{oldName}' to '{newName}'");
-                entity.Name = newName;
-                transaction.Commit();
+                var oldQualifiedName = entityRef.Value.QualifiedName;
+                HostServices.DomainModel.RenameEntity(entityRef.Value, newName);
 
-                _logger.LogInformation($"Renamed entity '{oldName}' to '{newName}' in module '{module!.Name}'");
+                var newModuleName = oldQualifiedName.Contains('.') ? oldQualifiedName.Split('.')[0] : moduleName ?? "";
+                _logger.LogInformation($"Renamed entity '{entityName}' to '{newName}'");
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    message = $"Entity renamed from '{oldName}' to '{newName}'",
-                    module = module.Name,
-                    oldName,
+                    message = $"Entity renamed from '{entityName}' to '{newName}'",
+                    module = newModuleName,
+                    oldName = entityName,
                     newName,
-                    qualifiedName = $"{module.Name}.{newName}"
+                    qualifiedName = $"{newModuleName}.{newName}"
                 });
             }
             catch (Exception ex)
@@ -3692,35 +2271,28 @@ namespace Terminal.Spmcp.Tools
                 if (string.IsNullOrEmpty(newName))
                     return JsonSerializer.Serialize(new { error = "new_name is required" });
 
-                if (_nameValidationService != null)
-                {
-                    var validation = _nameValidationService.IsNameValid(newName);
-                    if (!validation.IsValid)
-                        return JsonSerializer.Serialize(new { error = $"Invalid name '{newName}': {validation.ErrorMessage}" });
-                }
+                var validation = HostServices.DomainModel.ValidateName(newName);
+                if (validation != null && !validation.IsValid)
+                    return JsonSerializer.Serialize(new { error = $"Invalid name '{newName}': {validation.ErrorMessage}" });
 
-                var (entity, module) = Utils.Utils.FindEntityAcrossModules(_model, entityName, moduleName);
-                if (entity == null)
+                var entityRef = ResolveEntityRef(entityName, moduleName);
+                if (entityRef == null)
                     return JsonSerializer.Serialize(new { error = $"Entity '{entityName}' not found{(moduleName != null ? $" in module '{moduleName}'" : "")}" });
 
-                var attribute = entity.GetAttributes()
-                    .FirstOrDefault(a => a.Name.Equals(attributeName, StringComparison.OrdinalIgnoreCase));
-                if (attribute == null)
-                    return JsonSerializer.Serialize(new { error = $"Attribute '{attributeName}' not found on entity '{entity.Name}'" });
+                var shape = HostServices.DomainModel.ReadEntity(entityRef.Value);
+                var attrRef = shape.Attributes.FirstOrDefault(a => a.Name.Equals(attributeName, StringComparison.OrdinalIgnoreCase));
+                if (attrRef.Name == null)
+                    return JsonSerializer.Serialize(new { error = $"Attribute '{attributeName}' not found on entity '{entityRef.Value.QualifiedName}'" });
 
-                var oldName = attribute.Name;
-                using var transaction = _model.StartTransaction($"Rename attribute '{oldName}' to '{newName}' on '{entity.Name}'");
-                attribute.Name = newName;
-                transaction.Commit();
+                HostServices.DomainModel.RenameAttribute(entityRef.Value, attrRef, newName);
 
-                _logger.LogInformation($"Renamed attribute '{oldName}' to '{newName}' on entity '{entity.Name}'");
+                _logger.LogInformation($"Renamed attribute '{attributeName}' to '{newName}' on entity '{entityRef.Value.QualifiedName}'");
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    message = $"Attribute renamed from '{oldName}' to '{newName}' on entity '{entity.Name}'",
-                    entity = entity.Name,
-                    module = module!.Name,
-                    oldName,
+                    message = $"Attribute renamed from '{attributeName}' to '{newName}' on entity '{entityRef.Value.QualifiedName}'",
+                    entity = entityRef.Value.QualifiedName,
+                    oldName = attributeName,
                     newName
                 });
             }
@@ -3744,52 +2316,23 @@ namespace Terminal.Spmcp.Tools
                 if (string.IsNullOrEmpty(newName))
                     return JsonSerializer.Serialize(new { error = "new_name is required" });
 
-                if (_nameValidationService != null)
-                {
-                    var validation = _nameValidationService.IsNameValid(newName);
-                    if (!validation.IsValid)
-                        return JsonSerializer.Serialize(new { error = $"Invalid name '{newName}': {validation.ErrorMessage}" });
-                }
+                var validation = HostServices.DomainModel.ValidateName(newName);
+                if (validation != null && !validation.IsValid)
+                    return JsonSerializer.Serialize(new { error = $"Invalid name '{newName}': {validation.ErrorMessage}" });
 
-                // Search for the association across all entities in the target module(s)
-                IAssociation? foundAssociation = null;
-                IModule? foundModule = null;
-
-                var modules = moduleName != null
-                    ? new[] { Utils.Utils.ResolveModule(_model, moduleName) }.Where(m => m != null)
-                    : _model.Root.GetModules().Where(m => !m.FromAppStore);
-
-                foreach (var mod in modules)
-                {
-                    foreach (var entity in mod!.DomainModel.GetEntities())
-                    {
-                        var assoc = entity.GetAssociations(AssociationDirection.Both, null)
-                            .FirstOrDefault(a => a.Association.Name.Equals(associationName, StringComparison.OrdinalIgnoreCase));
-                        if (assoc != null)
-                        {
-                            foundAssociation = assoc.Association;
-                            foundModule = mod;
-                            break;
-                        }
-                    }
-                    if (foundAssociation != null) break;
-                }
-
-                if (foundAssociation == null)
+                var (assocRef, foundModuleName) = ResolveAssociationRef(associationName, moduleName);
+                if (assocRef == null)
                     return JsonSerializer.Serialize(new { error = $"Association '{associationName}' not found{(moduleName != null ? $" in module '{moduleName}'" : "")}" });
 
-                var oldName = foundAssociation.Name;
-                using var transaction = _model.StartTransaction($"Rename association '{oldName}' to '{newName}'");
-                foundAssociation.Name = newName;
-                transaction.Commit();
+                HostServices.DomainModel.RenameAssociation(assocRef.Value, newName);
 
-                _logger.LogInformation($"Renamed association '{oldName}' to '{newName}' in module '{foundModule!.Name}'");
+                _logger.LogInformation($"Renamed association '{associationName}' to '{newName}'");
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    message = $"Association renamed from '{oldName}' to '{newName}'",
-                    module = foundModule.Name,
-                    oldName,
+                    message = $"Association renamed from '{associationName}' to '{newName}'",
+                    module = foundModuleName,
+                    oldName = associationName,
                     newName
                 });
             }
@@ -3814,75 +2357,74 @@ namespace Terminal.Spmcp.Tools
                 if (string.IsNullOrEmpty(newName))
                     return JsonSerializer.Serialize(new { error = "new_name is required" });
 
-                if (_nameValidationService != null)
-                {
-                    var validation = _nameValidationService.IsNameValid(newName);
-                    if (!validation.IsValid)
-                        return JsonSerializer.Serialize(new { error = $"Invalid name '{newName}': {validation.ErrorMessage}" });
-                }
+                var validation = HostServices.DomainModel.ValidateName(newName);
+                if (validation != null && !validation.IsValid)
+                    return JsonSerializer.Serialize(new { error = $"Invalid name '{newName}': {validation.ErrorMessage}" });
 
-                // Handle qualified name (Module.DocumentName)
-                if (documentName.Contains('.') && moduleName == null)
+                // Normalize: handle qualified name (Module.DocumentName)
+                string? effectiveModule = moduleName;
+                string effectiveDocName = documentName;
+                if (documentName.Contains('.') && effectiveModule == null)
                 {
                     var parts = documentName.Split('.', 2);
-                    moduleName = parts[0];
-                    documentName = parts[1];
+                    effectiveModule = parts[0];
+                    effectiveDocName = parts[1];
                 }
 
-                var modules = moduleName != null
-                    ? new[] { Utils.Utils.ResolveModule(_model, moduleName) }.Where(m => m != null)
-                    : _model.Root.GetModules().Where(m => !m.FromAppStore);
+                // Build qualified name for lookup
+                DocumentId? docId = null;
+                string? resolvedModule = null;
 
-                IDocument? foundDoc = null;
-                IModule? foundModule = null;
-
-                foreach (var mod in modules)
+                if (!string.IsNullOrEmpty(effectiveModule))
                 {
-                    var docs = mod!.GetDocuments();
+                    // Try direct qualified lookup first
+                    var qualifiedName = $"{effectiveModule}.{effectiveDocName}";
+                    docId = HostServices.Model.GetDocumentByQualifiedName(qualifiedName);
+                    resolvedModule = effectiveModule;
+                }
 
-                    // Filter by type if specified
-                    IEnumerable<IDocument> filtered = documentType switch
+                if (docId == null)
+                {
+                    // Search across modules via ListAllDocuments
+                    var typeFilter = documentType switch
                     {
-                        "microflow" => docs.OfType<IMicroflow>(),
-                        "constant" => docs.OfType<IConstant>(),
-                        "enumeration" => docs.OfType<IEnumeration>(),
-                        _ => docs
+                        "microflow" => "microflow",
+                        "constant" => "constant",
+                        "enumeration" => "enumeration",
+                        _ => null
                     };
-
-                    foundDoc = filtered.FirstOrDefault(d => d.Name.Equals(documentName, StringComparison.OrdinalIgnoreCase));
-
-                    // If not found at root, search subfolders
-                    if (foundDoc == null)
+                    var allDocs = HostServices.Model.ListAllDocuments(typeFilter);
+                    var match = allDocs.FirstOrDefault(d =>
                     {
-                        foundDoc = FindDocumentRecursive(mod, documentName);
-                    }
-
-                    if (foundDoc != null)
+                        var parts = d.QualifiedName.Split('.', 2);
+                        var docLocalName = parts.Length == 2 ? parts[1] : d.QualifiedName;
+                        var docMod = parts.Length == 2 ? parts[0] : null;
+                        bool nameMatch = docLocalName.Equals(effectiveDocName, StringComparison.OrdinalIgnoreCase);
+                        bool moduleMatch = effectiveModule == null || (docMod != null && docMod.Equals(effectiveModule, StringComparison.OrdinalIgnoreCase));
+                        return nameMatch && moduleMatch;
+                    });
+                    if (match.QualifiedName != null)
                     {
-                        foundModule = mod;
-                        break;
+                        docId = match;
+                        var mp = match.QualifiedName.Split('.', 2);
+                        resolvedModule = mp.Length == 2 ? mp[0] : effectiveModule;
                     }
                 }
 
-                if (foundDoc == null)
-                    return JsonSerializer.Serialize(new { error = $"Document '{documentName}'{(documentType != null ? $" (type: {documentType})" : "")} not found{(moduleName != null ? $" in module '{moduleName}'" : "")}" });
+                if (docId == null)
+                    return JsonSerializer.Serialize(new { error = $"Document '{documentName}'{(documentType != null ? $" (type: {documentType})" : "")} not found{(effectiveModule != null ? $" in module '{effectiveModule}'" : "")}" });
 
-                var oldName = foundDoc.Name;
-                var detectedType = foundDoc.GetType().Name;
-                using var transaction = _model.StartTransaction($"Rename document '{oldName}' to '{newName}'");
-                foundDoc.Name = newName;
-                transaction.Commit();
+                HostServices.DomainModel.RenameDocument(docId.Value, newName);
 
-                _logger.LogInformation($"Renamed document '{oldName}' to '{newName}' in module '{foundModule!.Name}'");
+                _logger.LogInformation($"Renamed document '{documentName}' to '{newName}'");
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    message = $"Document renamed from '{oldName}' to '{newName}' (all by-name references updated)",
-                    module = foundModule.Name,
-                    documentType = detectedType,
-                    oldName,
+                    message = $"Document renamed from '{effectiveDocName}' to '{newName}' (all by-name references updated)",
+                    module = resolvedModule,
+                    oldName = effectiveDocName,
                     newName,
-                    qualifiedName = $"{foundModule.Name}.{newName}"
+                    qualifiedName = $"{resolvedModule}.{newName}"
                 });
             }
             catch (Exception ex)
@@ -3904,29 +2446,22 @@ namespace Terminal.Spmcp.Tools
                 if (string.IsNullOrEmpty(newName))
                     return JsonSerializer.Serialize(new { error = "new_name is required" });
 
-                if (_nameValidationService != null)
-                {
-                    var validation = _nameValidationService.IsNameValid(newName);
-                    if (!validation.IsValid)
-                        return JsonSerializer.Serialize(new { error = $"Invalid name '{newName}': {validation.ErrorMessage}" });
-                }
+                var validation = HostServices.DomainModel.ValidateName(newName);
+                if (validation != null && !validation.IsValid)
+                    return JsonSerializer.Serialize(new { error = $"Invalid name '{newName}': {validation.ErrorMessage}" });
 
-                var module = _model.Root.GetModules()
-                    .FirstOrDefault(m => m.Name.Equals(moduleName, StringComparison.OrdinalIgnoreCase));
-                if (module == null)
+                var moduleId = HostServices.Model.GetModuleByName(moduleName);
+                if (moduleId == null)
                     return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" });
 
-                var oldName = module.Name;
-                using var transaction = _model.StartTransaction($"Rename module '{oldName}' to '{newName}'");
-                module.Name = newName;
-                transaction.Commit();
+                HostServices.DomainModel.RenameModule(moduleId.Value, newName);
 
-                _logger.LogInformation($"Renamed module '{oldName}' to '{newName}' (all qualified references updated)");
+                _logger.LogInformation($"Renamed module '{moduleName}' to '{newName}' (all qualified references updated)");
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    message = $"Module renamed from '{oldName}' to '{newName}' (all qualified references updated)",
-                    oldName,
+                    message = $"Module renamed from '{moduleName}' to '{newName}' (all qualified references updated)",
+                    oldName = moduleName,
                     newName
                 });
             }
@@ -3953,61 +2488,44 @@ namespace Terminal.Spmcp.Tools
                 if (string.IsNullOrEmpty(newName))
                     return JsonSerializer.Serialize(new { error = "new_name is required" });
 
-                if (_nameValidationService != null)
+                var validation = HostServices.DomainModel.ValidateName(newName);
+                if (validation != null && !validation.IsValid)
+                    return JsonSerializer.Serialize(new { error = $"Invalid name '{newName}': {validation.ErrorMessage}" });
+
+                // Build the qualified enumeration name for the host call
+                string qualifiedEnumName;
+                if (enumerationName.Contains('.'))
                 {
-                    var validation = _nameValidationService.IsNameValid(newName);
-                    if (!validation.IsValid)
-                        return JsonSerializer.Serialize(new { error = $"Invalid name '{newName}': {validation.ErrorMessage}" });
+                    qualifiedEnumName = enumerationName;
                 }
-
-                // Handle qualified name (Module.EnumName)
-                if (enumerationName.Contains('.') && moduleName == null)
+                else if (!string.IsNullOrEmpty(moduleName))
                 {
-                    var parts = enumerationName.Split('.', 2);
-                    moduleName = parts[0];
-                    enumerationName = parts[1];
+                    qualifiedEnumName = $"{moduleName}.{enumerationName}";
                 }
-
-                IEnumeration? foundEnum = null;
-                IModule? foundModule = null;
-
-                var modules = moduleName != null
-                    ? new[] { Utils.Utils.ResolveModule(_model, moduleName) }.Where(m => m != null)
-                    : _model.Root.GetModules().Where(m => !m.FromAppStore);
-
-                foreach (var mod in modules)
+                else
                 {
-                    var en = _model.Root.GetModuleDocuments<IEnumeration>(mod!)
-                        .FirstOrDefault(e => e.Name.Equals(enumerationName, StringComparison.OrdinalIgnoreCase));
-                    if (en != null)
+                    // Search all modules to find the enumeration's qualified name
+                    var allDocs = HostServices.Model.ListAllDocuments("enumeration");
+                    var match = allDocs.FirstOrDefault(d =>
                     {
-                        foundEnum = en;
-                        foundModule = mod;
-                        break;
-                    }
+                        var parts = d.QualifiedName.Split('.', 2);
+                        var localName = parts.Length == 2 ? parts[1] : d.QualifiedName;
+                        return localName.Equals(enumerationName, StringComparison.OrdinalIgnoreCase);
+                    });
+                    if (match.QualifiedName == null)
+                        return JsonSerializer.Serialize(new { error = $"Enumeration '{enumerationName}' not found" });
+                    qualifiedEnumName = match.QualifiedName;
                 }
 
-                if (foundEnum == null)
-                    return JsonSerializer.Serialize(new { error = $"Enumeration '{enumerationName}' not found{(moduleName != null ? $" in module '{moduleName}'" : "")}" });
+                HostServices.DomainModel.RenameEnumerationValue(qualifiedEnumName, valueName, newName);
 
-                var value = foundEnum.GetValues()
-                    .FirstOrDefault(v => v.Name.Equals(valueName, StringComparison.OrdinalIgnoreCase));
-                if (value == null)
-                    return JsonSerializer.Serialize(new { error = $"Value '{valueName}' not found in enumeration '{foundEnum.Name}'" });
-
-                var oldValueName = value.Name;
-                using var transaction = _model.StartTransaction($"Rename enumeration value '{oldValueName}' to '{newName}' in '{foundEnum.Name}'");
-                value.Name = newName;
-                transaction.Commit();
-
-                _logger.LogInformation($"Renamed enumeration value '{oldValueName}' to '{newName}' in '{foundEnum.Name}'");
+                _logger.LogInformation($"Renamed enumeration value '{valueName}' to '{newName}' in '{qualifiedEnumName}'");
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
-                    message = $"Enumeration value renamed from '{oldValueName}' to '{newName}' in '{foundEnum.Name}'",
-                    enumeration = foundEnum.Name,
-                    module = foundModule!.Name,
-                    oldName = oldValueName,
+                    message = $"Enumeration value renamed from '{valueName}' to '{newName}' in '{qualifiedEnumName}'",
+                    enumeration = qualifiedEnumName,
+                    oldName = valueName,
                     newName
                 });
             }
@@ -4119,29 +2637,6 @@ namespace Terminal.Spmcp.Tools
                 _logger.LogError(ex, "Error updating attribute");
                 return JsonSerializer.Serialize(new { error = ex.Message });
             }
-        }
-
-        private IEnumeration? FindEnumerationByName(string enumName, string? moduleName = null)
-        {
-            // Handle qualified name
-            if (enumName.Contains('.'))
-            {
-                var parts = enumName.Split('.', 2);
-                moduleName = parts[0];
-                enumName = parts[1];
-            }
-
-            var modules = moduleName != null
-                ? new[] { Utils.Utils.ResolveModule(_model, moduleName) }.Where(m => m != null)
-                : _model.Root.GetModules().Where(m => !m.FromAppStore);
-
-            foreach (var mod in modules)
-            {
-                var en = _model.Root.GetModuleDocuments<IEnumeration>(mod!)
-                    .FirstOrDefault(e => e.Name.Equals(enumName, StringComparison.OrdinalIgnoreCase));
-                if (en != null) return en;
-            }
-            return null;
         }
 
         public async Task<string> UpdateAssociation(JsonObject parameters)
@@ -4538,8 +3033,6 @@ namespace Terminal.Spmcp.Tools
 
             return null;
         }
-
-        #endregion
 
         #endregion
     }
