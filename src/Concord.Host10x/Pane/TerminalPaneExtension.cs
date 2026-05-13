@@ -20,9 +20,9 @@ namespace Concord.Host10x.Pane;
 public sealed class TerminalPaneExtension : DockablePaneExtension
 {
     [Import(typeof(Host10xEntry))]
-#pragma warning disable CS0649  // Field is assigned by MEF, never read directly
+#pragma warning disable CS0414  // Field is assigned by MEF, never read directly
     private Host10xEntry? _entry = null;
-#pragma warning restore CS0649
+#pragma warning restore CS0414
 
     // Product name. Used by Studio Pro both as the pane's MEF identity AND
     // the visible tab title in the right-pane strip. Renamed from "Terminal"

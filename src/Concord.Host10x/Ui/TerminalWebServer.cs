@@ -12,9 +12,9 @@ namespace Concord.Host10x.Ui;
 public sealed class TerminalWebServer : WebServerExtension
 {
     [Import(typeof(Host10xEntry))]
-#pragma warning disable CS0649  // Field is assigned by MEF, never read directly
+#pragma warning disable CS0414  // Field is assigned by MEF, never read directly
     private Host10xEntry? _entry = null;
-#pragma warning restore CS0649
+#pragma warning restore CS0414
 
     private readonly IExtensionFileService extensionFileService;
 
