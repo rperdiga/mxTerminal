@@ -4677,7 +4677,10 @@ namespace Terminal.Spmcp.Tools
                     entitiesWithCreatedDate = new { count = entitiesWithCreatedDate, pct = totalEntities > 0 ? $"{(int)(entitiesWithCreatedDate * 100.0 / totalEntities)}%" : "0%" },
                     entitiesWithChangedDate = new { count = entitiesWithChangedDate, pct = totalEntities > 0 ? $"{(int)(entitiesWithChangedDate * 100.0 / totalEntities)}%" : "0%" },
                     pageSuffixPatterns = pageSuffixCounts,
-                    baseEntityDistribution = topBaseEntities
+                    baseEntityDistribution = topBaseEntities,
+                    // AssociationRef (read path) does not expose DeleteBehavior; Mendix default is always
+                    // DeleteMeButKeepReferences, so we surface that as the advisory recommendation.
+                    commonDeleteBehavior = "delete_me_but_keep_references"
                 };
 
                 // ── Generate and optionally save skill file ───────────────────
