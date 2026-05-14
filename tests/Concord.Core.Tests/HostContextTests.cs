@@ -4,6 +4,7 @@ using Xunit;
 using Terminal;
 using Terminal.Interop;
 
+[Collection("HostServices")]
 public class HostContextTests
 {
     [Fact]
@@ -157,5 +158,104 @@ public class HostContextTests
         HostServices.Reset();
         Assert.Throws<InvalidOperationException>(() => _ = HostServices.RunStateProbe);
         Assert.Throws<InvalidOperationException>(() => _ = HostServices.UiAutomation);
+    }
+
+    // Pane-scoped model-tier setters (the production registration path).
+    // The 11-arg Register overload covers test paths above where fakes can
+    // be constructed at registration time; these setters cover production
+    // where IModel comes from CurrentApp and is only available after pane Open.
+
+    [Fact]
+    public void HostServices_SetModel_ResolvesAfterSet()
+    {
+        HostServices.Reset();
+        var fake = new Fakes.FakeModelHost();
+        HostServices.SetModel(fake);
+        Assert.Same(fake, HostServices.Model);
+    }
+
+    [Fact]
+    public void HostServices_SetDomainModel_ResolvesAfterSet()
+    {
+        HostServices.Reset();
+        var fake = new Fakes.FakeDomainModelHost();
+        HostServices.SetDomainModel(fake);
+        Assert.Same(fake, HostServices.DomainModel);
+    }
+
+    [Fact]
+    public void HostServices_SetPageGeneration_ResolvesAfterSet()
+    {
+        HostServices.Reset();
+        var fake = new Fakes.FakePageGenerationHost();
+        HostServices.SetPageGeneration(fake);
+        Assert.Same(fake, HostServices.PageGeneration);
+    }
+
+    [Fact]
+    public void HostServices_SetNavigation_ResolvesAfterSet()
+    {
+        HostServices.Reset();
+        var fake = new Fakes.FakeNavigationHost();
+        HostServices.SetNavigation(fake);
+        Assert.Same(fake, HostServices.Navigation);
+    }
+
+    [Fact]
+    public void HostServices_SetVersionControl_ResolvesAfterSet()
+    {
+        HostServices.Reset();
+        var fake = new Fakes.FakeVersionControlHost();
+        HostServices.SetVersionControl(fake);
+        Assert.Same(fake, HostServices.VersionControl);
+    }
+
+    [Fact]
+    public void HostServices_SetUntypedModel_ResolvesAfterSet()
+    {
+        HostServices.Reset();
+        var fake = new Fakes.FakeUntypedModelHost();
+        HostServices.SetUntypedModel(fake);
+        Assert.Same(fake, HostServices.UntypedModel);
+    }
+
+    [Fact]
+    public void HostServices_SetMicroflowAuthoring_ResolvesAfterSet()
+    {
+        HostServices.Reset();
+        var fake = new Fakes.FakeMicroflowAuthoringHost();
+        HostServices.SetMicroflowAuthoring(fake);
+        Assert.Same(fake, HostServices.MicroflowAuthoring);
+    }
+
+    [Fact]
+    public void HostServices_Reset_ClearsAllModelTierSetters()
+    {
+        HostServices.SetModel(new Fakes.FakeModelHost());
+        HostServices.SetDomainModel(new Fakes.FakeDomainModelHost());
+        HostServices.SetPageGeneration(new Fakes.FakePageGenerationHost());
+        HostServices.SetNavigation(new Fakes.FakeNavigationHost());
+        HostServices.SetVersionControl(new Fakes.FakeVersionControlHost());
+        HostServices.SetUntypedModel(new Fakes.FakeUntypedModelHost());
+        HostServices.SetMicroflowAuthoring(new Fakes.FakeMicroflowAuthoringHost());
+
+        HostServices.Reset();
+
+        Assert.Throws<InvalidOperationException>(() => _ = HostServices.Model);
+        Assert.Throws<InvalidOperationException>(() => _ = HostServices.DomainModel);
+        Assert.Throws<InvalidOperationException>(() => _ = HostServices.PageGeneration);
+        Assert.Throws<InvalidOperationException>(() => _ = HostServices.Navigation);
+        Assert.Throws<InvalidOperationException>(() => _ = HostServices.VersionControl);
+        Assert.Throws<InvalidOperationException>(() => _ = HostServices.UntypedModel);
+        Assert.Throws<InvalidOperationException>(() => _ = HostServices.MicroflowAuthoring);
+    }
+
+    [Fact]
+    public void HostServices_SetModel_AcceptsNull_ClearsBinding()
+    {
+        HostServices.Reset();
+        HostServices.SetModel(new Fakes.FakeModelHost());
+        HostServices.SetModel(null);
+        Assert.Throws<InvalidOperationException>(() => _ = HostServices.Model);
     }
 }

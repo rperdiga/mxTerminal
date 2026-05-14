@@ -94,6 +94,48 @@ public static class HostServices
         lock (_gate) { _maiaActions = maia; }
     }
 
+    // Pane-scoped setters for the 7 model-tier Interop hosts. Production
+    // cannot pass these to Register because their constructors require
+    // IModel from CurrentApp, which is only available after the pane opens.
+    // The pane calls these setters in TryAutoStartActionServer, mirroring
+    // the SetRunStateProbe/SetUiAutomation/SetMaiaActions pattern. Tests
+    // may still use the 11-arg Register overload with fakes.
+
+    public static void SetModel(IModelHost? model)
+    {
+        lock (_gate) { _model = model; }
+    }
+
+    public static void SetDomainModel(IDomainModelHost? domainModel)
+    {
+        lock (_gate) { _domainModel = domainModel; }
+    }
+
+    public static void SetPageGeneration(IPageGenerationHost? pageGeneration)
+    {
+        lock (_gate) { _pageGeneration = pageGeneration; }
+    }
+
+    public static void SetNavigation(INavigationHost? navigation)
+    {
+        lock (_gate) { _navigation = navigation; }
+    }
+
+    public static void SetVersionControl(IVersionControlHost? versionControl)
+    {
+        lock (_gate) { _versionControl = versionControl; }
+    }
+
+    public static void SetUntypedModel(IUntypedModelHost? untypedModel)
+    {
+        lock (_gate) { _untypedModel = untypedModel; }
+    }
+
+    public static void SetMicroflowAuthoring(IMicroflowAuthoringHost? microflowAuthoring)
+    {
+        lock (_gate) { _microflowAuthoring = microflowAuthoring; }
+    }
+
     /// <summary>
     /// Legacy 4-argument overload retained for backward compatibility.
     /// New accessors (Model … MicroflowAuthoring) will throw until the

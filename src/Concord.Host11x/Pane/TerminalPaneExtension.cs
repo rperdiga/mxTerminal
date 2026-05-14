@@ -5,6 +5,7 @@ using Mendix.StudioPro.ExtensionsAPI.UI.Events;
 using Mendix.StudioPro.ExtensionsAPI.UI.Services;
 using Mendix.StudioPro.ExtensionsAPI.Model;
 using Mendix.StudioPro.ExtensionsAPI.Model.Projects;
+using MxVcsService = Mendix.StudioPro.ExtensionsAPI.UI.Services.IVersionControlService;
 using Terminal;
 using Terminal.Interop;
 using Concord.Host11x;
@@ -28,6 +29,17 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
 
     private readonly TerminalSessionManager manager;
     private readonly ILocalRunConfigurationsService localRunConfigs;
+    // MEF-imported services consumed by the 7 model-tier Interop hosts wired
+    // in TryAutoStartActionServer. IPageGenerationService, INavigationManagerService,
+    // and IMicroflowService are required (their corresponding hosts have non-nullable
+    // ctor params); the rest are optional and tolerate missing exports via AllowDefault.
+    private readonly IPageGenerationService pageGenerationService;
+    private readonly INavigationManagerService navigationManagerService;
+    private readonly IMicroflowService microflowService;
+    private readonly INameValidationService? nameValidationService;
+    private readonly IUntypedModelAccessService? untypedModelAccessService;
+    private readonly IMicroflowExpressionService? microflowExpressionService;
+    private readonly MxVcsService? versionControlService;
     private Logger log = null!;
     private bool subscribed;
     private bool stateRestored;          // first-Open guard for cross-session restore
@@ -58,10 +70,24 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
     [ImportingConstructor]
     public TerminalPaneExtension(
         ILocalRunConfigurationsService localRunConfigs,
-        IExtensionFileService extensionFileService)
+        IExtensionFileService extensionFileService,
+        IPageGenerationService pageGenerationService,
+        INavigationManagerService navigationManagerService,
+        IMicroflowService microflowService,
+        [Import(AllowDefault = true)] INameValidationService? nameValidationService = null,
+        [Import(AllowDefault = true)] IUntypedModelAccessService? untypedModelAccessService = null,
+        [Import(AllowDefault = true)] IMicroflowExpressionService? microflowExpressionService = null,
+        [Import(AllowDefault = true)] MxVcsService? versionControlService = null)
     {
         this.localRunConfigs = localRunConfigs;
         this.extensionFileService = extensionFileService;
+        this.pageGenerationService = pageGenerationService;
+        this.navigationManagerService = navigationManagerService;
+        this.microflowService = microflowService;
+        this.nameValidationService = nameValidationService;
+        this.untypedModelAccessService = untypedModelAccessService;
+        this.microflowExpressionService = microflowExpressionService;
+        this.versionControlService = versionControlService;
         manager = new TerminalSessionManager(new PtyNetFactory());
     }
 
@@ -77,6 +103,7 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         TryAutoStartActionServer();
         TryFirstRunApply();
         TryUpgradeApply();
+        TryRepairInconsistentSettings();
         TryRestoreTabsOnFirstOpen();
 
         // Append ?theme=dark|light from Studio Pro's persisted preference
@@ -274,11 +301,35 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 catch (Exception ex) { log?.Warn($"GetActiveConfiguration threw: {ex.Message}"); return null; }
             });
             HostServices.SetRunStateProbe(probe);
-            // Build Maia plumbing only on Windows when the toggle is on. The router
-            // probe runs in the background; the router is functional even before it
-            // returns (early calls just see all-tiers-down and fail with a clear message).
+
+            // Wire the 7 model-tier Interop hosts. IModel is per-project, so
+            // this happens here (pane Open) rather than in Host11xEntry. Skip
+            // when CurrentApp is unavailable — SPMCP tools will surface
+            // NotInitialized until a project is open in Studio Pro, which is
+            // the correct user-facing contract.
+            var currentModel = CurrentApp;
+            if (currentModel != null)
+            {
+                HostServices.SetModel(new ModelHost11x(currentModel));
+                HostServices.SetDomainModel(new DomainModelHost11x(currentModel, nameValidationService));
+                HostServices.SetPageGeneration(new PageGenerationHost11x(currentModel, pageGenerationService, navigationManagerService));
+                HostServices.SetNavigation(new NavigationHost11x(currentModel, navigationManagerService));
+                HostServices.SetVersionControl(new VersionControlHost11x(currentModel, versionControlService));
+                HostServices.SetUntypedModel(new UntypedModelHost11x(currentModel, untypedModelAccessService));
+                HostServices.SetMicroflowAuthoring(new MicroflowAuthoringHost11x(currentModel, microflowService, microflowExpressionService, untypedModelAccessService));
+            }
+            else
+            {
+                log.Warn("[concord-mcp] CurrentApp is null at pane Open — model-tier tools will throw NotInitialized until a project is open");
+            }
+
+            // Build Maia plumbing only on Windows when the toggle is on AND
+            // when the Studio Pro version exposes a Maia panel (11.10+).
+            // 11.6–11.9 don't have a Maia panel — Maia plumbing would create
+            // a CDP client that has nothing to inject into.
             Terminal.Maia.CdpClient? sharedCdp = null;
-            bool maiaEnabled = OperatingSystem.IsWindows() && settings.MaiaIntegrationEnabled;
+            bool maiaSupported = StudioProThemeProbe.IsMaiaSupported(StudioProVersionFromExePath());
+            bool maiaEnabled = OperatingSystem.IsWindows() && settings.MaiaIntegrationEnabled && maiaSupported;
             if (maiaEnabled)
             {
                 // v4.2.0: singleton CdpClient — port discovery and the
@@ -358,6 +409,25 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
 
             log.Info("[first-run] no settings file — applying defaults to project");
             var defaults = TerminalSettings.Defaults();
+            // Force McpEnabled = false on Studio Pro versions that don't expose
+            // the mendix-studio-pro MCP (10.x, 11.6–11.9). Keeps the saved
+            // settings file aligned with what's actually wired so the Settings
+            // UI checkbox state matches reality.
+            if (!ProbeStudioProMcpAvailable())
+            {
+                defaults = defaults with { McpEnabled = false };
+                log.Info("[first-run] Studio Pro version doesn't expose mendix-studio-pro MCP; forcing McpEnabled=false in defaults");
+            }
+            // Same gate for Maia features: versions < 11.10 have no Maia panel.
+            if (!StudioProThemeProbe.IsMaiaSupported(StudioProVersionFromExePath()))
+            {
+                defaults = defaults with
+                {
+                    MaiaIntegrationEnabled = false,
+                    MaiaDiagnosticLogging = false,
+                };
+                log.Info("[first-run] Studio Pro version doesn't expose Maia panel; forcing Maia*=false in defaults");
+            }
 
             // "Empty prev" so the apply chain treats every CLI as newly-added
             // and writes/installs accordingly.
@@ -381,7 +451,8 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 defaults,
                 log,
                 currentActionServerPort: () => manager.CurrentActionServerPort,
-                probeStudioProMcpPort:   () => ProbeStudioProMcpPort());
+                probeStudioProMcpPort:      () => ProbeStudioProMcpPort(),
+                probeStudioProMcpAvailable: () => ProbeStudioProMcpAvailable());
 
             // Stamp the version we just applied so TryUpgradeApply on the
             // SAME Open() call sees a current stamp and is a no-op
@@ -442,6 +513,26 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
             log.Info($"[upgrade] applying wiring defaults: stamp '{loaded.LastAppliedVersion ?? "<null>"}' -> {current}");
 
             var defaults = TerminalSettings.Defaults();
+            // Same gate as TryFirstRunApply: force McpEnabled = false on Studio
+            // Pro versions without the mendix-studio-pro MCP. Critical for
+            // cross-version migration: a project that lived on 11.10+ may now
+            // open on 10.x, and we don't want the upgrade-apply to re-enable
+            // an MCP the host can't serve.
+            if (!ProbeStudioProMcpAvailable())
+            {
+                defaults = defaults with { McpEnabled = false };
+                log.Info("[upgrade] Studio Pro version doesn't expose mendix-studio-pro MCP; forcing McpEnabled=false");
+            }
+            // Same gate for Maia features.
+            if (!StudioProThemeProbe.IsMaiaSupported(StudioProVersionFromExePath()))
+            {
+                defaults = defaults with
+                {
+                    MaiaIntegrationEnabled = false,
+                    MaiaDiagnosticLogging = false,
+                };
+                log.Info("[upgrade] Studio Pro version doesn't expose Maia panel; forcing Maia*=false");
+            }
             // Re-default ONLY wiring keys (MCP + skills + sub-toggles).
             // Runtime prefs (shell/theme/ports/hotkeys/scrollback/etc.) come
             // through from `loaded` unchanged. Trade-off accepted: a user
@@ -459,6 +550,14 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 SkillClients            = defaults.SkillClients,
                 LastAppliedVersion      = current,
             };
+            // If Maia isn't supported by this Studio Pro version, also force
+            // diagnostic logging off — otherwise a project that lived on
+            // 11.10+ with diagnostic on would silently carry that flag
+            // forward to a 11.6 open where it can never fire.
+            if (!StudioProThemeProbe.IsMaiaSupported(StudioProVersionFromExePath()))
+            {
+                nextSettings = nextSettings with { MaiaDiagnosticLogging = false };
+            }
 
             // "Empty prev" so the apply chain treats every CLI as newly-
             // added — same pattern as TryFirstRunApply. The underlying
@@ -484,7 +583,8 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 nextSettings,
                 log,
                 currentActionServerPort: () => manager.CurrentActionServerPort,
-                probeStudioProMcpPort:   () => ProbeStudioProMcpPort());
+                probeStudioProMcpPort:      () => ProbeStudioProMcpPort(),
+                probeStudioProMcpAvailable: () => ProbeStudioProMcpAvailable());
 
             nextSettings.Save(dir);
 
@@ -507,6 +607,60 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         catch (Exception ex)
         {
             log.Error("[upgrade] apply failed", ex);
+        }
+    }
+
+    /// <summary>
+    /// One-shot repair for settings inconsistencies caused by past UI bugs.
+    /// Specifically the v5.0.0-alpha.x Bug-1 regression that cleared
+    /// <c>McpClients</c> to empty while leaving <c>McpServerEnabled</c> true
+    /// — the result was that <c>concord-mcp</c> got removed from <c>.mcp.json</c>
+    /// and re-saves never re-wrote it because the apply path saw "MCP server on
+    /// but zero clients" and skipped. This method detects that combination via
+    /// <see cref="TerminalSettings.TryRepair"/>, saves the corrected settings,
+    /// and forces a one-time re-apply so the missing entries reappear.
+    /// </summary>
+    private void TryRepairInconsistentSettings()
+    {
+        try
+        {
+            var dir = (CurrentApp?.Root as IProject)?.DirectoryPath;
+            if (dir is null) return;
+
+            var settingsPath = Path.Combine(dir, "resources", "terminal-settings.json");
+            if (!File.Exists(settingsPath)) return;
+
+            var loaded = TerminalSettings.Load(dir);
+            var (repaired, changed) = TerminalSettings.TryRepair(loaded);
+            if (!changed)
+            {
+                log.Info("[settings-repair] no inconsistencies detected");
+                return;
+            }
+
+            log.Info($"[settings-repair] restored defaults for McpServerEnabled+empty-McpClients or SkillsEnabled+empty-SkillClients");
+            repaired.Save(dir);
+
+            // Re-apply so the missing .mcp.json / config.toml entries get
+            // rewritten. Treat the broken loaded state as `prev` so the diff
+            // sees the additions properly.
+            var bundledSkillsRoot = extensionFileService.ResolvePath("skills");
+            var bundledRulesRoot = extensionFileService.ResolvePath("rules");
+            var touched = SettingsApplyHelper.ApplyAll(
+                dir,
+                bundledSkillsRoot,
+                bundledRulesRoot,
+                loaded,        // prev (the damaged state)
+                repaired,      // next (the corrected state)
+                log,
+                currentActionServerPort: () => manager.CurrentActionServerPort,
+                probeStudioProMcpPort:      () => ProbeStudioProMcpPort(),
+                probeStudioProMcpAvailable: () => ProbeStudioProMcpAvailable());
+            log.Info($"[settings-repair] re-applied {touched.Length} target(s) after repair");
+        }
+        catch (Exception ex)
+        {
+            log.Error("[settings-repair] failed", ex);
         }
     }
 
@@ -610,6 +764,25 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         catch
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// True iff the running Studio Pro version exposes the built-in
+    /// <c>mendix-studio-pro</c> MCP server (requires 11.10+). Passed through
+    /// to <see cref="SettingsApplyHelper.ApplyAll"/> so first-run / upgrade
+    /// apply on an older Studio Pro skips wiring AND cleans up any stale
+    /// <c>mendix-studio-pro</c> entry left behind from a prior 11.10+ open.
+    /// </summary>
+    private bool ProbeStudioProMcpAvailable()
+    {
+        try
+        {
+            return StudioProThemeProbe.IsMcpServerSupported(StudioProVersionFromExePath());
+        }
+        catch
+        {
+            return false;
         }
     }
 

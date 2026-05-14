@@ -30,8 +30,8 @@ public static class Studio11xAllowlist
         "exclude_document", "set_microflow_url", "modify_microflow_activity", "insert_before_activity",
         // Project / Settings
         "read_runtime_settings", "set_runtime_settings", "read_configurations", "set_configuration",
-        // Data & Sample
-        "save_data", "generate_sample_data", "read_sample_data", "setup_data_import",
+        // (Data & Sample tools intentionally absent — handlers unregistered
+        //  from SpmcpToolBootstrap*. Same for debug_info.)
         // Diagnostics
         "check_model", "check_project_errors", "get_studio_pro_logs", "get_last_error", "analyze_project_patterns",
     };

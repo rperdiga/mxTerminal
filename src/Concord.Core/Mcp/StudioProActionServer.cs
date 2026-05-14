@@ -362,6 +362,13 @@ public sealed class StudioProActionServer : IDisposable
         var name = pars?["name"]?.GetValue<string>();
         var args = pars?["arguments"] as JsonObject ?? new JsonObject();
 
+        // Capture request shape for diagnostics. The args JSON is the verbatim
+        // payload Claude Code / Codex / Copilot sent — invaluable when a tool
+        // fails on a malformed or unexpected argument shape. Truncated to 2000
+        // chars to keep the log readable on large requests like
+        // create_multiple_entities.
+        log?.Info($"[concord-mcp] tools/call name={name ?? "<null>"} args={Truncate(args.ToJsonString(), 2000)}");
+
         // --- Catalog dispatch (single path for all tools) ---
         // All tools (SPMCP, UI-actions, Maia) are registered in the ToolCatalog
         // at MEF activation time. Family toggles via SetFamilyEnabled gate
@@ -385,6 +392,7 @@ public sealed class StudioProActionServer : IDisposable
                         {
                             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
                         });
+                    log?.Info($"[concord-mcp] tools/call name={name} result={Truncate(payloadJson, 2000)}");
                     return new JsonObject
                     {
                         ["content"] = new JsonArray
@@ -396,7 +404,7 @@ public sealed class StudioProActionServer : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    log?.Warn($"[concord-mcp] catalog tool '{name}' failed: {ex.Message}");
+                    log?.Warn($"[concord-mcp] catalog tool '{name}' threw: {ex.GetType().Name}: {ex.Message}");
                     return new JsonObject
                     {
                         ["content"] = new JsonArray
@@ -411,6 +419,9 @@ public sealed class StudioProActionServer : IDisposable
 
         return BuildErrorBody(code: -32601, message: $"Unknown tool '{name}'");
     }
+
+    private static string Truncate(string s, int max)
+        => s.Length <= max ? s : s.Substring(0, max) + $"…(+{s.Length - max} chars)";
 
     private static JsonObject BuildError(JsonNode? id, int code, string message) =>
         new() { ["jsonrpc"] = "2.0", ["id"] = id?.DeepClone(), ["error"] = new JsonObject { ["code"] = code, ["message"] = message } };

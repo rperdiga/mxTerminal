@@ -62,7 +62,8 @@ public class SettingsApplyHelperTests : IDisposable
         var touched = SettingsApplyHelper.ApplyAll(
             projectDir, bundledRoot, bundledRulesRoot, s, s, log,
             currentActionServerPort: () => null,
-            probeStudioProMcpPort:   () => null);
+            probeStudioProMcpPort:      () => null,
+            probeStudioProMcpAvailable: () => true);
         touched.Should().BeEmpty();
     }
 
@@ -75,7 +76,8 @@ public class SettingsApplyHelperTests : IDisposable
         var touched = SettingsApplyHelper.ApplyAll(
             projectDir, bundledRoot, bundledRulesRoot, prev, next, log,
             currentActionServerPort: () => 7783,
-            probeStudioProMcpPort:   () => 8100);
+            probeStudioProMcpPort:      () => 8100,
+            probeStudioProMcpAvailable: () => true);
 
         File.Exists(Path.Combine(projectDir, ".mcp.json")).Should().BeTrue();
         var json = File.ReadAllText(Path.Combine(projectDir, ".mcp.json"));
@@ -98,13 +100,15 @@ public class SettingsApplyHelperTests : IDisposable
 
         // Pre-populate the project so we have something to remove.
         SettingsApplyHelper.ApplyAll(projectDir, bundledRoot, bundledRulesRoot, AllOff(), prev, log,
-            currentActionServerPort: () => 7783, probeStudioProMcpPort: () => 8100);
+            currentActionServerPort: () => 7783, probeStudioProMcpPort: () => 8100,
+            probeStudioProMcpAvailable: () => true);
         File.Exists(Path.Combine(projectDir, ".mcp.json")).Should().BeTrue();
 
         var touched = SettingsApplyHelper.ApplyAll(
             projectDir, bundledRoot, bundledRulesRoot, prev, next, log,
             currentActionServerPort: () => 7783,
-            probeStudioProMcpPort:   () => 8100);
+            probeStudioProMcpPort:      () => 8100,
+            probeStudioProMcpAvailable: () => true);
 
         // .mcp.json should be removed entirely (no other servers in it).
         File.Exists(Path.Combine(projectDir, ".mcp.json")).Should().BeFalse();
@@ -126,7 +130,8 @@ public class SettingsApplyHelperTests : IDisposable
         SettingsApplyHelper.ApplyAll(
             projectDir, bundledRoot, bundledRulesRoot, prev, next, log,
             currentActionServerPort: () => 7783,
-            probeStudioProMcpPort:   () => null);  // probe fails
+            probeStudioProMcpPort:      () => null,  // probe fails
+            probeStudioProMcpAvailable: () => true);
 
         var json = File.ReadAllText(Path.Combine(projectDir, ".mcp.json"));
         // Falls back to TerminalSettings.StudioProMcpDefaultPort = 8100.
@@ -146,11 +151,67 @@ public class SettingsApplyHelperTests : IDisposable
         var touched = SettingsApplyHelper.ApplyAll(
             projectDir, bundledRoot, bundledRulesRoot, prev, next, log,
             currentActionServerPort: () => 7783,
-            probeStudioProMcpPort:   () => 8100);
+            probeStudioProMcpPort:      () => 8100,
+            probeStudioProMcpAvailable: () => true);
 
         File.Exists(Path.Combine(projectDir, ".mcp.json")).Should().BeTrue();
         Directory.Exists(Path.Combine(projectDir, ".claude", "skills")).Should().BeFalse();
         touched.Should().Contain(t => t.Contains("Claude"));
         touched.Should().NotContain(t => t.Contains("skills"));
+    }
+
+    [Fact]
+    public void ApplyAll_McpUnavailable_SkipsUpsertAndPreventsWiring()
+    {
+        // Studio Pro 10.x / 11.6–11.9: probe returns Available=false.
+        // Even when next.McpEnabled=true and McpClients includes Claude/Copilot,
+        // the apply MUST NOT write a mendix-studio-pro entry.
+        var prev = AllOff();
+        var next = ClaudePlusCopilot();  // wants mendix-studio-pro wired
+
+        var touched = SettingsApplyHelper.ApplyAll(
+            projectDir, bundledRoot, bundledRulesRoot, prev, next, log,
+            currentActionServerPort: () => 7783,
+            probeStudioProMcpPort:      () => 8100,
+            probeStudioProMcpAvailable: () => false);  // <-- the gate
+
+        if (File.Exists(Path.Combine(projectDir, ".mcp.json")))
+        {
+            var json = File.ReadAllText(Path.Combine(projectDir, ".mcp.json"));
+            json.Should().NotContain("mendix-studio-pro",
+                "Studio Pro 10.x / pre-11.10 has no mendix-studio-pro MCP server");
+        }
+        // The Concord MCP entry (concord-mcp) is unrelated to the availability
+        // gate and should still wire normally.
+        touched.Should().Contain(t => t.Contains("actions"));
+    }
+
+    [Fact]
+    public void ApplyAll_McpUnavailable_CleansUpStaleMendixStudioProEntry()
+    {
+        // Cross-version migration: project was last opened on 11.10+ (so
+        // .mcp.json has a stale mendix-studio-pro entry), now opens on 10.x.
+        // The apply must REMOVE the orphaned entry so it doesn't dangle.
+        var prev = ClaudePlusCopilot();  // had it wired
+        // Pre-populate the project as if from a prior 11.10+ apply.
+        SettingsApplyHelper.ApplyAll(projectDir, bundledRoot, bundledRulesRoot, AllOff(), prev, log,
+            currentActionServerPort: () => 7783, probeStudioProMcpPort: () => 8100,
+            probeStudioProMcpAvailable: () => true);
+        File.ReadAllText(Path.Combine(projectDir, ".mcp.json")).Should().Contain("mendix-studio-pro");
+
+        // Now the same project opens on Studio Pro 10.x. Even though saved
+        // settings still say McpEnabled=true, the apply must clean up.
+        var touched = SettingsApplyHelper.ApplyAll(
+            projectDir, bundledRoot, bundledRulesRoot, prev, prev, log,
+            currentActionServerPort: () => 7783,
+            probeStudioProMcpPort:      () => 8100,
+            probeStudioProMcpAvailable: () => false);
+
+        if (File.Exists(Path.Combine(projectDir, ".mcp.json")))
+        {
+            var json = File.ReadAllText(Path.Combine(projectDir, ".mcp.json"));
+            json.Should().NotContain("mendix-studio-pro",
+                "stale mendix-studio-pro from prior 11.10+ open must be cleaned up");
+        }
     }
 }

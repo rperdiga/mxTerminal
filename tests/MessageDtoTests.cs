@@ -70,6 +70,7 @@ public class MessageDtoTests
             McpServerEnabled: true,
             StudioProActionsEnabled: true, MaiaIntegrationEnabled: true,
             MaiaDiagnosticLogging: false,
+            MaiaAvailable: true,
             Platform: "windows",
             RefreshFromDiskHotkey: "F4", RestoreTabsOnReopen: true,
             About: new AboutInfoPayload("1.3.0", null, null),

@@ -6,6 +6,14 @@ using Terminal.Interop;
 using Terminal.Spmcp.Tools;
 using Xunit;
 
+// Collection definition for tests that mutate static HostServices state.
+// SpmcpSmokeTests and HostContextTests both Reset+Register on construction,
+// and would otherwise race when xUnit runs them in parallel within the same
+// test assembly. Mirrors the "ActionServer" pattern in Terminal.Tests.
+[CollectionDefinition("HostServices")]
+public class HostServicesCollection { }
+
+[Collection("HostServices")]
 public class SpmcpSmokeTests : IDisposable
 {
     public SpmcpSmokeTests()

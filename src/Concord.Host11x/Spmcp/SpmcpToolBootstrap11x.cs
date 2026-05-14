@@ -12,10 +12,9 @@ public static class SpmcpToolBootstrap11x
         var additional = new MendixAdditionalTools(NullLogger<MendixAdditionalTools>.Instance, projectDirectory);
         var domain = new MendixDomainModelTools(NullLogger<MendixDomainModelTools>.Instance);
 
-        // --- MendixAdditionalTools (47) ---
-        RegisterObject(catalog, "save_data", ToolFamily.DataSample, additional.SaveData);
-        RegisterObject(catalog, "generate_sample_data", ToolFamily.DataSample, additional.GenerateSampleData);
-        RegisterObject(catalog, "read_sample_data", ToolFamily.DataSample, additional.ReadSampleData);
+        // --- MendixAdditionalTools (42 registered; SaveData/GenerateSampleData/ReadSampleData/SetupDataImport/DebugInfo intentionally unregistered) ---
+        // Note: handler methods stay in MendixAdditionalTools.cs for parity
+        // with upstream SPMCP source; we just don't surface them through MCP.
         RegisterObject(catalog, "generate_overview_pages", ToolFamily.Pages, additional.GenerateOverviewPages);
         RegisterObject(catalog, "list_microflows", ToolFamily.Microflows, additional.ListMicroflows);
         RegisterObject(catalog, "read_microflow_details", ToolFamily.Microflows, additional.ReadMicroflowDetails);
@@ -23,10 +22,8 @@ public static class SpmcpToolBootstrap11x
         RegisterObject(catalog, "get_studio_pro_logs", ToolFamily.Diagnostics, additional.GetStudioProLogs);
         RegisterObject(catalog, "check_project_errors", ToolFamily.Diagnostics, additional.CheckProjectErrors);
         RegisterObject(catalog, "list_available_tools", ToolFamily.Diagnostics, additional.ListAvailableTools);
-        RegisterObject(catalog, "debug_info", ToolFamily.Diagnostics, additional.DebugInfo);
         RegisterObject(catalog, "create_microflow", ToolFamily.Microflows, additional.CreateMicroflow);
         RegisterObject(catalog, "create_microflow_activity", ToolFamily.Microflows, additional.CreateMicroflowActivity);
-        RegisterString(catalog, "setup_data_import", ToolFamily.DataSample, additional.SetupDataImport);
         RegisterObject(catalog, "create_microflow_activities_sequence", ToolFamily.Microflows, additional.CreateMicroflowActivitiesSequence);
         RegisterString(catalog, "list_java_actions", ToolFamily.Diagnostics, additional.ListJavaActions);
         RegisterString(catalog, "read_runtime_settings", ToolFamily.ProjectSettings, additional.ReadRuntimeSettings);

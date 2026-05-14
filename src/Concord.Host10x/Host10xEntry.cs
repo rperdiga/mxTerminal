@@ -37,7 +37,11 @@ public class Host10xEntry
         var catalog = new ToolCatalog(TargetMode.Studio10x);
         Spmcp.SpmcpToolBootstrap10x.Register(catalog);
         Terminal.Mcp.UiActionsBootstrap.Register(catalog);
-        Terminal.Mcp.MaiaToolsBootstrap.Register(catalog);
+        // Maia panel is an 11.10+ feature; Host10x runs only on Studio Pro
+        // 10.x where there is no Maia panel to inject into. Skip the
+        // maia__* tool registration entirely so tools/list never advertises
+        // tools that can't function on this host.
+        // Terminal.Mcp.MaiaToolsBootstrap.Register(catalog);  // intentionally omitted on Host10x
         Catalog = catalog;
         ToolCatalogRegistry.Active = catalog;
     }

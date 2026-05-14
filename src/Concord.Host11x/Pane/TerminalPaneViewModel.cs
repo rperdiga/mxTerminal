@@ -357,7 +357,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 updated,
                 log,
                 currentActionServerPort: () => manager.CurrentActionServerPort,
-                probeStudioProMcpPort:   () => ProbeStudioProMcp()?.Port);
+                probeStudioProMcpPort:      () => ProbeStudioProMcp().Port,
+                probeStudioProMcpAvailable: () => ProbeStudioProMcp().Available);
 
             updated.Save(dir);
             Post("settings", BuildSettingsPayload(updated));
@@ -558,6 +559,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             StudioProActionsEnabled: s.StudioProActionsEnabled,
             MaiaIntegrationEnabled: s.MaiaIntegrationEnabled,
             MaiaDiagnosticLogging: s.MaiaDiagnosticLogging,
+            MaiaAvailable: StudioProThemeProbe.IsMaiaSupported(StudioProThemeProbe.StudioProVersionFromExePath()),
             Platform: OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsMacOS() ? "darwin" : "linux",
             RefreshFromDiskHotkey: s.RefreshFromDiskHotkey,
             RestoreTabsOnReopen: s.RestoreTabsOnReopen,
@@ -580,24 +582,25 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     /// so the JS side can warn when our saved port differs from what Studio Pro
     /// is actually serving on. Returns null on any probe failure.
     /// </summary>
-    private StudioProMcpInfoPayload? ProbeStudioProMcp()
+    private StudioProMcpInfoPayload ProbeStudioProMcp()
     {
         try
         {
             var version = TerminalPaneExtension.StudioProVersionFromExePath();
-            if (string.IsNullOrEmpty(version))
+            var available = StudioProThemeProbe.IsMcpServerSupported(version);
+            if (!available)
             {
-                log.Info("[mcp-probe] version not detected from exe path");
-                return null;
+                log.Info($"[mcp-probe] sp-version={version ?? "<unknown>"} available=false (requires 11.10+); skipping SQLite read");
+                return new StudioProMcpInfoPayload(Enabled: null, Port: null, Available: false);
             }
-            var info = StudioProThemeProbe.ReadMcpServer(version);
-            log.Info($"[mcp-probe] sp-version={version} {info.Diagnostic}");
-            return new StudioProMcpInfoPayload(info.Enabled, info.Port);
+            var info = StudioProThemeProbe.ReadMcpServer(version!);
+            log.Info($"[mcp-probe] sp-version={version} available=true {info.Diagnostic}");
+            return new StudioProMcpInfoPayload(info.Enabled, info.Port, Available: true);
         }
         catch (Exception ex)
         {
             log.Warn($"[mcp-probe] outer exception: {ex.GetType().Name}: {ex.Message}");
-            return null;
+            return new StudioProMcpInfoPayload(Enabled: null, Port: null, Available: false);
         }
     }
 

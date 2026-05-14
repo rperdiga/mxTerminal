@@ -8,6 +8,7 @@ using Terminal.Maia;
 using Terminal.Mcp;
 using Xunit;
 
+[Collection("HostServices")]
 public class CatalogBootstrapTests : IDisposable
 {
     private sealed class FakeProbe : IRunStateProbe

@@ -32,7 +32,16 @@ public class Host11xEntry
         var catalog = new ToolCatalog(TargetMode.Studio11x);
         Spmcp.SpmcpToolBootstrap11x.Register(catalog);
         Terminal.Mcp.UiActionsBootstrap.Register(catalog);
-        Terminal.Mcp.MaiaToolsBootstrap.Register(catalog);
+        // Maia panel ships with Studio Pro 11.10+. Host11x covers 11.6–11.x,
+        // so we have to runtime-check the version: 11.6–11.9 don't have a
+        // Maia panel and registering maia__* would surface dead tools.
+        // Probe the version at activation time from the exe path so the
+        // catalog is correct for the lifetime of this host instance.
+        var spVersion = StudioProThemeProbe.StudioProVersionFromExePath();
+        if (StudioProThemeProbe.IsMaiaSupported(spVersion))
+        {
+            Terminal.Mcp.MaiaToolsBootstrap.Register(catalog);
+        }
         Catalog = catalog;
         ToolCatalogRegistry.Active = catalog;
     }

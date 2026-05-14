@@ -357,7 +357,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 updated,
                 log,
                 currentActionServerPort: () => manager.CurrentActionServerPort,
-                probeStudioProMcpPort:   () => ProbeStudioProMcp()?.Port);
+                probeStudioProMcpPort:      () => ProbeStudioProMcp().Port,
+                probeStudioProMcpAvailable: () => ProbeStudioProMcp().Available);
 
             updated.Save(dir);
             Post("settings", BuildSettingsPayload(updated));
@@ -558,6 +559,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             StudioProActionsEnabled: s.StudioProActionsEnabled,
             MaiaIntegrationEnabled: s.MaiaIntegrationEnabled,
             MaiaDiagnosticLogging: s.MaiaDiagnosticLogging,
+            // Always false on Host10x — 10.x has no Maia panel.
+            MaiaAvailable: false,
             Platform: OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsMacOS() ? "darwin" : "linux",
             RefreshFromDiskHotkey: s.RefreshFromDiskHotkey,
             RestoreTabsOnReopen: s.RestoreTabsOnReopen,
@@ -586,24 +589,28 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     /// from the current process exe path via regex.
     /// </para>
     /// </summary>
-    private StudioProMcpInfoPayload? ProbeStudioProMcp()
+    private StudioProMcpInfoPayload ProbeStudioProMcp()
     {
         try
         {
             var version = StudioProVersionFromExePath();
-            if (string.IsNullOrEmpty(version))
+            // Host10x runs on Studio Pro 10.x where the mendix-studio-pro MCP
+            // server doesn't exist. IsMcpServerSupported will return false for
+            // any 10.x version. Short-circuit without touching SQLite.
+            var available = StudioProThemeProbe.IsMcpServerSupported(version);
+            if (!available)
             {
-                log.Info("[mcp-probe] version not detected from exe path");
-                return null;
+                log.Info($"[mcp-probe] sp-version={version ?? "<unknown>"} available=false (requires 11.10+); skipping SQLite read");
+                return new StudioProMcpInfoPayload(Enabled: null, Port: null, Available: false);
             }
-            var info = StudioProThemeProbe.ReadMcpServer(version);
-            log.Info($"[mcp-probe] sp-version={version} {info.Diagnostic}");
-            return new StudioProMcpInfoPayload(info.Enabled, info.Port);
+            var info = StudioProThemeProbe.ReadMcpServer(version!);
+            log.Info($"[mcp-probe] sp-version={version} available=true {info.Diagnostic}");
+            return new StudioProMcpInfoPayload(info.Enabled, info.Port, Available: true);
         }
         catch (Exception ex)
         {
             log.Warn($"[mcp-probe] outer exception: {ex.GetType().Name}: {ex.Message}");
-            return null;
+            return new StudioProMcpInfoPayload(Enabled: null, Port: null, Available: false);
         }
     }
 
