@@ -12,16 +12,17 @@ public class BundleResolutionTests
     {
         var src = ReadHostSource("Concord.Host10x");
 
-        var skillsCalls = Regex.Matches(src, @"ResolvePath\(""skills(-10x)?""\)");
+        var skillsCalls = Regex.Matches(src, @"ResolvePath\(\s*""skills(-10x)?""\s*\)");
         skillsCalls.Should().HaveCount(4, "Host10x has 4 call sites that resolve the skills bundle");
         skillsCalls.Should().AllSatisfy(m =>
-            m.Value.Should().Be("ResolvePath(\"skills-10x\")",
+            NormalizeCall(m.Value).Should().Be("ResolvePath(\"skills-10x\")",
                 "Host10x must resolve the 10.x bundle, not the 11.x one"));
 
-        var rulesCalls = Regex.Matches(src, @"ResolvePath\(""rules(-10x)?""\)");
-        rulesCalls.Should().HaveCount(4);
+        var rulesCalls = Regex.Matches(src, @"ResolvePath\(\s*""rules(-10x)?""\s*\)");
+        rulesCalls.Should().HaveCount(4, "Host10x has 4 call sites that resolve the rules bundle");
         rulesCalls.Should().AllSatisfy(m =>
-            m.Value.Should().Be("ResolvePath(\"rules-10x\")"));
+            NormalizeCall(m.Value).Should().Be("ResolvePath(\"rules-10x\")",
+                "Host10x must resolve the 10.x bundle, not the 11.x one"));
     }
 
     [Fact]
@@ -29,17 +30,22 @@ public class BundleResolutionTests
     {
         var src = ReadHostSource("Concord.Host11x");
 
-        var skillsCalls = Regex.Matches(src, @"ResolvePath\(""skills(-10x)?""\)");
-        skillsCalls.Should().HaveCount(4);
+        var skillsCalls = Regex.Matches(src, @"ResolvePath\(\s*""skills(-10x)?""\s*\)");
+        skillsCalls.Should().HaveCount(4, "Host11x has 4 call sites that resolve the skills bundle");
         skillsCalls.Should().AllSatisfy(m =>
-            m.Value.Should().Be("ResolvePath(\"skills\")",
+            NormalizeCall(m.Value).Should().Be("ResolvePath(\"skills\")",
                 "Host11x must resolve the 11.x bundle, not the 10.x one"));
 
-        var rulesCalls = Regex.Matches(src, @"ResolvePath\(""rules(-10x)?""\)");
-        rulesCalls.Should().HaveCount(4);
+        var rulesCalls = Regex.Matches(src, @"ResolvePath\(\s*""rules(-10x)?""\s*\)");
+        rulesCalls.Should().HaveCount(4, "Host11x has 4 call sites that resolve the rules bundle");
         rulesCalls.Should().AllSatisfy(m =>
-            m.Value.Should().Be("ResolvePath(\"rules\")"));
+            NormalizeCall(m.Value).Should().Be("ResolvePath(\"rules\")",
+                "Host11x must resolve the 11.x bundle, not the 10.x one"));
     }
+
+    // Strip whitespace inside ResolvePath(...) so the regex's \s* tolerance
+    // doesn't break the equality check downstream.
+    private static string NormalizeCall(string match) => Regex.Replace(match, @"\s+", "");
 
     private static string ReadHostSource(string hostAssemblyName)
     {
