@@ -14,13 +14,112 @@
 //             in side_effect_check sub-record of findings.json
 //   notes:    free-text intent (especially for known-bug entries)
 [
+  // ---- Diagnostics ----
   {
+    "name": "list_available_tools",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Returns hardcoded string array of tool names; no parameters read."
+  }
+  ,{
+    "name": "list_available_tools_domain",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "MendixDomainModelTools variant; returns slightly older hardcoded tool list."
+  }
+  ,{
+    "name": "analyze_project_patterns",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": { "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Scope analysis to MyFirstModule; save_skill defaults to true."
+  }
+  ,{
+    "name": "check_model",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "No required args; null-safe access on parameters object."
+  }
+  ,{
+    "name": "check_project_errors",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Always returns escalation: manual — consistency-check API not exposed."
+  }
+  ,{
+    "name": "check_variable_name",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": { "microflow_name": "MyFirstModule.ACT_Example", "variable_name": "NewCustomer" },
+    "expected": "ok",
+    "notes": "Checks for variable name conflicts in a microflow."
+  }
+  ,{
+    "name": "diagnose_associations",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Diagnoses association issues; null-safe module_name access."
+  }
+  ,{
+    "name": "get_last_error",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "either",
+    "notes": "Returns static _lastError field; may be empty/null if no error has been recorded."
+  }
+  ,{
+    "name": "get_last_error_domain",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "either",
+    "notes": "MendixDomainModelTools.GetLastError — always returns a stub 'not implemented' response."
+  }
+  ,{
+    "name": "get_studio_pro_logs",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": { "level": "ERROR", "last_minutes": 10 },
+    "expected": "either",
+    "notes": "KNOWN STALE pre-sweep: hardcoded 11.5.0 path (MendixAdditionalTools.cs:658)."
+  }
+  ,{
+    "name": "list_java_actions",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Lists Java actions across all modules; null-safe module_name filter."
+  }
+
+  // ---- DomainModel reads ----
+  ,{
     "name": "list_modules",
     "family": "DomainModel",
     "phase": "read",
     "args": {},
     "expected": "ok",
-    "notes": "No args required; returns all 10 modules. Used as classification smoke test."
+    "notes": "No args required; returns all 10 modules."
+  }
+  ,{
+    "name": "read_domain_model",
+    "family": "DomainModel",
+    "phase": "read",
+    "args": { "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Returns domain model for MyFirstModule; null-safe module_name access."
   }
   ,{
     "name": "read_project_info",
@@ -28,6 +127,228 @@
     "phase": "read",
     "args": {},
     "expected": "ok",
-    "notes": "KNOWN FAIL pre-sweep: ModuleProxy KeyNotFound (MendixDomainModelTools.cs:769-775)."
+    "notes": "KNOWN CRASH pre-sweep: ModuleProxy KeyNotFound (MendixDomainModelTools.cs:769-775)."
+  }
+  ,{
+    "name": "query_model_elements",
+    "family": "DomainModel",
+    "phase": "read",
+    "args": { "type_name": "DomainModels$Entity", "module_name": "MyFirstModule", "max_results": 10 },
+    "expected": "ok",
+    "notes": "BUG-014 fix: routes entity type through IDomainModelHost."
+  }
+  ,{
+    "name": "query_associations",
+    "family": "DomainModel",
+    "phase": "read",
+    "args": { "entity_name": "Customer", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "All parameters optional; delegates to IDomainModelHost.QueryAssociations."
+  }
+  ,{
+    "name": "read_attribute_details",
+    "family": "DomainModel",
+    "phase": "read",
+    "args": { "entity_name": "Customer", "attribute_name": "Name" },
+    "expected": "ok",
+    "notes": "Returns attribute metadata; maxLength/enumeration/defaultValue may be null (Interop gap)."
+  }
+  ,{
+    "name": "validate_name",
+    "family": "DomainModel",
+    "phase": "read",
+    "args": { "name": "MyEntity" },
+    "expected": "ok",
+    "notes": "Returns isValid, errorMessage, fixedName from INameValidationResult."
+  }
+
+  // ---- Microflows reads ----
+  ,{
+    "name": "list_microflows",
+    "family": "Microflows",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Lists microflows across all modules; null-safe module_name filter."
+  }
+  ,{
+    "name": "read_microflow_details",
+    "family": "Microflows",
+    "phase": "read",
+    "args": { "microflow_name": "ACT_Example", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Reads microflow details; unqualified name + module_name used to build qualified name."
+  }
+  ,{
+    "name": "list_nanoflows",
+    "family": "Microflows",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Lists nanoflows across all modules; null-safe module_name filter."
+  }
+  ,{
+    "name": "read_nanoflow_details",
+    "family": "Microflows",
+    "phase": "read",
+    "args": { "nanoflow_name": "MyNanoflow", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Activity details not available via typed API; returns activities: []."
+  }
+  ,{
+    "name": "list_scheduled_events",
+    "family": "Microflows",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Requires IUntypedModel (Studio Pro 11+); null-safe module_name filter."
+  }
+
+  // ---- Pages reads ----
+  ,{
+    "name": "list_pages",
+    "family": "Pages",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Requires IUntypedModel; include_excluded defaults to false."
+  }
+  ,{
+    "name": "read_page_details",
+    "family": "Pages",
+    "phase": "read",
+    "args": { "page_name": "Customer_Overview", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Returns flat properties plus propertiesJson; widget tree not available via IUntypedModelHost."
+  }
+
+  // ---- Workflows reads ----
+  ,{
+    "name": "list_workflows",
+    "family": "Workflows",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Requires IUntypedModel; null-safe module_name filter."
+  }
+  ,{
+    "name": "read_workflow_details",
+    "family": "Workflows",
+    "phase": "read",
+    "args": { "workflow_name": "MyWorkflow", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Returns flat properties plus propertiesJson; deep sub-element traversal not available."
+  }
+
+  // ---- ConstantsEnums reads ----
+  ,{
+    "name": "list_constants",
+    "family": "ConstantsEnums",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Requires IUntypedModel (Studio Pro 11+); returns escalation: manual stub on 10.x."
+  }
+  ,{
+    "name": "list_enumerations",
+    "family": "ConstantsEnums",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Per-module resilience: skips modules that throw; enum values not returned (IDomainModelHost gap)."
+  }
+
+  // ---- Security reads ----
+  ,{
+    "name": "list_rules",
+    "family": "Security",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Always returns escalation: manual — IRule documents not exposed on typed Interop surface."
+  }
+  ,{
+    "name": "read_security_info",
+    "family": "Security",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Always returns escalation: manual — requires IModelRoot sub-element traversal."
+  }
+  ,{
+    "name": "read_entity_access_rules",
+    "family": "Security",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Always returns escalation: manual — DomainModels$AccessRule requires IModelUnit sub-element traversal."
+  }
+  ,{
+    "name": "read_microflow_security",
+    "family": "Security",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Always returns escalation: manual — allowedModuleRoles requires IModelUnit traversal."
+  }
+  ,{
+    "name": "audit_security",
+    "family": "Security",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Always returns escalation: manual — full audit requires cross-type traversal not available on IUntypedModelHost."
+  }
+
+  // ---- ProjectSettings reads ----
+  ,{
+    "name": "read_runtime_settings",
+    "family": "ProjectSettings",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Delegates directly to HostServices.Model.ReadRuntimeSettings(); no parameters read."
+  }
+  ,{
+    "name": "read_configurations",
+    "family": "ProjectSettings",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "IsActive/DatabaseType/DatabaseConnectionString returned as false/null (typed API gap)."
+  }
+  ,{
+    "name": "list_rest_services",
+    "family": "ProjectSettings",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Requires IUntypedModel; resource sub-elements not available; raw propertiesJson included."
+  }
+  ,{
+    "name": "read_version_control",
+    "family": "ProjectSettings",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Returns available: false if IVersionControlHost.IsAvailable is false; no parameters read."
+  }
+
+  // ---- UiActions reads ----
+  ,{
+    "name": "get_app_status",
+    "family": "UiActions",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Returns composite status (run state, active configuration, etc.); no parameters read."
+  }
+  ,{
+    "name": "get_active_run_configuration",
+    "family": "UiActions",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Returns name of currently active run configuration; no parameters read."
   }
 ]
