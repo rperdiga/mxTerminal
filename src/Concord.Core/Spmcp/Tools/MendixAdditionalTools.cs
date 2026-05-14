@@ -1247,38 +1247,32 @@ namespace Terminal.Spmcp.Tools
 
                 // Validate activity type (preserve supported-types vocabulary)
                 var normalizedType = activityType.ToLowerInvariant();
+                // Phase 2/3 sweep fix (REAL_BUG): the allowlist was previously aspirational
+                // (~30 types incl. log, change_list, aggregations) but the host's CreateActivity
+                // switch in MicroflowAuthoringHost1{0,1}x.cs only handles 8 type families.
+                // The allowlist is intentionally narrowed to what the host actually authors so
+                // create_microflow_activity returns a clean "Unsupported" error instead of a
+                // silent no-op or downstream null-deref.
+                // TODO(spmcp-tool-sweep follow-up): re-expand the allowlist as host support grows
+                // (log activity, change_attribute typed setter, list aggregations).
                 var supportedTypes = new[]
                 {
                     "create_object", "create_variable", "create",
-                    "microflow_call", "call_microflow",
-                    "change_variable", "change_value",
-                    "retrieve", "retrieve_from_database", "retrieve_database", "database_retrieve",
-                    "retrieve_by_association", "association_retrieve",
-                    "commit_object", "commit_objects", "commit",
-                    "rollback_object", "rollback",
-                    "delete_object", "delete",
+                    "change_object",
+                    "retrieve", "retrieve_from_database", "database_retrieve",
+                    "commit", "commit_object",
+                    "rollback", "rollback_object",
+                    "delete", "delete_object",
                     "create_list", "new_list",
-                    "change_list", "modify_list",
-                    "sort_list", "filter_list",
-                    "find_in_list", "find_list_item",
-                    "aggregate_list", "list_aggregate",
-                    "java_action_call", "call_java_action",
-                    "change_attribute", "change_association", "change_object",
-                    "union_lists", "union",
-                    "subtract_lists", "subtract",
-                    "intersect_lists", "intersect",
-                    "contains_in_list", "contains",
-                    "head_of_list", "head",
-                    "tail_of_list", "tail",
-                    "reduce_list", "reduce",
-                    "log", "log_message"
+                    "microflow_call", "call_microflow",
+                    "java_action_call", "call_java_action"
                 };
 
                 if (!supportedTypes.Contains(normalizedType))
                 {
                     var error = $"Unsupported activity type: '{activityType}'. " +
                                $"Supported types: {string.Join(", ", supportedTypes.Distinct())}. " +
-                               $"Note: For object changes, use 'change_object' (auto-detects), 'change_attribute' (for attributes), or 'change_association' (for references).";
+                               $"Note: For object changes use 'change_object'. Log, list aggregation, and association-retrieve activity types are not yet wired into the host authoring layer.";
                     SetLastError(error);
                     return JsonSerializer.Serialize(new { error, supportedTypes });
                 }

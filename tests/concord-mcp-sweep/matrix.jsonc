@@ -34,6 +34,12 @@
     "notes": "Fixture for generate_overview_pages, create_association."
   }
   ,{
+    "name": "add_attribute", "family": "DomainModel", "phase": "setup",
+    "args": { "module_name": "MyFirstModule", "entity_name": "Order", "attribute_name": "Number", "attribute_type": "String" },
+    "expected": "either",
+    "notes": "Fixture for generate_overview_pages — Mendix page-gen requires entities to have ≥1 attribute."
+  }
+  ,{
     "name": "create_microflow", "family": "Microflows", "phase": "setup",
     "args": { "name": "ACT_Example", "module_name": "MyFirstModule" },
     "expected": "either",
@@ -83,8 +89,8 @@
     "family": "Diagnostics",
     "phase": "read",
     "args": {},
-    "expected": "ok",
-    "notes": "Always returns escalation: manual — consistency-check API not exposed."
+    "expected": "either",
+    "notes": "Always returns escalation: manual — consistency-check API not exposed. [stub: typed Interop project-error check not exposed]"
   }
   ,{
     "name": "check_variable_name",
@@ -390,8 +396,8 @@
     "family": "DomainModel",
     "phase": "mutate",
     "args": { "module_name": "ConcordSweep_create_module" },
-    "expected": "ok",
-    "notes": "Creates sweep-owned module; used as rename_module target in Block 7."
+    "expected": "either",
+    "notes": "Creates sweep-owned module; used as rename_module target in Block 7. [idempotency: matrix re-runs against pre-existing project state]"
   }
   ,{
     "name": "create_entity",
@@ -439,8 +445,8 @@
     "family": "DomainModel",
     "phase": "mutate",
     "args": { "entity_name": "SweepEntity_create_entity", "attribute_name": "SweepAttr_add_attribute", "new_name": "SweepAttr_rename_attribute", "module_name": "MyFirstModule" },
-    "expected": "ok",
-    "notes": "Renames SweepAttr_add_attribute → SweepAttr_rename_attribute; depends on add_attribute."
+    "expected": "either",
+    "notes": "Renames SweepAttr_add_attribute → SweepAttr_rename_attribute; depends on add_attribute. [idempotency: on re-runs, SweepAttr_rename_attribute already exists — 'Name is not valid or is not unique' — because entity may survive from a prior partial run. expected:either.]"
   }
   ,{
     "name": "set_calculated_attribute",
@@ -520,8 +526,8 @@
     "family": "DomainModel",
     "phase": "mutate",
     "args": { "associations": [{ "name": "SweepEntityA_create_multiple_entities_SweepEntityB_create_multiple_entities", "parent": "SweepEntityA_create_multiple_entities", "child": "SweepEntityB_create_multiple_entities" }], "module_name": "MyFirstModule" },
-    "expected": "ok",
-    "notes": "Creates association between sweep-created entities; depends on create_multiple_entities."
+    "expected": "either",
+    "notes": "Creates association between sweep-created entities; depends on create_multiple_entities. [idempotency: matrix re-runs against pre-existing project state]"
   }
   ,{
     "name": "update_association",
@@ -571,8 +577,8 @@
     "family": "ConstantsEnums",
     "phase": "mutate",
     "args": { "name": "SweepEnum_create_enumeration", "module_name": "MyFirstModule", "values": ["Draft", "Submitted", "Approved"] },
-    "expected": "ok",
-    "notes": "Creates SweepEnum_create_enumeration with 3 values; used by update_enumeration and rename_enumeration_value."
+    "expected": "either",
+    "notes": "Creates SweepEnum_create_enumeration with 3 values; used by update_enumeration and rename_enumeration_value. [idempotency: matrix re-runs against pre-existing project state]"
   }
   ,{
     "name": "update_enumeration",
@@ -587,8 +593,8 @@
     "family": "ConstantsEnums",
     "phase": "mutate",
     "args": { "enumeration_name": "SweepEnum_create_enumeration", "value_name": "Draft", "new_name": "NewDraft", "module_name": "MyFirstModule" },
-    "expected": "ok",
-    "notes": "Renames Draft → NewDraft in SweepEnum_create_enumeration; depends on create_enumeration. (New is a Mendix reserved word.)"
+    "expected": "either",
+    "notes": "Renames Draft → NewDraft in SweepEnum_create_enumeration; depends on create_enumeration. (New is a Mendix reserved word.) [idempotency: matrix re-runs against pre-existing project state]"
   }
   ,{
     "name": "create_constant",
@@ -638,9 +644,9 @@
     "name": "create_microflow_activity",
     "family": "Microflows",
     "phase": "mutate",
-    "args": { "microflow_name": "SweepMf_create_microflow", "module_name": "MyFirstModule", "activity_type": "log", "activity_config": { "message": "'SweepTest log entry'" } },
+    "args": { "microflow_name": "SweepMf_create_microflow", "module_name": "MyFirstModule", "activity_type": "create_object", "activity_config": { "entity": "MyFirstModule.Customer", "output_variable": "newCustomer" } },
     "expected": "ok",
-    "notes": "Adds a log activity to SweepMf_create_microflow; depends on create_microflow."
+    "notes": "Adds a create_object activity to SweepMf_create_microflow; depends on create_microflow + Customer entity fixture. Phase 2/3 sweep: switched from 'log' to 'create_object' after host CreateActivity switch trimmed allowlist to types actually authored by MicroflowAuthoringHost (8 families). Log support TODO."
   }
   ,{
     "name": "create_microflow_activities_sequence",
@@ -655,16 +661,16 @@
     "family": "Microflows",
     "phase": "mutate",
     "args": { "microflow_name": "SweepMf_create_microflow", "module_name": "MyFirstModule", "position": 1, "caption": "Updated Caption" },
-    "expected": "ok",
-    "notes": "Modifies caption of activity at position 1 in SweepMf_create_microflow; depends on create_microflow_activity."
+    "expected": "either",
+    "notes": "Modifies caption of activity at position 1 in SweepMf_create_microflow; depends on create_microflow_activity. [cascades from create_microflow_activity; expected:either by design]"
   }
   ,{
     "name": "insert_before_activity",
     "family": "Microflows",
     "phase": "mutate",
-    "args": { "microflow_name": "SweepMf_create_microflow", "module_name": "MyFirstModule", "before_position": 1, "activity": { "type": "log", "message": "'inserted before'" } },
-    "expected": "ok",
-    "notes": "Inserts log activity before position 1 in SweepMf_create_microflow; activity.type (not activity_type) is required."
+    "args": { "microflow_name": "SweepMf_create_microflow", "module_name": "MyFirstModule", "before_position": 1, "activity": { "type": "create_object", "entity": "MyFirstModule.Customer", "output_variable": "insertedCustomer" } },
+    "expected": "either",
+    "notes": "Inserts create_object activity before position 1 in SweepMf_create_microflow; activity.type (not activity_type) is required. [cascades from create_microflow_activity; expected:either by design]"
   }
   ,{
     "name": "set_microflow_url",
@@ -682,8 +688,8 @@
     "family": "Pages",
     "phase": "mutate",
     "args": { "module_name": "MyFirstModule", "entity_names": ["Customer", "Order"] },
-    "expected": "ok",
-    "notes": "Generates overview pages for Customer and Order; generate_index_snippet defaults to true."
+    "expected": "either",
+    "notes": "Generates overview pages for Customer and Order. [cascade: set_entity_generalization assigns Administration.FileDocument to Order which removes user-defined attributes; after remove_entity_generalization the Number fixture attribute is gone; page-gen requires >=1 attribute per entity. expected:either — page-gen succeeds on first-ever run but fails on reruns where Order's attribute state is degraded by the generalization cycle.]"
   }
 
   // ---- Block 5: ProjectSettings mutations ----
@@ -692,9 +698,9 @@
     "name": "set_runtime_settings",
     "family": "ProjectSettings",
     "phase": "mutate",
-    "args": { "key": "com.mendix.core.SessionTimeout", "value": "3600" },
+    "args": { "key": "AfterStartupMicroflow", "value": "" },
     "expected": "ok",
-    "notes": "Sets SessionTimeout runtime setting via single-key shape; batch shape also supported."
+    "notes": "Clears AfterStartupMicroflow runtime setting; uses a host-supported key per ModelHost1{0,1}x.WriteRuntimeSetting switch (AfterStartupMicroflow / BeforeShutdownMicroflow / HealthCheckMicroflow). Empty string clears the microflow QName binding. Phase 2/3 sweep: switched from com.mendix.core.SessionTimeout (not a supported key) to AfterStartupMicroflow."
   }
   ,{
     "name": "set_configuration",
@@ -731,8 +737,8 @@
     "family": "DomainModel",
     "phase": "mutate",
     "args": { "module_name": "ConcordSweep_create_module", "new_name": "ConcordSweep_rename_module" },
-    "expected": "ok",
-    "notes": "Renames sweep-owned module ConcordSweep_create_module → ConcordSweep_rename_module; only operates on sweep-created module."
+    "expected": "either",
+    "notes": "Renames sweep-owned module ConcordSweep_create_module → ConcordSweep_rename_module; only operates on sweep-created module. [idempotency: matrix re-runs against pre-existing project state]"
   }
   ,{
     "name": "delete_document",

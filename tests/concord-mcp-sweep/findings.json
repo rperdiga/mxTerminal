@@ -11,7 +11,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  472078,
+                             "id":  995225,
                              "result":  {
                                             "content":  [
                                                             {
@@ -25,8 +25,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  207,
-        "timestamp":  "2026-05-14T02:48:30.2980307Z"
+        "elapsed_ms":  112,
+        "timestamp":  "2026-05-14T03:54:00.4857338Z"
     },
     {
         "name":  "add_attribute",
@@ -42,7 +42,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  760219,
+                             "id":  474082,
                              "result":  {
                                             "content":  [
                                                             {
@@ -56,8 +56,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  42,
-        "timestamp":  "2026-05-14T02:48:30.4228457Z"
+        "elapsed_ms":  23,
+        "timestamp":  "2026-05-14T03:54:00.5782690Z"
     },
     {
         "name":  "create_entity",
@@ -71,7 +71,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  755387,
+                             "id":  457275,
                              "result":  {
                                             "content":  [
                                                             {
@@ -85,8 +85,39 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  144,
-        "timestamp":  "2026-05-14T02:48:30.5800096Z"
+        "elapsed_ms":  63,
+        "timestamp":  "2026-05-14T03:54:00.6703575Z"
+    },
+    {
+        "name":  "add_attribute",
+        "family":  "DomainModel",
+        "phase":  "setup",
+        "status":  "PASS",
+        "expected":  "either",
+        "args":  {
+                     "module_name":  "MyFirstModule",
+                     "entity_name":  "Order",
+                     "attribute_name":  "Number",
+                     "attribute_type":  "String"
+                 },
+        "raw_response":  {
+                             "jsonrpc":  "2.0",
+                             "id":  244407,
+                             "result":  {
+                                            "content":  [
+                                                            {
+                                                                "type":  "text",
+                                                                "text":  "{\"error\":\"Attribute \\u0027Number\\u0027 already exists on entity \\u0027Order\\u0027\"}"
+                                                            }
+                                                        ],
+                                            "isError":  false
+                                        }
+                         },
+        "error_summary":  null,
+        "severity":  null,
+        "side_effect_check":  null,
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:00.7033551Z"
     },
     {
         "name":  "create_microflow",
@@ -100,12 +131,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  950018,
+                             "id":  395711,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"message\":\"Microflow \\u0027ACT_Example\\u0027 created successfully in module \\u0027MyFirstModule\\u0027.\",\"document_id\":\"5d674956-bf31-4493-bfb1-417e54b7a6a9\",\"qualified_name\":\"MyFirstModule.ACT_Example\",\"microflow\":{\"name\":\"ACT_Example\",\"qualifiedName\":\"MyFirstModule.ACT_Example\",\"module\":\"MyFirstModule\",\"returnType\":\"void\",\"parameterCount\":0}}"
+                                                                "text":  "{\"error\":\"Microflow \\u0027ACT_Example\\u0027 already exists in module \\u0027MyFirstModule\\u0027.\"}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -114,8 +145,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  752,
-        "timestamp":  "2026-05-14T02:48:31.3485726Z"
+        "elapsed_ms":  20,
+        "timestamp":  "2026-05-14T03:54:00.7368951Z"
     },
     {
         "name":  "create_microflow",
@@ -129,7 +160,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  916659,
+                             "id":  694539,
                              "result":  {
                                             "content":  [
                                                             {
@@ -143,8 +174,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  25,
-        "timestamp":  "2026-05-14T02:48:31.3915729Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:00.7788922Z"
     },
     {
         "name":  "list_available_tools",
@@ -157,7 +188,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  349133,
+                             "id":  379739,
                              "result":  {
                                             "content":  [
                                                             {
@@ -171,8 +202,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  30,
-        "timestamp":  "2026-05-14T02:48:31.4367032Z"
+        "elapsed_ms":  22,
+        "timestamp":  "2026-05-14T03:54:00.8354258Z"
     },
     {
         "name":  "list_available_tools_domain",
@@ -185,7 +216,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  662295,
+                             "id":  651796,
                              "result":  {
                                             "content":  [
                                                             {
@@ -199,36 +230,36 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  25,
-        "timestamp":  "2026-05-14T02:48:31.5057034Z"
+        "elapsed_ms":  20,
+        "timestamp":  "2026-05-14T03:54:00.8754259Z"
     },
     {
         "name":  "analyze_project_patterns",
         "family":  "Diagnostics",
         "phase":  "read",
-        "status":  "FAIL",
+        "status":  "PASS",
         "expected":  "ok",
         "args":  {
                      "module_name":  "MyFirstModule"
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  646363,
+                             "id":  55299,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Failed to analyze project patterns: \\u0027\\u003C\\u003Ef__AnonymousType134\\u003Cint,int,int,int,int,System.Collections.Generic.List\\u003C\\u003C\\u003Ef__AnonymousType129\\u003Cstring,int,int\\u003E\\u003E,\\u003C\\u003Ef__AnonymousType135\\u003Cint,int,string\\u003E,System.Collections.Generic.Dictionary\\u003Cstring,int\\u003E,\\u003C\\u003Ef__AnonymousType136\\u003Cint,string\\u003E,\\u003C\\u003Ef__AnonymousType136\\u003Cint,string\\u003E,System.Collections.Generic.Dictionary\\u003Cstring,int\\u003E,System.Collections.Generic.List\\u003C\\u003C\\u003Ef__AnonymousType130\\u003Cstring,int\\u003E\\u003E\\u003E\\u0027 does not contain a definition for \\u0027commonDeleteBehavior\\u0027\"}"
+                                                                "text":  "{\r\n  \"success\": true,\r\n  \"projectName\": \"Test_10_24_13\",\r\n  \"analyzedAt\": \"2026-05-13T23:54:00.9052640-04:00\",\r\n  \"modulesAnalyzed\": [\r\n    \"MyFirstModule\"\r\n  ],\r\n  \"conventions\": {\r\n    \"entityNaming\": {\r\n      \"pattern\": \"Mixed\",\r\n      \"consistency\": \"66%\",\r\n      \"examples\": [\r\n        \"Customer\",\r\n        \"Order\",\r\n        \"Customer\",\r\n        \"Order\",\r\n        \"Customer\"\r\n      ]\r\n    },\r\n    \"attributeNaming\": {\r\n      \"pattern\": \"PascalCase\",\r\n      \"consistency\": \"100%\"\r\n    },\r\n    \"microflowPrefixes\": {\r\n      \"ACT_\": 2,\r\n      \"SUB_\": 0,\r\n      \"BCO_\": 0,\r\n      \"ACO_\": 0,\r\n      \"RUL_\": 0,\r\n      \"IVK_\": 0,\r\n      \"DS_\": 0,\r\n      \"none\": 2\r\n    },\r\n    \"standardAuditAttributes\": [\r\n      \"Name\"\r\n    ],\r\n    \"commonBaseEntities\": {\r\n      \"System.Object\": 21\r\n    }\r\n  },\r\n  \"statistics\": {\r\n    \"totalEntities\": 21,\r\n    \"totalAssociations\": 4,\r\n    \"totalMicroflows\": 4,\r\n    \"totalPages\": 1,\r\n    \"totalEventHandlers\": 0,\r\n    \"attributeTypeDistribution\": [\r\n      {\r\n        \"type\": \"String\",\r\n        \"count\": 18,\r\n        \"pct\": 100\r\n      }\r\n    ],\r\n    \"associationTypeRatio\": {\r\n      \"oneToMany\": 4,\r\n      \"manyToMany\": 0,\r\n      \"oneToManyPct\": \"100%\"\r\n    },\r\n    \"eventHandlerDistribution\": {},\r\n    \"entitiesWithCreatedDate\": {\r\n      \"count\": 0,\r\n      \"pct\": \"0%\"\r\n    },\r\n    \"entitiesWithChangedDate\": {\r\n      \"count\": 0,\r\n      \"pct\": \"0%\"\r\n    },\r\n    \"pageSuffixPatterns\": {\r\n      \"_Overview\": 0,\r\n      \"_NewEdit\": 0,\r\n      \"_Detail\": 0,\r\n      \"_Edit\": 0,\r\n      \"_New\": 0,\r\n      \"_Select\": 0,\r\n      \"_Popup\": 0,\r\n      \"other\": 1\r\n    },\r\n    \"baseEntityDistribution\": [\r\n      {\r\n        \"parent\": \"System.Object\",\r\n        \"count\": 21\r\n      }\r\n    ],\r\n    \"commonDeleteBehavior\": \"delete_me_but_keep_references\"\r\n  },\r\n  \"modules\": [\r\n    {\r\n      \"name\": \"MyFirstModule\",\r\n      \"entities\": 21,\r\n      \"associations\": 4,\r\n      \"microflows\": 4,\r\n      \"pages\": 1\r\n    }\r\n  ],\r\n  \"skillFilePath\": \"C:\\\\Extensions\\\\MCPExtension\\\\.claude\\\\skills\\\\mendix-project-context.md\",\r\n  \"skillFileWritten\": true\r\n}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Failed to analyze project patterns: \u0027\u003c\u003ef__AnonymousType134\u003cint,int,int,int,int,System.Collections.Generic.List\u003c\u003c\u003ef__AnonymousType129\u003cstring,int,int\u003e\u003e,\u003c\u003ef__AnonymousType135\u003cint,int,string\u003e,System.Collections.Generic.Dictionary\u003cstring,int\u003e,\u003c\u003ef__AnonymousType136\u003cint,string\u003e,\u003c\u003ef__AnonymousType136\u003cint,string\u003e,System.Collections.Generic.Dictionary\u003cstring,int\u003e,System.Collections.Generic.List\u003c\u003c\u003ef__AnonymousType130\u003cstring,int\u003e\u003e\u003e\u0027 does not contain a definition for \u0027commonDeleteBehavior\u0027",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
         "elapsed_ms":  31,
-        "timestamp":  "2026-05-14T02:48:31.5532343Z"
+        "timestamp":  "2026-05-14T03:54:00.9285274Z"
     },
     {
         "name":  "check_model",
@@ -241,12 +272,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  803424,
+                             "id":  635677,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\r\n  \"success\": true,\r\n  \"healthy\": true,\r\n  \"summary\": {\r\n    \"totalItems\": 5,\r\n    \"errorCount\": 0,\r\n    \"warningCount\": 5,\r\n    \"infoCount\": 0\r\n  },\r\n  \"errors\": null,\r\n  \"warnings\": [\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"SweepEntityA_create_multiple_entities\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027SweepEntityA_create_multiple_entities\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"SweepEntityB_create_multiple_entities\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027SweepEntityB_create_multiple_entities\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Order\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Order\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Customer\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Customer\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Order\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Order\\u0027 has no attributes defined.\"\r\n    }\r\n  ],\r\n  \"info\": null,\r\n  \"message\": \"Found 0 error(s) and 5 warning(s).\"\r\n}"
+                                                                "text":  "{\r\n  \"success\": true,\r\n  \"healthy\": true,\r\n  \"summary\": {\r\n    \"totalItems\": 15,\r\n    \"errorCount\": 0,\r\n    \"warningCount\": 15,\r\n    \"infoCount\": 0\r\n  },\r\n  \"errors\": null,\r\n  \"warnings\": [\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"SweepEntityA_create_multiple_entities\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027SweepEntityA_create_multiple_entities\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"SweepEntityB_create_multiple_entities\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027SweepEntityB_create_multiple_entities\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Customer\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Customer\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Order\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Order\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Customer\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Customer\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Order\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Order\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Customer\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Customer\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Order\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Order\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Customer\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Customer\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Order\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Order\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Customer\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Customer\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Order\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Order\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"SweepEntity_create_entity\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027SweepEntity_create_entity\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Customer\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Customer\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Order\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Order\\u0027 has no attributes defined.\"\r\n    }\r\n  ],\r\n  \"info\": null,\r\n  \"message\": \"Found 0 error(s) and 15 warning(s).\"\r\n}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -255,21 +286,21 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  55,
-        "timestamp":  "2026-05-14T02:48:31.6347458Z"
+        "elapsed_ms":  22,
+        "timestamp":  "2026-05-14T03:54:00.9700483Z"
     },
     {
         "name":  "check_project_errors",
         "family":  "Diagnostics",
         "phase":  "read",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
 
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  260836,
+                             "id":  404168,
                              "result":  {
                                             "content":  [
                                                             {
@@ -280,11 +311,11 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "success:false",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  35,
-        "timestamp":  "2026-05-14T02:48:31.6957504Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:01.0040477Z"
     },
     {
         "name":  "check_variable_name",
@@ -298,7 +329,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  866145,
+                             "id":  772413,
                              "result":  {
                                             "content":  [
                                                             {
@@ -312,8 +343,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  35,
-        "timestamp":  "2026-05-14T02:48:31.7471352Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:01.0366869Z"
     },
     {
         "name":  "diagnose_associations",
@@ -326,12 +357,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  525450,
+                             "id":  141806,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"entities\":[\"FeedbackModule.ResponseHelper\",\"FeedbackModule.Feedback\",\"Administration.Account\",\"Administration.AccountPasswordData\",\"Atlas_Web_Content.LoginContext\",\"NanoflowCommons.Geolocation\",\"NanoflowCommons.Position\",\"FileUploader.UploadedFile\",\"FileUploader.FileUploadContext\",\"FileUploader.UploadedImage\",\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"MyFirstModule.Customer\",\"MyFirstModule.Order\",\"MyFirstModule.SweepEntity_copy\",\"MyFirstModule.Customer\",\"MyFirstModule.Order\"],\"entityCount\":18,\"associations\":[{\"Name\":\"AccountPasswordData_Account\",\"Parent\":\"AccountPasswordData\",\"Child\":\"Account\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"UploadedFile_FileUploadContext\",\"Parent\":\"UploadedFile\",\"Child\":\"FileUploadContext\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"UploadedImage_FileUploadContext\",\"Parent\":\"UploadedImage\",\"Child\":\"FileUploadContext\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"SweepEntityA_create_multiple_entities_SweepEntityB_create_multiple_entities\",\"Parent\":\"SweepEntityB_create_multiple_entities\",\"Child\":\"SweepEntityA_create_multiple_entities\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"Customer_OrderItems\",\"Parent\":\"Order\",\"Child\":\"Customer\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"}],\"associationCount\":5,\"status\":\"Domain model diagnosed successfully\",\"guidance\":{\"commonIssues\":[\"Entities must exist before creating associations\",\"Entity names are case sensitive\",\"Don\\u0027t use module prefixes in entity names\",\"Association names must be unique\",\"For one-to-many associations, parent is the \\u0027one\\u0027 side, child is the \\u0027many\\u0027 side\"],\"properFormat\":{\"Name\":\"Customer_Orders\",\"Parent\":\"Customer\",\"Child\":\"Order\",\"Type\":\"one-to-many\"}}}"
+                                                                "text":  "{\"entities\":[\"FeedbackModule.ResponseHelper\",\"FeedbackModule.Feedback\",\"Administration.Account\",\"Administration.AccountPasswordData\",\"Atlas_Web_Content.LoginContext\",\"NanoflowCommons.Geolocation\",\"NanoflowCommons.Position\",\"FileUploader.UploadedFile\",\"FileUploader.FileUploadContext\",\"FileUploader.UploadedImage\",\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"MyFirstModule.Customer\",\"MyFirstModule.Order\",\"MyFirstModule.SweepEntity_copy\",\"MyFirstModule.Customer\",\"MyFirstModule.Order\",\"MyFirstModule.SweepEntity_copy\",\"MyFirstModule.Customer\",\"MyFirstModule.Order\",\"MyFirstModule.Customer\",\"MyFirstModule.Order\",\"MyFirstModule.Customer\",\"MyFirstModule.Order\",\"MyFirstModule.Customer\",\"MyFirstModule.Order\",\"MyFirstModule.SweepEntity_create_entity\",\"MyFirstModule.SweepEntity_copy\",\"MyFirstModule.Customer\",\"MyFirstModule.Order\"],\"entityCount\":31,\"associations\":[{\"Name\":\"AccountPasswordData_Account\",\"Parent\":\"AccountPasswordData\",\"Child\":\"Account\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"UploadedFile_FileUploadContext\",\"Parent\":\"UploadedFile\",\"Child\":\"FileUploadContext\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"UploadedImage_FileUploadContext\",\"Parent\":\"UploadedImage\",\"Child\":\"FileUploadContext\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"SweepEntityA_create_multiple_entities_SweepEntityB_create_multiple_entities\",\"Parent\":\"SweepEntityB_create_multiple_entities\",\"Child\":\"SweepEntityA_create_multiple_entities\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"FreshAssocTest_2\",\"Parent\":\"SweepEntityB_create_multiple_entities\",\"Child\":\"SweepEntityA_create_multiple_entities\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"Customer_OrderItems\",\"Parent\":\"Order\",\"Child\":\"Customer\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"Customer_Orders\",\"Parent\":\"Order\",\"Child\":\"Customer\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"}],\"associationCount\":7,\"status\":\"Domain model diagnosed successfully\",\"guidance\":{\"commonIssues\":[\"Entities must exist before creating associations\",\"Entity names are case sensitive\",\"Don\\u0027t use module prefixes in entity names\",\"Association names must be unique\",\"For one-to-many associations, parent is the \\u0027one\\u0027 side, child is the \\u0027many\\u0027 side\"],\"properFormat\":{\"Name\":\"Customer_Orders\",\"Parent\":\"Customer\",\"Child\":\"Order\",\"Type\":\"one-to-many\"}}}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -340,8 +371,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  29,
-        "timestamp":  "2026-05-14T02:48:31.7931349Z"
+        "elapsed_ms":  21,
+        "timestamp":  "2026-05-14T03:54:01.0726861Z"
     },
     {
         "name":  "get_last_error",
@@ -354,12 +385,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  879615,
+                             "id":  6517,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"message\":\"Last error retrieved\",\"last_error\":\"Error in create_microflow: Microflow \\u0027CAL_Customer_FullName\\u0027 already exists in module \\u0027MyFirstModule\\u0027.\",\"details\":\"Microflow \\u0027CAL_Customer_FullName\\u0027 already exists in module \\u0027MyFirstModule\\u0027.\",\"stack_trace\":\"   at Concord.Host10x.Interop.MicroflowAuthoringHost10x.Create(CreateMicroflowRequest request) in C:\\\\Extensions\\\\Terminal\\\\src\\\\Concord.Host10x\\\\Interop\\\\MicroflowAuthoringHost10x.cs:line 97\\r\\n   at Terminal.Spmcp.Tools.MendixAdditionalTools.CreateMicroflow(JsonObject arguments) in C:\\\\Extensions\\\\Terminal\\\\src\\\\Concord.Core\\\\Spmcp\\\\Tools\\\\MendixAdditionalTools.cs:line 1103\",\"timestamp\":\"2026-05-14 02:48:31 UTC\"}"
+                                                                "text":  "{\"message\":\"Last error retrieved\",\"last_error\":\"Error in create_microflow: Microflow \\u0027CAL_Customer_FullName\\u0027 already exists in module \\u0027MyFirstModule\\u0027.\",\"details\":\"Microflow \\u0027CAL_Customer_FullName\\u0027 already exists in module \\u0027MyFirstModule\\u0027.\",\"stack_trace\":\"   at Concord.Host10x.Interop.MicroflowAuthoringHost10x.Create(CreateMicroflowRequest request) in C:\\\\Extensions\\\\Terminal\\\\src\\\\Concord.Host10x\\\\Interop\\\\MicroflowAuthoringHost10x.cs:line 97\\r\\n   at Terminal.Spmcp.Tools.MendixAdditionalTools.CreateMicroflow(JsonObject arguments) in C:\\\\Extensions\\\\Terminal\\\\src\\\\Concord.Core\\\\Spmcp\\\\Tools\\\\MendixAdditionalTools.cs:line 1103\",\"timestamp\":\"2026-05-14 03:54:01 UTC\"}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -368,8 +399,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  28,
-        "timestamp":  "2026-05-14T02:48:31.8366686Z"
+        "elapsed_ms":  20,
+        "timestamp":  "2026-05-14T03:54:01.1076798Z"
     },
     {
         "name":  "get_last_error_domain",
@@ -382,7 +413,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  544880,
+                             "id":  921685,
                              "result":  {
                                             "content":  [
                                                             {
@@ -396,8 +427,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  43,
-        "timestamp":  "2026-05-14T02:48:31.9006680Z"
+        "elapsed_ms":  21,
+        "timestamp":  "2026-05-14T03:54:01.1442302Z"
     },
     {
         "name":  "get_studio_pro_logs",
@@ -411,7 +442,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  762654,
+                             "id":  770575,
                              "result":  {
                                             "content":  [
                                                             {
@@ -425,36 +456,36 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  28,
-        "timestamp":  "2026-05-14T02:48:31.9587021Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:01.1802272Z"
     },
     {
         "name":  "list_java_actions",
         "family":  "Diagnostics",
         "phase":  "read",
-        "status":  "FAIL",
+        "status":  "PASS",
         "expected":  "ok",
         "args":  {
 
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  313557,
+                             "id":  13219,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\"}"
+                                                                "text":  "{\"success\":true,\"totalJavaActions\":0,\"javaActions\":[],\"skippedModules\":[{\"module\":\"Atlas_Core\",\"operation\":\"ListJavaActions\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"FeedbackModule\",\"operation\":\"ListJavaActions\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"Administration\",\"operation\":\"ListJavaActions\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"Atlas_Web_Content\",\"operation\":\"ListJavaActions\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"NanoflowCommons\",\"operation\":\"ListJavaActions\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"WebActions\",\"operation\":\"ListJavaActions\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"DataWidgets\",\"operation\":\"ListJavaActions\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"FileUploader\",\"operation\":\"ListJavaActions\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"}]}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "The given key \u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\u0027 was not present in the dictionary.",
-        "severity":  "CRASH",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  30,
-        "timestamp":  "2026-05-14T02:48:32.0087033Z"
+        "elapsed_ms":  20,
+        "timestamp":  "2026-05-14T03:54:01.2162309Z"
     },
     {
         "name":  "list_modules",
@@ -467,12 +498,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  224508,
+                             "id":  215311,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\r\n  \"success\": true,\r\n  \"message\": \"Found 12 modules\",\r\n  \"note\": \"fromAppStore filter not available via IModelHost \\u2014 all modules shown\",\r\n  \"modules\": [\r\n    {\r\n      \"name\": \"Administration\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 2\r\n    },\r\n    {\r\n      \"name\": \"Atlas_Core\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"Atlas_Web_Content\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 1\r\n    },\r\n    {\r\n      \"name\": \"ConcordSweep_create_module\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"ConcordSweep_rename_module\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"DataWidgets\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"FeedbackModule\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 2\r\n    },\r\n    {\r\n      \"name\": \"FileUploader\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 3\r\n    },\r\n    {\r\n      \"name\": \"MyFirstModule\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 8\r\n    },\r\n    {\r\n      \"name\": \"NanoflowCommons\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 2\r\n    },\r\n    {\r\n      \"name\": \"Sales\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"WebActions\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    }\r\n  ],\r\n  \"userModules\": [\r\n    \"Administration\",\r\n    \"Atlas_Core\",\r\n    \"Atlas_Web_Content\",\r\n    \"ConcordSweep_create_module\",\r\n    \"ConcordSweep_rename_module\",\r\n    \"DataWidgets\",\r\n    \"FeedbackModule\",\r\n    \"FileUploader\",\r\n    \"MyFirstModule\",\r\n    \"NanoflowCommons\",\r\n    \"Sales\",\r\n    \"WebActions\"\r\n  ]\r\n}"
+                                                                "text":  "{\r\n  \"success\": true,\r\n  \"message\": \"Found 12 modules\",\r\n  \"note\": \"fromAppStore filter not available via IModelHost \\u2014 all modules shown\",\r\n  \"modules\": [\r\n    {\r\n      \"name\": \"Administration\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 2\r\n    },\r\n    {\r\n      \"name\": \"Atlas_Core\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"Atlas_Web_Content\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 1\r\n    },\r\n    {\r\n      \"name\": \"ConcordSweep_create_module\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"ConcordSweep_rename_module\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"DataWidgets\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"FeedbackModule\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 2\r\n    },\r\n    {\r\n      \"name\": \"FileUploader\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 3\r\n    },\r\n    {\r\n      \"name\": \"MyFirstModule\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 21\r\n    },\r\n    {\r\n      \"name\": \"NanoflowCommons\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 2\r\n    },\r\n    {\r\n      \"name\": \"Sales\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"WebActions\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    }\r\n  ],\r\n  \"userModules\": [\r\n    \"Administration\",\r\n    \"Atlas_Core\",\r\n    \"Atlas_Web_Content\",\r\n    \"ConcordSweep_create_module\",\r\n    \"ConcordSweep_rename_module\",\r\n    \"DataWidgets\",\r\n    \"FeedbackModule\",\r\n    \"FileUploader\",\r\n    \"MyFirstModule\",\r\n    \"NanoflowCommons\",\r\n    \"Sales\",\r\n    \"WebActions\"\r\n  ]\r\n}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -481,8 +512,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  34,
-        "timestamp":  "2026-05-14T02:48:32.0652420Z"
+        "elapsed_ms":  21,
+        "timestamp":  "2026-05-14T03:54:01.2587813Z"
     },
     {
         "name":  "read_domain_model",
@@ -495,12 +526,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  706975,
+                             "id":  693723,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\r\n  \"success\": true,\r\n  \"message\": \"Model retrieved successfully\",\r\n  \"data\": {\r\n    \"moduleName\": \"MyFirstModule\",\r\n    \"entities\": [\r\n      {\r\n        \"name\": \"SweepEntityA_create_multiple_entities\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntityA_create_multiple_entities\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"SweepEntityA_create_multiple_entities_SweepEntityB_create_multiple_entities\",\r\n            \"parent\": \"SweepEntityB_create_multiple_entities\",\r\n            \"child\": \"SweepEntityA_create_multiple_entities\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"SweepEntityB_create_multiple_entities\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntityB_create_multiple_entities\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"SweepEntityA_create_multiple_entities_SweepEntityB_create_multiple_entities\",\r\n            \"parent\": \"SweepEntityB_create_multiple_entities\",\r\n            \"child\": \"SweepEntityA_create_multiple_entities\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"SweepEntity_create_domain_model_from_schema\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Title\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Customer\",\r\n        \"qualifiedName\": \"MyFirstModule.Customer\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Order\",\r\n        \"qualifiedName\": \"MyFirstModule.Order\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"SweepEntity_copy\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntity_copy\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Customer\",\r\n        \"qualifiedName\": \"MyFirstModule.Customer\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Order\",\r\n        \"qualifiedName\": \"MyFirstModule.Order\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      }\r\n    ]\r\n  },\r\n  \"status\": \"success\"\r\n}"
+                                                                "text":  "{\r\n  \"success\": true,\r\n  \"message\": \"Model retrieved successfully\",\r\n  \"data\": {\r\n    \"moduleName\": \"MyFirstModule\",\r\n    \"entities\": [\r\n      {\r\n        \"name\": \"SweepEntityA_create_multiple_entities\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntityA_create_multiple_entities\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"SweepEntityA_create_multiple_entities_SweepEntityB_create_multiple_entities\",\r\n            \"parent\": \"SweepEntityB_create_multiple_entities\",\r\n            \"child\": \"SweepEntityA_create_multiple_entities\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"FreshAssocTest_2\",\r\n            \"parent\": \"SweepEntityB_create_multiple_entities\",\r\n            \"child\": \"SweepEntityA_create_multiple_entities\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"SweepEntityB_create_multiple_entities\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntityB_create_multiple_entities\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"SweepEntityA_create_multiple_entities_SweepEntityB_create_multiple_entities\",\r\n            \"parent\": \"SweepEntityB_create_multiple_entities\",\r\n            \"child\": \"SweepEntityA_create_multiple_entities\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"FreshAssocTest_2\",\r\n            \"parent\": \"SweepEntityB_create_multiple_entities\",\r\n            \"child\": \"SweepEntityA_create_multiple_entities\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"SweepEntity_create_domain_model_from_schema\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Title\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Customer\",\r\n        \"qualifiedName\": \"MyFirstModule.Customer\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"Customer_Orders\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Order\",\r\n        \"qualifiedName\": \"MyFirstModule.Order\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Number\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"Customer_Orders\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"SweepEntity_copy\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntity_copy\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Customer\",\r\n        \"qualifiedName\": \"MyFirstModule.Customer\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"Customer_Orders\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Order\",\r\n        \"qualifiedName\": \"MyFirstModule.Order\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Number\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"Customer_Orders\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"SweepEntity_copy\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntity_copy\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Customer\",\r\n        \"qualifiedName\": \"MyFirstModule.Customer\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"Customer_Orders\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Order\",\r\n        \"qualifiedName\": \"MyFirstModule.Order\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Number\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"Customer_Orders\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Customer\",\r\n        \"qualifiedName\": \"MyFirstModule.Customer\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"Customer_Orders\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Order\",\r\n        \"qualifiedName\": \"MyFirstModule.Order\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Number\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"Customer_Orders\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Customer\",\r\n        \"qualifiedName\": \"MyFirstModule.Customer\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"Customer_Orders\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Order\",\r\n        \"qualifiedName\": \"MyFirstModule.Order\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Number\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"Customer_Orders\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Customer\",\r\n        \"qualifiedName\": \"MyFirstModule.Customer\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"Customer_Orders\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Order\",\r\n        \"qualifiedName\": \"MyFirstModule.Order\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Number\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"Customer_Orders\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"SweepEntity_create_entity\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntity_create_entity\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [],\r\n        \"associations\": [],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"SweepEntity_copy\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntity_copy\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Customer\",\r\n        \"qualifiedName\": \"MyFirstModule.Customer\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"Customer_Orders\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Order\",\r\n        \"qualifiedName\": \"MyFirstModule.Order\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Number\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          },\r\n          {\r\n            \"name\": \"Customer_Orders\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      }\r\n    ]\r\n  },\r\n  \"status\": \"success\"\r\n}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -509,36 +540,36 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  35,
-        "timestamp":  "2026-05-14T02:48:32.1192342Z"
+        "elapsed_ms":  38,
+        "timestamp":  "2026-05-14T03:54:01.3157727Z"
     },
     {
         "name":  "read_project_info",
         "family":  "DomainModel",
         "phase":  "read",
-        "status":  "FAIL",
+        "status":  "PASS",
         "expected":  "ok",
         "args":  {
 
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  81975,
+                             "id":  158968,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Failed to read project info: The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\"}"
+                                                                "text":  "{\r\n  \"success\": true,\r\n  \"projectName\": \"Test_10_24_13\",\r\n  \"projectDirectory\": \"C:\\\\Projects\\\\Test_10_24_13\",\r\n  \"mendixVersion\": null,\r\n  \"appId\": null,\r\n  \"totals\": {\r\n    \"modules\": 4,\r\n    \"entities\": 21,\r\n    \"associations\": 4,\r\n    \"microflows\": 4,\r\n    \"constants\": 0,\r\n    \"enumerations\": 2\r\n  },\r\n  \"modules\": [\r\n    {\r\n      \"name\": \"ConcordSweep_create_module\",\r\n      \"entityCount\": 0,\r\n      \"associationCount\": 0,\r\n      \"microflowCount\": 0,\r\n      \"constantCount\": 0,\r\n      \"enumerationCount\": 0,\r\n      \"entities\": []\r\n    },\r\n    {\r\n      \"name\": \"Sales\",\r\n      \"entityCount\": 0,\r\n      \"associationCount\": 0,\r\n      \"microflowCount\": 0,\r\n      \"constantCount\": 0,\r\n      \"enumerationCount\": 0,\r\n      \"entities\": []\r\n    },\r\n    {\r\n      \"name\": \"MyFirstModule\",\r\n      \"entityCount\": 21,\r\n      \"associationCount\": 4,\r\n      \"microflowCount\": 4,\r\n      \"constantCount\": 0,\r\n      \"enumerationCount\": 2,\r\n      \"entities\": [\r\n        \"SweepEntityA_create_multiple_entities\",\r\n        \"SweepEntityB_create_multiple_entities\",\r\n        \"SweepEntity_create_domain_model_from_schema\",\r\n        \"Customer\",\r\n        \"Order\",\r\n        \"SweepEntity_copy\",\r\n        \"Customer\",\r\n        \"Order\",\r\n        \"SweepEntity_copy\",\r\n        \"Customer\",\r\n        \"Order\",\r\n        \"Customer\",\r\n        \"Order\",\r\n        \"Customer\",\r\n        \"Order\",\r\n        \"Customer\",\r\n        \"Order\",\r\n        \"SweepEntity_create_entity\",\r\n        \"SweepEntity_copy\",\r\n        \"Customer\",\r\n        \"Order\"\r\n      ]\r\n    },\r\n    {\r\n      \"name\": \"ConcordSweep_rename_module\",\r\n      \"entityCount\": 0,\r\n      \"associationCount\": 0,\r\n      \"microflowCount\": 0,\r\n      \"constantCount\": 0,\r\n      \"enumerationCount\": 0,\r\n      \"entities\": []\r\n    }\r\n  ],\r\n  \"skippedModules\": [\r\n    {\r\n      \"module\": \"Atlas_Core\",\r\n      \"operation\": \"ListEnumerations\",\r\n      \"error\": \"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\r\n      \"note\": \"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"\r\n    },\r\n    {\r\n      \"module\": \"FeedbackModule\",\r\n      \"operation\": \"ListEnumerations\",\r\n      \"error\": \"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\r\n      \"note\": \"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"\r\n    },\r\n    {\r\n      \"module\": \"Administration\",\r\n      \"operation\": \"ListEnumerations\",\r\n      \"error\": \"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\r\n      \"note\": \"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"\r\n    },\r\n    {\r\n      \"module\": \"Atlas_Web_Content\",\r\n      \"operation\": \"ListEnumerations\",\r\n      \"error\": \"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\r\n      \"note\": \"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"\r\n    },\r\n    {\r\n      \"module\": \"NanoflowCommons\",\r\n      \"operation\": \"ListEnumerations\",\r\n      \"error\": \"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\r\n      \"note\": \"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"\r\n    },\r\n    {\r\n      \"module\": \"WebActions\",\r\n      \"operation\": \"ListEnumerations\",\r\n      \"error\": \"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\r\n      \"note\": \"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"\r\n    },\r\n    {\r\n      \"module\": \"DataWidgets\",\r\n      \"operation\": \"ListEnumerations\",\r\n      \"error\": \"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\r\n      \"note\": \"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"\r\n    },\r\n    {\r\n      \"module\": \"FileUploader\",\r\n      \"operation\": \"ListEnumerations\",\r\n      \"error\": \"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\r\n      \"note\": \"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"\r\n    }\r\n  ]\r\n}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Failed to read project info: The given key \u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\u0027 was not present in the dictionary.",
-        "severity":  "CRASH",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  26,
-        "timestamp":  "2026-05-14T02:48:32.1631700Z"
+        "elapsed_ms":  20,
+        "timestamp":  "2026-05-14T03:54:01.3542850Z"
     },
     {
         "name":  "query_model_elements",
@@ -553,12 +584,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  961184,
+                             "id":  356891,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":8,\"returned\":8,\"elements\":[{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_domain_model_from_schema\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
+                                                                "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":10,\"returned\":10,\"elements\":[{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_domain_model_from_schema\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -567,8 +598,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  36,
-        "timestamp":  "2026-05-14T02:48:32.2193325Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:01.3902860Z"
     },
     {
         "name":  "query_associations",
@@ -582,12 +613,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  948176,
+                             "id":  515755,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"count\":1,\"query\":{\"entityName\":\"Customer\",\"secondEntity\":null,\"moduleName\":\"MyFirstModule\",\"direction\":\"both\"},\"associations\":[{\"name\":\"Customer_OrderItems\",\"parent\":\"Order\",\"child\":\"Customer\",\"type\":\"one-to-many\"}]}"
+                                                                "text":  "{\"success\":true,\"count\":2,\"query\":{\"entityName\":\"Customer\",\"secondEntity\":null,\"moduleName\":\"MyFirstModule\",\"direction\":\"both\"},\"associations\":[{\"name\":\"Customer_OrderItems\",\"parent\":\"Order\",\"child\":\"Customer\",\"type\":\"one-to-many\"},{\"name\":\"Customer_Orders\",\"parent\":\"Order\",\"child\":\"Customer\",\"type\":\"one-to-many\"}]}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -596,8 +627,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  33,
-        "timestamp":  "2026-05-14T02:48:32.2768500Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:01.4293071Z"
     },
     {
         "name":  "read_attribute_details",
@@ -611,7 +642,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  432344,
+                             "id":  532990,
                              "result":  {
                                             "content":  [
                                                             {
@@ -625,8 +656,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  36,
-        "timestamp":  "2026-05-14T02:48:32.3379848Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:01.4745415Z"
     },
     {
         "name":  "validate_name",
@@ -639,7 +670,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  894036,
+                             "id":  416052,
                              "result":  {
                                             "content":  [
                                                             {
@@ -653,8 +684,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  29,
-        "timestamp":  "2026-05-14T02:48:32.4002887Z"
+        "elapsed_ms":  20,
+        "timestamp":  "2026-05-14T03:54:01.5105456Z"
     },
     {
         "name":  "list_microflows",
@@ -667,12 +698,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  633501,
+                             "id":  582102,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"microflows\":[{\"name\":\"PopulateUserAttributes\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.PopulateUserAttributes\",\"parameterCount\":1,\"activityCount\":2,\"returnType\":null,\"returnIsList\":false},{\"name\":\"VAL_Feedback\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.VAL_Feedback\",\"parameterCount\":1,\"activityCount\":1,\"returnType\":\"Boolean\",\"returnIsList\":false},{\"name\":\"SUB_Feedback_Sanitize\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.SUB_Feedback_Sanitize\",\"parameterCount\":1,\"activityCount\":10,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ConvertBase64String\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.ConvertBase64String\",\"parameterCount\":1,\"activityCount\":0,\"returnType\":\"String\",\"returnIsList\":false},{\"name\":\"ConvertUUIDToURL\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.ConvertUUIDToURL\",\"parameterCount\":1,\"activityCount\":0,\"returnType\":\"String\",\"returnIsList\":false},{\"name\":\"SUB_Feedback_PostToAppInsights\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.SUB_Feedback_PostToAppInsights\",\"parameterCount\":1,\"activityCount\":0,\"returnType\":\"FeedbackModule.ResponseHelper\",\"returnIsList\":false},{\"name\":\"SUB_Feedback_SendToServer\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.SUB_Feedback_SendToServer\",\"parameterCount\":1,\"activityCount\":3,\"returnType\":\"FeedbackModule.ResponseHelper\",\"returnIsList\":false},{\"name\":\"NewAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.NewAccount\",\"parameterCount\":0,\"activityCount\":2,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ChangePassword\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ChangePassword\",\"parameterCount\":1,\"activityCount\":3,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ShowPasswordForm\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ShowPasswordForm\",\"parameterCount\":1,\"activityCount\":1,\"returnType\":null,\"returnIsList\":false},{\"name\":\"NewWebServiceAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.NewWebServiceAccount\",\"parameterCount\":0,\"activityCount\":3,\"returnType\":null,\"returnIsList\":false},{\"name\":\"SaveNewAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.SaveNewAccount\",\"parameterCount\":1,\"activityCount\":3,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ChangeMyPassword\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ChangeMyPassword\",\"parameterCount\":1,\"activityCount\":4,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ManageMyAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ManageMyAccount\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ShowMyPasswordForm\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ShowMyPasswordForm\",\"parameterCount\":1,\"activityCount\":1,\"returnType\":null,\"returnIsList\":false},{\"name\":\"MyFirstLogic\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.MyFirstLogic\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ACT_ExampleRenamed\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.ACT_ExampleRenamed\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"CAL_Customer_FullName\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.CAL_Customer_FullName\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ACT_Example\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.ACT_Example\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false}]}"
+                                                                "text":  "{\"microflows\":[{\"name\":\"PopulateUserAttributes\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.PopulateUserAttributes\",\"parameterCount\":1,\"activityCount\":2,\"returnType\":null,\"returnIsList\":false},{\"name\":\"VAL_Feedback\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.VAL_Feedback\",\"parameterCount\":1,\"activityCount\":1,\"returnType\":\"Boolean\",\"returnIsList\":false},{\"name\":\"SUB_Feedback_Sanitize\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.SUB_Feedback_Sanitize\",\"parameterCount\":1,\"activityCount\":10,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ConvertBase64String\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.ConvertBase64String\",\"parameterCount\":1,\"activityCount\":0,\"returnType\":\"String\",\"returnIsList\":false},{\"name\":\"ConvertUUIDToURL\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.ConvertUUIDToURL\",\"parameterCount\":1,\"activityCount\":0,\"returnType\":\"String\",\"returnIsList\":false},{\"name\":\"SUB_Feedback_PostToAppInsights\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.SUB_Feedback_PostToAppInsights\",\"parameterCount\":1,\"activityCount\":0,\"returnType\":\"FeedbackModule.ResponseHelper\",\"returnIsList\":false},{\"name\":\"SUB_Feedback_SendToServer\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.SUB_Feedback_SendToServer\",\"parameterCount\":1,\"activityCount\":3,\"returnType\":\"FeedbackModule.ResponseHelper\",\"returnIsList\":false},{\"name\":\"NewAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.NewAccount\",\"parameterCount\":0,\"activityCount\":2,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ChangePassword\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ChangePassword\",\"parameterCount\":1,\"activityCount\":3,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ShowPasswordForm\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ShowPasswordForm\",\"parameterCount\":1,\"activityCount\":1,\"returnType\":null,\"returnIsList\":false},{\"name\":\"NewWebServiceAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.NewWebServiceAccount\",\"parameterCount\":0,\"activityCount\":3,\"returnType\":null,\"returnIsList\":false},{\"name\":\"SaveNewAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.SaveNewAccount\",\"parameterCount\":1,\"activityCount\":3,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ChangeMyPassword\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ChangeMyPassword\",\"parameterCount\":1,\"activityCount\":4,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ManageMyAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ManageMyAccount\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ShowMyPasswordForm\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ShowMyPasswordForm\",\"parameterCount\":1,\"activityCount\":1,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ACT_Example\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.ACT_Example\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ACT_ExampleRenamed\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.ACT_ExampleRenamed\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"CAL_Customer_FullName\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.CAL_Customer_FullName\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"MyFirstLogic\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.MyFirstLogic\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false}]}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -681,8 +712,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  29,
-        "timestamp":  "2026-05-14T02:48:32.4517467Z"
+        "elapsed_ms":  20,
+        "timestamp":  "2026-05-14T03:54:01.5640944Z"
     },
     {
         "name":  "read_microflow_details",
@@ -696,7 +727,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  735405,
+                             "id":  773635,
                              "result":  {
                                             "content":  [
                                                             {
@@ -710,8 +741,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  24,
-        "timestamp":  "2026-05-14T02:48:32.4930859Z"
+        "elapsed_ms":  20,
+        "timestamp":  "2026-05-14T03:54:01.6080895Z"
     },
     {
         "name":  "list_nanoflows",
@@ -724,7 +755,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  122956,
+                             "id":  901934,
                              "result":  {
                                             "content":  [
                                                             {
@@ -738,8 +769,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  84,
-        "timestamp":  "2026-05-14T02:48:32.5926194Z"
+        "elapsed_ms":  31,
+        "timestamp":  "2026-05-14T03:54:01.6546337Z"
     },
     {
         "name":  "read_nanoflow_details",
@@ -753,7 +784,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  305387,
+                             "id":  424224,
                              "result":  {
                                             "content":  [
                                                             {
@@ -767,8 +798,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  26,
-        "timestamp":  "2026-05-14T02:48:32.6597023Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:01.6916383Z"
     },
     {
         "name":  "list_scheduled_events",
@@ -781,7 +812,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  75645,
+                             "id":  356655,
                              "result":  {
                                             "content":  [
                                                             {
@@ -795,8 +826,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  36,
-        "timestamp":  "2026-05-14T02:48:32.7146968Z"
+        "elapsed_ms":  17,
+        "timestamp":  "2026-05-14T03:54:01.7286534Z"
     },
     {
         "name":  "list_pages",
@@ -809,7 +840,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  37302,
+                             "id":  933364,
                              "result":  {
                                             "content":  [
                                                             {
@@ -823,8 +854,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  157,
-        "timestamp":  "2026-05-14T02:48:32.8923637Z"
+        "elapsed_ms":  46,
+        "timestamp":  "2026-05-14T03:54:01.7925679Z"
     },
     {
         "name":  "read_page_details",
@@ -838,7 +869,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  320759,
+                             "id":  455866,
                              "result":  {
                                             "content":  [
                                                             {
@@ -852,8 +883,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  28,
-        "timestamp":  "2026-05-14T02:48:32.9388755Z"
+        "elapsed_ms":  17,
+        "timestamp":  "2026-05-14T03:54:01.8297056Z"
     },
     {
         "name":  "list_workflows",
@@ -866,7 +897,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  700344,
+                             "id":  171663,
                              "result":  {
                                             "content":  [
                                                             {
@@ -880,8 +911,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  37,
-        "timestamp":  "2026-05-14T02:48:32.9946406Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:01.8712479Z"
     },
     {
         "name":  "read_workflow_details",
@@ -895,7 +926,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  835468,
+                             "id":  178675,
                              "result":  {
                                             "content":  [
                                                             {
@@ -910,7 +941,7 @@
         "severity":  null,
         "side_effect_check":  null,
         "elapsed_ms":  20,
-        "timestamp":  "2026-05-14T02:48:33.0364633Z"
+        "timestamp":  "2026-05-14T03:54:01.9102473Z"
     },
     {
         "name":  "list_constants",
@@ -923,7 +954,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  388388,
+                             "id":  822923,
                              "result":  {
                                             "content":  [
                                                             {
@@ -937,8 +968,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  42,
-        "timestamp":  "2026-05-14T02:48:33.0994789Z"
+        "elapsed_ms":  25,
+        "timestamp":  "2026-05-14T03:54:01.9588955Z"
     },
     {
         "name":  "list_enumerations",
@@ -951,12 +982,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  757632,
+                             "id":  836959,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"count\":1,\"enumerations\":[{\"name\":\"SweepEnum_create_enumeration\",\"qualifiedName\":\"MyFirstModule.SweepEnum_create_enumeration\",\"module\":\"MyFirstModule\",\"note\":\"Enumeration values not surfaced by IDomainModelHost; use read_domain_model for value detail\"}],\"skippedModules\":[{\"module\":\"Atlas_Core\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"FeedbackModule\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"Administration\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"Atlas_Web_Content\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"NanoflowCommons\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"WebActions\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"DataWidgets\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"FileUploader\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"}]}"
+                                                                "text":  "{\"success\":true,\"count\":2,\"enumerations\":[{\"name\":\"SweepEnum_create_enumeration\",\"qualifiedName\":\"MyFirstModule.SweepEnum_create_enumeration\",\"module\":\"MyFirstModule\",\"note\":\"Enumeration values not surfaced by IDomainModelHost; use read_domain_model for value detail\"},{\"name\":\"TestCanCreate12\",\"qualifiedName\":\"MyFirstModule.TestCanCreate12\",\"module\":\"MyFirstModule\",\"note\":\"Enumeration values not surfaced by IDomainModelHost; use read_domain_model for value detail\"}],\"skippedModules\":[{\"module\":\"Atlas_Core\",\"operation\":\"ListEnumerations\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"FeedbackModule\",\"operation\":\"ListEnumerations\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"Administration\",\"operation\":\"ListEnumerations\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"Atlas_Web_Content\",\"operation\":\"ListEnumerations\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"NanoflowCommons\",\"operation\":\"ListEnumerations\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"WebActions\",\"operation\":\"ListEnumerations\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"DataWidgets\",\"operation\":\"ListEnumerations\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"FileUploader\",\"operation\":\"ListEnumerations\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"}]}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -965,8 +996,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  39,
-        "timestamp":  "2026-05-14T02:48:33.1628596Z"
+        "elapsed_ms":  20,
+        "timestamp":  "2026-05-14T03:54:01.9978953Z"
     },
     {
         "name":  "list_rules",
@@ -979,7 +1010,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  974159,
+                             "id":  816392,
                              "result":  {
                                             "content":  [
                                                             {
@@ -993,8 +1024,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  38,
-        "timestamp":  "2026-05-14T02:48:33.2305293Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:02.0354358Z"
     },
     {
         "name":  "read_security_info",
@@ -1007,7 +1038,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  145612,
+                             "id":  750588,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1021,8 +1052,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  30,
-        "timestamp":  "2026-05-14T02:48:33.2823381Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:02.0844368Z"
     },
     {
         "name":  "read_entity_access_rules",
@@ -1035,7 +1066,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  87917,
+                             "id":  859037,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1049,8 +1080,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  22,
-        "timestamp":  "2026-05-14T02:48:33.3263529Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:02.1234508Z"
     },
     {
         "name":  "read_microflow_security",
@@ -1063,7 +1094,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  164115,
+                             "id":  747980,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1077,8 +1108,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  23,
-        "timestamp":  "2026-05-14T02:48:33.3748536Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:02.1689639Z"
     },
     {
         "name":  "audit_security",
@@ -1091,7 +1122,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  574515,
+                             "id":  115119,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1105,8 +1136,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  31,
-        "timestamp":  "2026-05-14T02:48:33.4288571Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:02.2169706Z"
     },
     {
         "name":  "read_runtime_settings",
@@ -1119,7 +1150,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  670347,
+                             "id":  274039,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1133,8 +1164,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  33,
-        "timestamp":  "2026-05-14T02:48:33.5003840Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:02.2602338Z"
     },
     {
         "name":  "read_configurations",
@@ -1147,7 +1178,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  482541,
+                             "id":  974213,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1161,8 +1192,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  29,
-        "timestamp":  "2026-05-14T02:48:33.5647054Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:02.3012401Z"
     },
     {
         "name":  "list_rest_services",
@@ -1175,7 +1206,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  878590,
+                             "id":  808834,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1189,8 +1220,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  24,
-        "timestamp":  "2026-05-14T02:48:33.6097098Z"
+        "elapsed_ms":  17,
+        "timestamp":  "2026-05-14T03:54:02.3391565Z"
     },
     {
         "name":  "read_version_control",
@@ -1203,7 +1234,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  6195,
+                             "id":  761586,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1217,8 +1248,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  30,
-        "timestamp":  "2026-05-14T02:48:33.6662469Z"
+        "elapsed_ms":  20,
+        "timestamp":  "2026-05-14T03:54:02.3820800Z"
     },
     {
         "name":  "get_app_status",
@@ -1231,7 +1262,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  633291,
+                             "id":  979105,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1245,8 +1276,8 @@
         "error_summary":  "{\"error\":\"Pending Task 15 \\u002B Task 1 spike \\u2014 10.x IApp surface verification\"}",
         "severity":  "CRASH",
         "side_effect_check":  null,
-        "elapsed_ms":  32,
-        "timestamp":  "2026-05-14T02:48:33.7242619Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:02.4222670Z"
     },
     {
         "name":  "get_active_run_configuration",
@@ -1259,7 +1290,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  501346,
+                             "id":  693566,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1273,21 +1304,21 @@
         "error_summary":  "{\"error\":\"Pending Task 15 \\u2014 10.x ILocalRunConfigurationsService surface verification\"}",
         "severity":  "CRASH",
         "side_effect_check":  null,
-        "elapsed_ms":  32,
-        "timestamp":  "2026-05-14T02:48:33.7835697Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:02.4658439Z"
     },
     {
         "name":  "create_module",
         "family":  "DomainModel",
         "phase":  "mutate",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
                      "module_name":  "ConcordSweep_create_module"
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  333123,
+                             "id":  436443,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1298,11 +1329,11 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Module \u0027ConcordSweep_create_module\u0027 already exists",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  26,
-        "timestamp":  "2026-05-14T02:48:33.8437027Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:02.5159298Z"
     },
     {
         "name":  "create_entity",
@@ -1316,7 +1347,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  203243,
+                             "id":  852130,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1338,12 +1369,12 @@
                                            },
                                   "raw_response":  {
                                                        "jsonrpc":  "2.0",
-                                                       "id":  388647,
+                                                       "id":  458027,
                                                        "result":  {
                                                                       "content":  [
                                                                                       {
                                                                                           "type":  "text",
-                                                                                          "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":9,\"returned\":9,\"elements\":[{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_domain_model_from_schema\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_entity\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_entity\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
+                                                                                          "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":22,\"returned\":22,\"elements\":[{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_domain_model_from_schema\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_entity\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_entity\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_entity\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_entity\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
                                                                                       }
                                                                                   ],
                                                                       "isError":  false
@@ -1351,8 +1382,8 @@
                                                    },
                                   "status":  "ran"
                               },
-        "elapsed_ms":  151,
-        "timestamp":  "2026-05-14T02:48:34.0203227Z"
+        "elapsed_ms":  100,
+        "timestamp":  "2026-05-14T03:54:02.6445504Z"
     },
     {
         "name":  "create_multiple_entities",
@@ -1373,7 +1404,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  218258,
+                             "id":  581487,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1387,8 +1418,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  150,
-        "timestamp":  "2026-05-14T02:48:34.1934195Z"
+        "elapsed_ms":  82,
+        "timestamp":  "2026-05-14T03:54:02.7529909Z"
     },
     {
         "name":  "create_domain_model_from_schema",
@@ -1414,7 +1445,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  833030,
+                             "id":  221304,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1428,8 +1459,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  69,
-        "timestamp":  "2026-05-14T02:48:34.2889343Z"
+        "elapsed_ms":  101,
+        "timestamp":  "2026-05-14T03:54:02.8805452Z"
     },
     {
         "name":  "add_attribute",
@@ -1445,7 +1476,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  377680,
+                             "id":  145881,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1459,8 +1490,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  143,
-        "timestamp":  "2026-05-14T02:48:34.4653081Z"
+        "elapsed_ms":  67,
+        "timestamp":  "2026-05-14T03:54:02.9723437Z"
     },
     {
         "name":  "update_attribute",
@@ -1477,7 +1508,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  538635,
+                             "id":  291923,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1491,15 +1522,15 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  133,
-        "timestamp":  "2026-05-14T02:48:34.6250245Z"
+        "elapsed_ms":  54,
+        "timestamp":  "2026-05-14T03:54:03.0499271Z"
     },
     {
         "name":  "rename_attribute",
         "family":  "DomainModel",
         "phase":  "mutate",
         "status":  "PASS",
-        "expected":  "ok",
+        "expected":  "either",
         "args":  {
                      "entity_name":  "SweepEntity_create_entity",
                      "attribute_name":  "SweepAttr_add_attribute",
@@ -1508,7 +1539,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  438328,
+                             "id":  125640,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1522,8 +1553,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  575,
-        "timestamp":  "2026-05-14T02:48:35.2245940Z"
+        "elapsed_ms":  179,
+        "timestamp":  "2026-05-14T03:54:03.2537256Z"
     },
     {
         "name":  "set_calculated_attribute",
@@ -1538,7 +1569,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  363838,
+                             "id":  795373,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1552,8 +1583,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  46,
-        "timestamp":  "2026-05-14T02:48:35.3061274Z"
+        "elapsed_ms":  20,
+        "timestamp":  "2026-05-14T03:54:03.2977291Z"
     },
     {
         "name":  "configure_system_attributes",
@@ -1569,7 +1600,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  323116,
+                             "id":  360221,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1583,8 +1614,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  127,
-        "timestamp":  "2026-05-14T02:48:35.4684970Z"
+        "elapsed_ms":  86,
+        "timestamp":  "2026-05-14T03:54:03.4082555Z"
     },
     {
         "name":  "add_event_handler",
@@ -1600,7 +1631,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  709735,
+                             "id":  33467,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1614,8 +1645,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  47,
-        "timestamp":  "2026-05-14T02:48:35.5457479Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:03.4617932Z"
     },
     {
         "name":  "set_documentation",
@@ -1631,7 +1662,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  852120,
+                             "id":  897637,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1645,8 +1676,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  170,
-        "timestamp":  "2026-05-14T02:48:35.7569881Z"
+        "elapsed_ms":  88,
+        "timestamp":  "2026-05-14T03:54:03.5733140Z"
     },
     {
         "name":  "rename_entity",
@@ -1661,7 +1692,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  522004,
+                             "id":  206400,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1683,12 +1714,12 @@
                                            },
                                   "raw_response":  {
                                                        "jsonrpc":  "2.0",
-                                                       "id":  42157,
+                                                       "id":  492769,
                                                        "result":  {
                                                                       "content":  [
                                                                                       {
                                                                                           "type":  "text",
-                                                                                          "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":9,\"returned\":9,\"elements\":[{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_domain_model_from_schema\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityRenamed_rename_entity\",\"qualifiedName\":\"MyFirstModule.SweepEntityRenamed_rename_entity\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
+                                                                                          "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":22,\"returned\":22,\"elements\":[{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_domain_model_from_schema\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityRenamed_rename_entity\",\"qualifiedName\":\"MyFirstModule.SweepEntityRenamed_rename_entity\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_entity\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_entity\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
                                                                                       }
                                                                                   ],
                                                                       "isError":  false
@@ -1696,8 +1727,8 @@
                                                    },
                                   "status":  "ran"
                               },
-        "elapsed_ms":  456,
-        "timestamp":  "2026-05-14T02:48:36.2376305Z"
+        "elapsed_ms":  157,
+        "timestamp":  "2026-05-14T03:54:03.7550540Z"
     },
     {
         "name":  "set_entity_generalization",
@@ -1712,7 +1743,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  185005,
+                             "id":  967948,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1726,8 +1757,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  28,
-        "timestamp":  "2026-05-14T02:48:36.2941643Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:03.8001460Z"
     },
     {
         "name":  "remove_entity_generalization",
@@ -1741,7 +1772,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  939652,
+                             "id":  754204,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1755,8 +1786,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  22,
-        "timestamp":  "2026-05-14T02:48:36.3419479Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:03.8436958Z"
     },
     {
         "name":  "copy_model_element",
@@ -1772,7 +1803,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  785361,
+                             "id":  838121,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1786,8 +1817,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  169,
-        "timestamp":  "2026-05-14T02:48:36.5381326Z"
+        "elapsed_ms":  80,
+        "timestamp":  "2026-05-14T03:54:03.9515998Z"
     },
     {
         "name":  "create_association",
@@ -1803,12 +1834,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  143517,
+                             "id":  65148,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"message\":\"Association \\u0027Customer_Orders\\u0027 created successfully\",\"association\":{\"name\":\"Customer_Orders\",\"parent\":\"Customer\",\"child\":\"Order\",\"type\":\"one-to-many\",\"parentDeleteBehavior\":\"delete_me_but_keep_references\",\"childDeleteBehavior\":\"delete_me_but_keep_references\",\"owner\":\"Default\"}}"
+                                                                "text":  "{\"error\":\"Failed to create association: Name is not valid or is not unique\"}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -1817,15 +1848,15 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  547,
-        "timestamp":  "2026-05-14T02:48:37.1144519Z"
+        "elapsed_ms":  21,
+        "timestamp":  "2026-05-14T03:54:03.9975204Z"
     },
     {
         "name":  "create_multiple_associations",
         "family":  "DomainModel",
         "phase":  "mutate",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
                      "associations":  [
                                           {
@@ -1838,7 +1869,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  413994,
+                             "id":  313290,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1849,11 +1880,11 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Failed to create associations: Name is not valid or is not unique",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  51,
-        "timestamp":  "2026-05-14T02:48:37.2071261Z"
+        "elapsed_ms":  25,
+        "timestamp":  "2026-05-14T03:54:04.0495776Z"
     },
     {
         "name":  "update_association",
@@ -1868,7 +1899,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  746200,
+                             "id":  407134,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1882,8 +1913,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  134,
-        "timestamp":  "2026-05-14T02:48:37.3712271Z"
+        "elapsed_ms":  34,
+        "timestamp":  "2026-05-14T03:54:04.1093437Z"
     },
     {
         "name":  "rename_association",
@@ -1898,7 +1929,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  41787,
+                             "id":  24274,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1912,8 +1943,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  60,
-        "timestamp":  "2026-05-14T02:48:37.4699269Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:04.1528545Z"
     },
     {
         "name":  "arrange_domain_model",
@@ -1926,7 +1957,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  371068,
+                             "id":  674269,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1940,8 +1971,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  130,
-        "timestamp":  "2026-05-14T02:48:37.6305344Z"
+        "elapsed_ms":  85,
+        "timestamp":  "2026-05-14T03:54:04.2665713Z"
     },
     {
         "name":  "manage_folders",
@@ -1955,7 +1986,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  303969,
+                             "id":  128100,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1969,8 +2000,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  26,
-        "timestamp":  "2026-05-14T02:48:37.6818359Z"
+        "elapsed_ms":  20,
+        "timestamp":  "2026-05-14T03:54:04.3125525Z"
     },
     {
         "name":  "rename_document",
@@ -1986,7 +2017,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  425358,
+                             "id":  382373,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2000,15 +2031,15 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  36,
-        "timestamp":  "2026-05-14T02:48:37.7453570Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:04.3575200Z"
     },
     {
         "name":  "create_enumeration",
         "family":  "ConstantsEnums",
         "phase":  "mutate",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
                      "name":  "SweepEnum_create_enumeration",
                      "module_name":  "MyFirstModule",
@@ -2020,7 +2051,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  353258,
+                             "id":  489372,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2031,17 +2062,17 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Failed to create enumeration: Enumeration \u0027SweepEnum_create_enumeration\u0027 already exists in module \u0027MyFirstModule\u0027.",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  30,
-        "timestamp":  "2026-05-14T02:48:37.8044242Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:04.4025857Z"
     },
     {
         "name":  "update_enumeration",
         "family":  "ConstantsEnums",
         "phase":  "mutate",
-        "status":  "FAIL",
+        "status":  "PASS",
         "expected":  "ok",
         "args":  {
                      "enumeration_name":  "SweepEnum_create_enumeration",
@@ -2052,29 +2083,29 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  673545,
+                             "id":  375703,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\"}"
+                                                                "text":  "{\"success\":true,\"message\":\"Enumeration \\u0027SweepEnum_create_enumeration\\u0027 updated\",\"enumeration\":\"SweepEnum_create_enumeration\",\"changes\":[\"added \\u0027Cancelled\\u0027\"]}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "The given key \u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\u0027 was not present in the dictionary.",
-        "severity":  "CRASH",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  24,
-        "timestamp":  "2026-05-14T02:48:37.8567993Z"
+        "elapsed_ms":  23,
+        "timestamp":  "2026-05-14T03:54:04.4522560Z"
     },
     {
         "name":  "rename_enumeration_value",
         "family":  "ConstantsEnums",
         "phase":  "mutate",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
                      "enumeration_name":  "SweepEnum_create_enumeration",
                      "value_name":  "Draft",
@@ -2083,7 +2114,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  247001,
+                             "id":  887887,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2094,11 +2125,11 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Value \u0027Draft\u0027 not found in enumeration \u0027SweepEnum_create_enumeration\u0027.",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  35,
-        "timestamp":  "2026-05-14T02:48:37.9218041Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:04.4973291Z"
     },
     {
         "name":  "create_constant",
@@ -2111,7 +2142,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  720504,
+                             "id":  864549,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2125,8 +2156,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  26,
-        "timestamp":  "2026-05-14T02:48:37.9833264Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:04.5525723Z"
     },
     {
         "name":  "update_constant",
@@ -2139,7 +2170,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  267061,
+                             "id":  939482,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2153,8 +2184,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  29,
-        "timestamp":  "2026-05-14T02:48:38.0452141Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:04.5985421Z"
     },
     {
         "name":  "configure_constant_values",
@@ -2167,7 +2198,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  282273,
+                             "id":  704664,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2181,8 +2212,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  39,
-        "timestamp":  "2026-05-14T02:48:38.1353636Z"
+        "elapsed_ms":  17,
+        "timestamp":  "2026-05-14T03:54:04.6459832Z"
     },
     {
         "name":  "create_microflow",
@@ -2196,12 +2227,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  370632,
+                             "id":  974418,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"message\":\"Microflow \\u0027SweepMf_create_microflow\\u0027 created successfully in module \\u0027MyFirstModule\\u0027.\",\"document_id\":\"e5a1d4a3-4893-4f9a-9bf6-a83ceee33342\",\"qualified_name\":\"MyFirstModule.SweepMf_create_microflow\",\"microflow\":{\"name\":\"SweepMf_create_microflow\",\"qualifiedName\":\"MyFirstModule.SweepMf_create_microflow\",\"module\":\"MyFirstModule\",\"returnType\":\"void\",\"parameterCount\":0}}"
+                                                                "text":  "{\"success\":true,\"message\":\"Microflow \\u0027SweepMf_create_microflow\\u0027 created successfully in module \\u0027MyFirstModule\\u0027.\",\"document_id\":\"0c890ff8-0f0d-41b3-a992-391f8a3ad9b0\",\"qualified_name\":\"MyFirstModule.SweepMf_create_microflow\",\"microflow\":{\"name\":\"SweepMf_create_microflow\",\"qualifiedName\":\"MyFirstModule.SweepMf_create_microflow\",\"module\":\"MyFirstModule\",\"returnType\":\"void\",\"parameterCount\":0}}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -2216,12 +2247,12 @@
                                            },
                                   "raw_response":  {
                                                        "jsonrpc":  "2.0",
-                                                       "id":  693334,
+                                                       "id":  953986,
                                                        "result":  {
                                                                       "content":  [
                                                                                       {
                                                                                           "type":  "text",
-                                                                                          "text":  "{\"microflows\":[{\"name\":\"MyFirstLogic\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.MyFirstLogic\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ACT_ExampleRenamed\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.ACT_ExampleRenamed\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"CAL_Customer_FullName\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.CAL_Customer_FullName\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ACT_Example\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.ACT_Example\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"SweepMf_create_microflow\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.SweepMf_create_microflow\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false}]}"
+                                                                                          "text":  "{\"microflows\":[{\"name\":\"ACT_Example\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.ACT_Example\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ACT_ExampleRenamed\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.ACT_ExampleRenamed\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"CAL_Customer_FullName\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.CAL_Customer_FullName\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"MyFirstLogic\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.MyFirstLogic\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"SweepMf_create_microflow\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.SweepMf_create_microflow\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false}]}"
                                                                                       }
                                                                                   ],
                                                                       "isError":  false
@@ -2229,8 +2260,8 @@
                                                    },
                                   "status":  "ran"
                               },
-        "elapsed_ms":  738,
-        "timestamp":  "2026-05-14T02:48:38.9114360Z"
+        "elapsed_ms":  200,
+        "timestamp":  "2026-05-14T03:54:04.8772427Z"
     },
     {
         "name":  "update_microflow",
@@ -2245,7 +2276,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  668672,
+                             "id":  71482,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2259,41 +2290,42 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  129,
-        "timestamp":  "2026-05-14T02:48:39.0700117Z"
+        "elapsed_ms":  73,
+        "timestamp":  "2026-05-14T03:54:04.9790808Z"
     },
     {
         "name":  "create_microflow_activity",
         "family":  "Microflows",
         "phase":  "mutate",
-        "status":  "FAIL",
+        "status":  "PASS",
         "expected":  "ok",
         "args":  {
                      "microflow_name":  "SweepMf_create_microflow",
                      "module_name":  "MyFirstModule",
-                     "activity_type":  "log",
+                     "activity_type":  "create_object",
                      "activity_config":  {
-                                             "message":  "\u0027SweepTest log entry\u0027"
+                                             "entity":  "MyFirstModule.Customer",
+                                             "output_variable":  "newCustomer"
                                          }
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  376359,
+                             "id":  298123,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Failed to create activity of type \\u0027log\\u0027.\"}"
+                                                                "text":  "{\"success\":true,\"message\":\"Activity of type \\u0027create_object\\u0027 added to microflow \\u0027SweepMf_create_microflow\\u0027 successfully.\",\"position\":1,\"microflow\":\"MyFirstModule.SweepMf_create_microflow\",\"activity\":{\"type\":\"create_object\",\"microflow\":\"SweepMf_create_microflow\",\"module\":\"MyFirstModule\",\"insertPosition\":1}}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Failed to create activity of type \u0027log\u0027.",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  43,
-        "timestamp":  "2026-05-14T02:48:39.1422740Z"
+        "elapsed_ms":  61,
+        "timestamp":  "2026-05-14T03:54:05.0678493Z"
     },
     {
         "name":  "create_microflow_activities_sequence",
@@ -2315,7 +2347,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  363564,
+                             "id":  631556,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2329,15 +2361,15 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  50,
-        "timestamp":  "2026-05-14T02:48:39.2337990Z"
+        "elapsed_ms":  29,
+        "timestamp":  "2026-05-14T03:54:05.1257645Z"
     },
     {
         "name":  "modify_microflow_activity",
         "family":  "Microflows",
         "phase":  "mutate",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
                      "microflow_name":  "SweepMf_create_microflow",
                      "module_name":  "MyFirstModule",
@@ -2346,56 +2378,57 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  103576,
+                             "id":  419690,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Invalid position 1. Microflow has 0 action activities (1-0)\"}"
+                                                                "text":  "{\"success\":true,\"microflow\":\"MyFirstModule.SweepMf_create_microflow\",\"position\":1,\"changes\":[\"caption\"]}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Invalid position 1. Microflow has 0 action activities (1-0)",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  24,
-        "timestamp":  "2026-05-14T02:48:39.2895847Z"
+        "elapsed_ms":  72,
+        "timestamp":  "2026-05-14T03:54:05.2356533Z"
     },
     {
         "name":  "insert_before_activity",
         "family":  "Microflows",
         "phase":  "mutate",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
                      "microflow_name":  "SweepMf_create_microflow",
                      "module_name":  "MyFirstModule",
                      "before_position":  1,
                      "activity":  {
-                                      "type":  "log",
-                                      "message":  "\u0027inserted before\u0027"
+                                      "type":  "create_object",
+                                      "entity":  "MyFirstModule.Customer",
+                                      "output_variable":  "insertedCustomer"
                                   }
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  944189,
+                             "id":  780043,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Invalid before_position 1. Microflow has 0 action activities (1-0)\"}"
+                                                                "text":  "{\"success\":true,\"microflow\":\"MyFirstModule.SweepMf_create_microflow\",\"insertedBefore\":1,\"position\":1,\"activityType\":\"create_object\",\"message\":\"Inserted create_object activity before position 1\"}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Invalid before_position 1. Microflow has 0 action activities (1-0)",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  30,
-        "timestamp":  "2026-05-14T02:48:39.3576165Z"
+        "elapsed_ms":  67,
+        "timestamp":  "2026-05-14T03:54:05.3331957Z"
     },
     {
         "name":  "set_microflow_url",
@@ -2410,7 +2443,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  36756,
+                             "id":  45366,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2424,15 +2457,15 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  140,
-        "timestamp":  "2026-05-14T02:48:39.5276494Z"
+        "elapsed_ms":  77,
+        "timestamp":  "2026-05-14T03:54:05.4414353Z"
     },
     {
         "name":  "generate_overview_pages",
         "family":  "Pages",
         "phase":  "mutate",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
                      "module_name":  "MyFirstModule",
                      "entity_names":  [
@@ -2442,7 +2475,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  535902,
+                             "id":  604279,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2453,40 +2486,40 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "One or more of the passed entities does not have any attributes (Parameter \u0027entities\u0027)",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  31,
-        "timestamp":  "2026-05-14T02:48:39.6042019Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:54:05.4924358Z"
     },
     {
         "name":  "set_runtime_settings",
         "family":  "ProjectSettings",
         "phase":  "mutate",
-        "status":  "FAIL",
+        "status":  "PASS",
         "expected":  "ok",
         "args":  {
-                     "key":  "com.mendix.core.SessionTimeout",
-                     "value":  "3600"
+                     "key":  "AfterStartupMicroflow",
+                     "value":  ""
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  189876,
+                             "id":  118323,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":false,\"key\":\"com.mendix.core.SessionTimeout\",\"value\":\"3600\"}"
+                                                                "text":  "{\"success\":true,\"key\":\"AfterStartupMicroflow\",\"value\":\"\"}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "success:false",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  35,
-        "timestamp":  "2026-05-14T02:48:39.6790168Z"
+        "elapsed_ms":  24,
+        "timestamp":  "2026-05-14T03:54:05.5477572Z"
     },
     {
         "name":  "set_configuration",
@@ -2499,7 +2532,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  154477,
+                             "id":  681228,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2513,8 +2546,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  41,
-        "timestamp":  "2026-05-14T02:48:39.7542517Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:05.5947637Z"
     },
     {
         "name":  "sync_filesystem",
@@ -2527,7 +2560,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  920377,
+                             "id":  537581,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2541,8 +2574,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  36,
-        "timestamp":  "2026-05-14T02:48:39.8432563Z"
+        "elapsed_ms":  20,
+        "timestamp":  "2026-05-14T03:54:05.6462849Z"
     },
     {
         "name":  "manage_navigation",
@@ -2562,7 +2595,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  47438,
+                             "id":  941113,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2576,22 +2609,22 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  30,
-        "timestamp":  "2026-05-14T02:48:39.9117755Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:05.7052921Z"
     },
     {
         "name":  "rename_module",
         "family":  "DomainModel",
         "phase":  "mutate",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
                      "module_name":  "ConcordSweep_create_module",
                      "new_name":  "ConcordSweep_rename_module"
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  363022,
+                             "id":  213974,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2602,11 +2635,11 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Name is not valid or is not unique",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  30,
-        "timestamp":  "2026-05-14T02:48:39.9723633Z"
+        "elapsed_ms":  18,
+        "timestamp":  "2026-05-14T03:54:05.7557367Z"
     },
     {
         "name":  "delete_document",
@@ -2620,7 +2653,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  575580,
+                             "id":  114173,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2634,8 +2667,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  667,
-        "timestamp":  "2026-05-14T02:48:40.6713114Z"
+        "elapsed_ms":  182,
+        "timestamp":  "2026-05-14T03:54:05.9748581Z"
     },
     {
         "name":  "exclude_document",
@@ -2650,7 +2683,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  143336,
+                             "id":  786782,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2664,8 +2697,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  36,
-        "timestamp":  "2026-05-14T02:48:40.7611302Z"
+        "elapsed_ms":  26,
+        "timestamp":  "2026-05-14T03:54:06.0329546Z"
     },
     {
         "name":  "delete_model_element",
@@ -2680,7 +2713,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  275959,
+                             "id":  644106,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2702,12 +2735,12 @@
                                            },
                                   "raw_response":  {
                                                        "jsonrpc":  "2.0",
-                                                       "id":  526917,
+                                                       "id":  20000,
                                                        "result":  {
                                                                       "content":  [
                                                                                       {
                                                                                           "type":  "text",
-                                                                                          "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":9,\"returned\":9,\"elements\":[{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_domain_model_from_schema\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
+                                                                                          "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":22,\"returned\":22,\"elements\":[{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_domain_model_from_schema\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_entity\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_entity\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
                                                                                       }
                                                                                   ],
                                                                       "isError":  false
@@ -2715,8 +2748,8 @@
                                                    },
                                   "status":  "ran"
                               },
-        "elapsed_ms":  187,
-        "timestamp":  "2026-05-14T02:48:40.9892301Z"
+        "elapsed_ms":  115,
+        "timestamp":  "2026-05-14T03:54:06.1789253Z"
     },
     {
         "name":  "save_all",
@@ -2729,7 +2762,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  819723,
+                             "id":  332280,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2743,8 +2776,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  35,
-        "timestamp":  "2026-05-14T02:48:41.0810009Z"
+        "elapsed_ms":  22,
+        "timestamp":  "2026-05-14T03:54:06.2339314Z"
     },
     {
         "name":  "run_app",
@@ -2759,8 +2792,8 @@
         "error_summary":  "The request was aborted: The operation has timed out.",
         "severity":  "TIMEOUT",
         "side_effect_check":  null,
-        "elapsed_ms":  30078,
-        "timestamp":  "2026-05-14T02:49:11.1947697Z"
+        "elapsed_ms":  30081,
+        "timestamp":  "2026-05-14T03:54:36.3566318Z"
     },
     {
         "name":  "stop_app",
@@ -2773,7 +2806,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  722352,
+                             "id":  806065,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2787,8 +2820,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  708,
-        "timestamp":  "2026-05-14T02:49:42.1706221Z"
+        "elapsed_ms":  1391,
+        "timestamp":  "2026-05-14T03:55:07.8126016Z"
     },
     {
         "name":  "refresh_project",
@@ -2801,7 +2834,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  239525,
+                             "id":  382788,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2815,7 +2848,7 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  33,
-        "timestamp":  "2026-05-14T02:49:42.2572500Z"
+        "elapsed_ms":  19,
+        "timestamp":  "2026-05-14T03:55:07.8811413Z"
     }
 ]

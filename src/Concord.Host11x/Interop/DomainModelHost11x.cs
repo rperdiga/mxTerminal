@@ -1129,7 +1129,22 @@ public sealed class DomainModelHost11x : IDomainModelHost
 
     private IEnumeration? FindEnumerationByRef(EnumerationRef enumRef)
     {
-        foreach (var module in _model.Root.GetModules())
+        // Phase 2/3 sweep fix: parse module from QualifiedName and search only that module's
+        // enumerations, mirroring FindEnumerationByQualifiedName. The previous implementation
+        // iterated _model.Root.GetModules() unconditionally, which throws ModuleProxy on system
+        // modules under certain Studio Pro states. Fall back to broad iteration only when the
+        // qualified name has no dot (preserves backwards-compat for callers passing simple names).
+        string? moduleNamePart = null;
+        if (!string.IsNullOrEmpty(enumRef.QualifiedName) && enumRef.QualifiedName.Contains('.'))
+        {
+            moduleNamePart = enumRef.QualifiedName.Split('.', 2)[0];
+        }
+
+        var modules = moduleNamePart != null
+            ? _model.Root.GetModules().Where(m => string.Equals(m.Name, moduleNamePart, StringComparison.OrdinalIgnoreCase))
+            : _model.Root.GetModules();
+
+        foreach (var module in modules)
         {
             var enumDoc = _model.Root.GetModuleDocuments<IEnumeration>(module)
                 .FirstOrDefault(e => Guid.TryParse(e.Id, out var g) && g == enumRef.Id
