@@ -427,7 +427,9 @@ try {
         Write-Host ("{0} ({1} ms){2}" -f $r.status, $r.elapsed_ms, $(if ($r.severity) { " [$($r.severity)]" } else { "" })) -ForegroundColor $color
         $results += $r
         Write-FindingsJson -Results $results -Path $jsonPath
-        Write-FindingsMarkdown -Results $results -Path $mdPath
+        # Per-entry MD writes removed: external file-watchers (VS Code) lock
+        # findings.md mid-run, crashing the sweep. MD is rendered once in the
+        # finally block from the authoritative findings.json.
 
         # Lifecycle wait: after run_app succeeds, poll get_app_status until
         # the app reports running, capped at 30s. Keeps the stop_app call
