@@ -1,0 +1,17 @@
+// tests/concord-mcp-sweep/matrix.jsonc
+// One entry per Concord MCP tool. See arg-shapes.md for the source-of-truth
+// for each tool's argument shape, and the design spec at
+// docs/superpowers/specs/2026-05-13-concord-mcp-tool-sweep-design.md for
+// the classification rules.
+//
+// Entry schema:
+//   name:     server-side tool name (must match tools/list)
+//   family:   for findings.md grouping (DomainModel, Microflows, etc.)
+//   phase:    "read" | "mutate" | "lifecycle"  — controls execution order
+//   args:     exact JSON object sent as params.arguments
+//   expected: "ok" | "error" | "either"
+//   verify:   (optional) follow-up read on risky mutators; result lands
+//             in side_effect_check sub-record of findings.json
+//   notes:    free-text intent (especially for known-bug entries)
+[
+]

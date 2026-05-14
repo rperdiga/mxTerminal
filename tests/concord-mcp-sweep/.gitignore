@@ -1,0 +1,5 @@
+# Sweep output artifacts. Re-generated each run; commit deliberately, not
+# automatically (see plan Task 9).
+findings.json
+findings.md
+findings.json.tmp
