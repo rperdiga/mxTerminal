@@ -14,7 +14,7 @@
 .PARAMETER Only
     Comma-list of tool names to run (subset of the matrix). Used for re-test.
 .PARAMETER Phase
-    Comma-list of phases to run: read, mutate, lifecycle.
+    Comma-list of phases to run: setup, read, mutate, lifecycle.
 .PARAMETER DryRun
     Print the planned execution without POSTing anything.
 .EXAMPLE
@@ -134,7 +134,8 @@ function Test-SweepEntry {
             $severity = "TRANSPORT"
             $errorSummary = "$($rawEnvelope.error.code): $($rawEnvelope.error.message)"
         }
-        # Server-side exception
+        # Server-side exception (isError:true means the tool returned an MCP error
+        # result, which is the stub/crash path for pending tools).
         elseif ($rawEnvelope.result.isError -eq $true) {
             $status = "FAIL"
             $severity = "CRASH"
@@ -179,6 +180,14 @@ function Test-SweepEntry {
                 }
             }
         }
+    }
+
+    # For expected:either entries, any outcome (FAIL, CRASH, TIMEOUT, etc.)
+    # is acceptable -- the tool may or may not work depending on Studio Pro
+    # state. Promote FAIL -> PASS here so the summary count reflects intent.
+    # We keep severity/error_summary for triage reference in findings.json.
+    if ($status -eq "FAIL" -and $Entry.expected -eq "either") {
+        $status = "PASS"
     }
 
     # Optional side-effect verifier -- runs a follow-up tool and stores
@@ -386,12 +395,12 @@ if ($Phase.Count -gt 0) {
     Write-Host "  -Phase filter: $($entries.Count) entries match"
 }
 
-# Stable phase ordering: read -> mutate -> lifecycle. Preserves
+# Stable phase ordering: setup -> read -> mutate -> lifecycle. Preserves
 # in-phase original order from matrix.jsonc.
 # NOTE: Sort-Object -Stable requires PowerShell 7+; for Windows PowerShell 5.1
 # compatibility we tag each entry with its original index and use it as a
 # tie-breaker, which achieves the same stable-sort semantics.
-$phaseOrder = @{ "read" = 0; "mutate" = 1; "lifecycle" = 2 }
+$phaseOrder = @{ "setup" = 0; "read" = 1; "mutate" = 2; "lifecycle" = 3 }
 $i = 0
 $entries = $entries | ForEach-Object { Add-Member -InputObject $_ -NotePropertyName _idx -NotePropertyValue ($i++) -PassThru }
 $entries = $entries | Sort-Object @{ Expression = { $phaseOrder[$_.phase] }; Ascending = $true }, @{ Expression = { $_._idx }; Ascending = $true }

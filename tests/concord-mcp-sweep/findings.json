@@ -1,5 +1,152 @@
 ﻿[
     {
+        "name":  "create_entity",
+        "family":  "DomainModel",
+        "phase":  "setup",
+        "status":  "PASS",
+        "expected":  "either",
+        "args":  {
+                     "module_name":  "MyFirstModule",
+                     "entity_name":  "Customer"
+                 },
+        "raw_response":  {
+                             "jsonrpc":  "2.0",
+                             "id":  472078,
+                             "result":  {
+                                            "content":  [
+                                                            {
+                                                                "type":  "text",
+                                                                "text":  "{\"success\":true,\"message\":\"Entity \\u0027Customer\\u0027 created successfully as persistent\",\"entity\":{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"persistable\":true,\"entityType\":\"persistent\",\"attributes\":[]}}"
+                                                            }
+                                                        ],
+                                            "isError":  false
+                                        }
+                         },
+        "error_summary":  null,
+        "severity":  null,
+        "side_effect_check":  null,
+        "elapsed_ms":  207,
+        "timestamp":  "2026-05-14T02:48:30.2980307Z"
+    },
+    {
+        "name":  "add_attribute",
+        "family":  "DomainModel",
+        "phase":  "setup",
+        "status":  "PASS",
+        "expected":  "either",
+        "args":  {
+                     "module_name":  "MyFirstModule",
+                     "entity_name":  "Customer",
+                     "attribute_name":  "Name",
+                     "attribute_type":  "String"
+                 },
+        "raw_response":  {
+                             "jsonrpc":  "2.0",
+                             "id":  760219,
+                             "result":  {
+                                            "content":  [
+                                                            {
+                                                                "type":  "text",
+                                                                "text":  "{\"error\":\"Attribute \\u0027Name\\u0027 already exists on entity \\u0027Customer\\u0027\"}"
+                                                            }
+                                                        ],
+                                            "isError":  false
+                                        }
+                         },
+        "error_summary":  null,
+        "severity":  null,
+        "side_effect_check":  null,
+        "elapsed_ms":  42,
+        "timestamp":  "2026-05-14T02:48:30.4228457Z"
+    },
+    {
+        "name":  "create_entity",
+        "family":  "DomainModel",
+        "phase":  "setup",
+        "status":  "PASS",
+        "expected":  "either",
+        "args":  {
+                     "module_name":  "MyFirstModule",
+                     "entity_name":  "Order"
+                 },
+        "raw_response":  {
+                             "jsonrpc":  "2.0",
+                             "id":  755387,
+                             "result":  {
+                                            "content":  [
+                                                            {
+                                                                "type":  "text",
+                                                                "text":  "{\"success\":true,\"message\":\"Entity \\u0027Order\\u0027 created successfully as persistent\",\"entity\":{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"persistable\":true,\"entityType\":\"persistent\",\"attributes\":[]}}"
+                                                            }
+                                                        ],
+                                            "isError":  false
+                                        }
+                         },
+        "error_summary":  null,
+        "severity":  null,
+        "side_effect_check":  null,
+        "elapsed_ms":  144,
+        "timestamp":  "2026-05-14T02:48:30.5800096Z"
+    },
+    {
+        "name":  "create_microflow",
+        "family":  "Microflows",
+        "phase":  "setup",
+        "status":  "PASS",
+        "expected":  "either",
+        "args":  {
+                     "name":  "ACT_Example",
+                     "module_name":  "MyFirstModule"
+                 },
+        "raw_response":  {
+                             "jsonrpc":  "2.0",
+                             "id":  950018,
+                             "result":  {
+                                            "content":  [
+                                                            {
+                                                                "type":  "text",
+                                                                "text":  "{\"success\":true,\"message\":\"Microflow \\u0027ACT_Example\\u0027 created successfully in module \\u0027MyFirstModule\\u0027.\",\"document_id\":\"5d674956-bf31-4493-bfb1-417e54b7a6a9\",\"qualified_name\":\"MyFirstModule.ACT_Example\",\"microflow\":{\"name\":\"ACT_Example\",\"qualifiedName\":\"MyFirstModule.ACT_Example\",\"module\":\"MyFirstModule\",\"returnType\":\"void\",\"parameterCount\":0}}"
+                                                            }
+                                                        ],
+                                            "isError":  false
+                                        }
+                         },
+        "error_summary":  null,
+        "severity":  null,
+        "side_effect_check":  null,
+        "elapsed_ms":  752,
+        "timestamp":  "2026-05-14T02:48:31.3485726Z"
+    },
+    {
+        "name":  "create_microflow",
+        "family":  "Microflows",
+        "phase":  "setup",
+        "status":  "PASS",
+        "expected":  "either",
+        "args":  {
+                     "name":  "CAL_Customer_FullName",
+                     "module_name":  "MyFirstModule"
+                 },
+        "raw_response":  {
+                             "jsonrpc":  "2.0",
+                             "id":  916659,
+                             "result":  {
+                                            "content":  [
+                                                            {
+                                                                "type":  "text",
+                                                                "text":  "{\"error\":\"Microflow \\u0027CAL_Customer_FullName\\u0027 already exists in module \\u0027MyFirstModule\\u0027.\"}"
+                                                            }
+                                                        ],
+                                            "isError":  false
+                                        }
+                         },
+        "error_summary":  null,
+        "severity":  null,
+        "side_effect_check":  null,
+        "elapsed_ms":  25,
+        "timestamp":  "2026-05-14T02:48:31.3915729Z"
+    },
+    {
         "name":  "list_available_tools",
         "family":  "Diagnostics",
         "phase":  "read",
@@ -10,7 +157,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  285961,
+                             "id":  349133,
                              "result":  {
                                             "content":  [
                                                             {
@@ -24,8 +171,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  42,
-        "timestamp":  "2026-05-14T01:16:11.5612931Z"
+        "elapsed_ms":  30,
+        "timestamp":  "2026-05-14T02:48:31.4367032Z"
     },
     {
         "name":  "list_available_tools_domain",
@@ -38,7 +185,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  705756,
+                             "id":  662295,
                              "result":  {
                                             "content":  [
                                                             {
@@ -52,8 +199,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  27,
-        "timestamp":  "2026-05-14T01:16:11.7525693Z"
+        "elapsed_ms":  25,
+        "timestamp":  "2026-05-14T02:48:31.5057034Z"
     },
     {
         "name":  "analyze_project_patterns",
@@ -66,7 +213,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  472713,
+                             "id":  646363,
                              "result":  {
                                             "content":  [
                                                             {
@@ -80,8 +227,8 @@
         "error_summary":  "Failed to analyze project patterns: \u0027\u003c\u003ef__AnonymousType134\u003cint,int,int,int,int,System.Collections.Generic.List\u003c\u003c\u003ef__AnonymousType129\u003cstring,int,int\u003e\u003e,\u003c\u003ef__AnonymousType135\u003cint,int,string\u003e,System.Collections.Generic.Dictionary\u003cstring,int\u003e,\u003c\u003ef__AnonymousType136\u003cint,string\u003e,\u003c\u003ef__AnonymousType136\u003cint,string\u003e,System.Collections.Generic.Dictionary\u003cstring,int\u003e,System.Collections.Generic.List\u003c\u003c\u003ef__AnonymousType130\u003cstring,int\u003e\u003e\u003e\u0027 does not contain a definition for \u0027commonDeleteBehavior\u0027",
         "severity":  "BUG",
         "side_effect_check":  null,
-        "elapsed_ms":  30,
-        "timestamp":  "2026-05-14T01:16:11.7967659Z"
+        "elapsed_ms":  31,
+        "timestamp":  "2026-05-14T02:48:31.5532343Z"
     },
     {
         "name":  "check_model",
@@ -94,12 +241,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  696288,
+                             "id":  803424,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\r\n  \"success\": true,\r\n  \"healthy\": true,\r\n  \"summary\": {\r\n    \"totalItems\": 0,\r\n    \"errorCount\": 0,\r\n    \"warningCount\": 0,\r\n    \"infoCount\": 0\r\n  },\r\n  \"errors\": null,\r\n  \"warnings\": null,\r\n  \"info\": null,\r\n  \"message\": \"Model is healthy. No issues found.\"\r\n}"
+                                                                "text":  "{\r\n  \"success\": true,\r\n  \"healthy\": true,\r\n  \"summary\": {\r\n    \"totalItems\": 5,\r\n    \"errorCount\": 0,\r\n    \"warningCount\": 5,\r\n    \"infoCount\": 0\r\n  },\r\n  \"errors\": null,\r\n  \"warnings\": [\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"SweepEntityA_create_multiple_entities\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027SweepEntityA_create_multiple_entities\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"SweepEntityB_create_multiple_entities\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027SweepEntityB_create_multiple_entities\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Order\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Order\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Customer\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Customer\\u0027 has no attributes defined.\"\r\n    },\r\n    {\r\n      \"module\": \"MyFirstModule\",\r\n      \"entity\": \"Order\",\r\n      \"code\": \"no_attributes\",\r\n      \"message\": \"Entity \\u0027Order\\u0027 has no attributes defined.\"\r\n    }\r\n  ],\r\n  \"info\": null,\r\n  \"message\": \"Found 0 error(s) and 5 warning(s).\"\r\n}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -108,8 +255,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  29,
-        "timestamp":  "2026-05-14T01:16:11.8477650Z"
+        "elapsed_ms":  55,
+        "timestamp":  "2026-05-14T02:48:31.6347458Z"
     },
     {
         "name":  "check_project_errors",
@@ -122,7 +269,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  552862,
+                             "id":  260836,
                              "result":  {
                                             "content":  [
                                                             {
@@ -136,14 +283,14 @@
         "error_summary":  "success:false",
         "severity":  "BUG",
         "side_effect_check":  null,
-        "elapsed_ms":  25,
-        "timestamp":  "2026-05-14T01:16:11.8868039Z"
+        "elapsed_ms":  35,
+        "timestamp":  "2026-05-14T02:48:31.6957504Z"
     },
     {
         "name":  "check_variable_name",
         "family":  "Diagnostics",
         "phase":  "read",
-        "status":  "FAIL",
+        "status":  "PASS",
         "expected":  "ok",
         "args":  {
                      "microflow_name":  "MyFirstModule.ACT_Example",
@@ -151,22 +298,22 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  66365,
+                             "id":  866145,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Microflow \\u0027MyFirstModule.ACT_Example\\u0027 not found.\"}"
+                                                                "text":  "{\"success\":true,\"microflow\":\"MyFirstModule.ACT_Example\",\"variableName\":\"NewCustomer\",\"in_use\":false,\"suggested_alternative\":null,\"existing_variables\":[]}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Microflow \u0027MyFirstModule.ACT_Example\u0027 not found.",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  24,
-        "timestamp":  "2026-05-14T01:16:11.9258130Z"
+        "elapsed_ms":  35,
+        "timestamp":  "2026-05-14T02:48:31.7471352Z"
     },
     {
         "name":  "diagnose_associations",
@@ -179,12 +326,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  917892,
+                             "id":  525450,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"entities\":[\"FeedbackModule.ResponseHelper\",\"FeedbackModule.Feedback\",\"Administration.Account\",\"Administration.AccountPasswordData\",\"Atlas_Web_Content.LoginContext\",\"NanoflowCommons.Geolocation\",\"NanoflowCommons.Position\",\"FileUploader.UploadedFile\",\"FileUploader.FileUploadContext\",\"FileUploader.UploadedImage\"],\"entityCount\":10,\"associations\":[{\"Name\":\"AccountPasswordData_Account\",\"Parent\":\"AccountPasswordData\",\"Child\":\"Account\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"UploadedFile_FileUploadContext\",\"Parent\":\"UploadedFile\",\"Child\":\"FileUploadContext\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"UploadedImage_FileUploadContext\",\"Parent\":\"UploadedImage\",\"Child\":\"FileUploadContext\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"}],\"associationCount\":3,\"status\":\"Domain model diagnosed successfully\",\"guidance\":{\"commonIssues\":[\"Entities must exist before creating associations\",\"Entity names are case sensitive\",\"Don\\u0027t use module prefixes in entity names\",\"Association names must be unique\",\"For one-to-many associations, parent is the \\u0027one\\u0027 side, child is the \\u0027many\\u0027 side\"],\"properFormat\":{\"Name\":\"Customer_Orders\",\"Parent\":\"Customer\",\"Child\":\"Order\",\"Type\":\"one-to-many\"}}}"
+                                                                "text":  "{\"entities\":[\"FeedbackModule.ResponseHelper\",\"FeedbackModule.Feedback\",\"Administration.Account\",\"Administration.AccountPasswordData\",\"Atlas_Web_Content.LoginContext\",\"NanoflowCommons.Geolocation\",\"NanoflowCommons.Position\",\"FileUploader.UploadedFile\",\"FileUploader.FileUploadContext\",\"FileUploader.UploadedImage\",\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"MyFirstModule.Customer\",\"MyFirstModule.Order\",\"MyFirstModule.SweepEntity_copy\",\"MyFirstModule.Customer\",\"MyFirstModule.Order\"],\"entityCount\":18,\"associations\":[{\"Name\":\"AccountPasswordData_Account\",\"Parent\":\"AccountPasswordData\",\"Child\":\"Account\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"UploadedFile_FileUploadContext\",\"Parent\":\"UploadedFile\",\"Child\":\"FileUploadContext\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"UploadedImage_FileUploadContext\",\"Parent\":\"UploadedImage\",\"Child\":\"FileUploadContext\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"SweepEntityA_create_multiple_entities_SweepEntityB_create_multiple_entities\",\"Parent\":\"SweepEntityB_create_multiple_entities\",\"Child\":\"SweepEntityA_create_multiple_entities\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"},{\"Name\":\"Customer_OrderItems\",\"Parent\":\"Order\",\"Child\":\"Customer\",\"Type\":\"Reference\",\"MappedType\":\"one-to-many\"}],\"associationCount\":5,\"status\":\"Domain model diagnosed successfully\",\"guidance\":{\"commonIssues\":[\"Entities must exist before creating associations\",\"Entity names are case sensitive\",\"Don\\u0027t use module prefixes in entity names\",\"Association names must be unique\",\"For one-to-many associations, parent is the \\u0027one\\u0027 side, child is the \\u0027many\\u0027 side\"],\"properFormat\":{\"Name\":\"Customer_Orders\",\"Parent\":\"Customer\",\"Child\":\"Order\",\"Type\":\"one-to-many\"}}}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -193,8 +340,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  30,
-        "timestamp":  "2026-05-14T01:16:11.9769346Z"
+        "elapsed_ms":  29,
+        "timestamp":  "2026-05-14T02:48:31.7931349Z"
     },
     {
         "name":  "get_last_error",
@@ -207,12 +354,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  666092,
+                             "id":  879615,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"message\":\"Last error retrieved\",\"last_error\":\"Microflow \\u0027MyFirstModule.ACT_Example\\u0027 not found.\",\"details\":null,\"stack_trace\":null,\"timestamp\":\"2026-05-14 01:16:11 UTC\"}"
+                                                                "text":  "{\"message\":\"Last error retrieved\",\"last_error\":\"Error in create_microflow: Microflow \\u0027CAL_Customer_FullName\\u0027 already exists in module \\u0027MyFirstModule\\u0027.\",\"details\":\"Microflow \\u0027CAL_Customer_FullName\\u0027 already exists in module \\u0027MyFirstModule\\u0027.\",\"stack_trace\":\"   at Concord.Host10x.Interop.MicroflowAuthoringHost10x.Create(CreateMicroflowRequest request) in C:\\\\Extensions\\\\Terminal\\\\src\\\\Concord.Host10x\\\\Interop\\\\MicroflowAuthoringHost10x.cs:line 97\\r\\n   at Terminal.Spmcp.Tools.MendixAdditionalTools.CreateMicroflow(JsonObject arguments) in C:\\\\Extensions\\\\Terminal\\\\src\\\\Concord.Core\\\\Spmcp\\\\Tools\\\\MendixAdditionalTools.cs:line 1103\",\"timestamp\":\"2026-05-14 02:48:31 UTC\"}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -221,8 +368,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  29,
-        "timestamp":  "2026-05-14T01:16:12.0209254Z"
+        "elapsed_ms":  28,
+        "timestamp":  "2026-05-14T02:48:31.8366686Z"
     },
     {
         "name":  "get_last_error_domain",
@@ -235,7 +382,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  148701,
+                             "id":  544880,
                              "result":  {
                                             "content":  [
                                                             {
@@ -249,8 +396,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  23,
-        "timestamp":  "2026-05-14T01:16:12.0629315Z"
+        "elapsed_ms":  43,
+        "timestamp":  "2026-05-14T02:48:31.9006680Z"
     },
     {
         "name":  "get_studio_pro_logs",
@@ -264,7 +411,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  780930,
+                             "id":  762654,
                              "result":  {
                                             "content":  [
                                                             {
@@ -278,8 +425,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  22,
-        "timestamp":  "2026-05-14T01:16:12.1004451Z"
+        "elapsed_ms":  28,
+        "timestamp":  "2026-05-14T02:48:31.9587021Z"
     },
     {
         "name":  "list_java_actions",
@@ -292,7 +439,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  975212,
+                             "id":  313557,
                              "result":  {
                                             "content":  [
                                                             {
@@ -306,8 +453,8 @@
         "error_summary":  "The given key \u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\u0027 was not present in the dictionary.",
         "severity":  "CRASH",
         "side_effect_check":  null,
-        "elapsed_ms":  24,
-        "timestamp":  "2026-05-14T01:16:12.1414405Z"
+        "elapsed_ms":  30,
+        "timestamp":  "2026-05-14T02:48:32.0087033Z"
     },
     {
         "name":  "list_modules",
@@ -320,12 +467,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  79366,
+                             "id":  224508,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\r\n  \"success\": true,\r\n  \"message\": \"Found 10 modules\",\r\n  \"note\": \"fromAppStore filter not available via IModelHost \\u2014 all modules shown\",\r\n  \"modules\": [\r\n    {\r\n      \"name\": \"Administration\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 2\r\n    },\r\n    {\r\n      \"name\": \"Atlas_Core\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"Atlas_Web_Content\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 1\r\n    },\r\n    {\r\n      \"name\": \"DataWidgets\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"FeedbackModule\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 2\r\n    },\r\n    {\r\n      \"name\": \"FileUploader\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 3\r\n    },\r\n    {\r\n      \"name\": \"MyFirstModule\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"NanoflowCommons\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 2\r\n    },\r\n    {\r\n      \"name\": \"Sales\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"WebActions\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    }\r\n  ],\r\n  \"userModules\": [\r\n    \"Administration\",\r\n    \"Atlas_Core\",\r\n    \"Atlas_Web_Content\",\r\n    \"DataWidgets\",\r\n    \"FeedbackModule\",\r\n    \"FileUploader\",\r\n    \"MyFirstModule\",\r\n    \"NanoflowCommons\",\r\n    \"Sales\",\r\n    \"WebActions\"\r\n  ]\r\n}"
+                                                                "text":  "{\r\n  \"success\": true,\r\n  \"message\": \"Found 12 modules\",\r\n  \"note\": \"fromAppStore filter not available via IModelHost \\u2014 all modules shown\",\r\n  \"modules\": [\r\n    {\r\n      \"name\": \"Administration\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 2\r\n    },\r\n    {\r\n      \"name\": \"Atlas_Core\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"Atlas_Web_Content\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 1\r\n    },\r\n    {\r\n      \"name\": \"ConcordSweep_create_module\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"ConcordSweep_rename_module\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"DataWidgets\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"FeedbackModule\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 2\r\n    },\r\n    {\r\n      \"name\": \"FileUploader\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 3\r\n    },\r\n    {\r\n      \"name\": \"MyFirstModule\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 8\r\n    },\r\n    {\r\n      \"name\": \"NanoflowCommons\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 2\r\n    },\r\n    {\r\n      \"name\": \"Sales\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    },\r\n    {\r\n      \"name\": \"WebActions\",\r\n      \"fromAppStore\": false,\r\n      \"entityCount\": 0\r\n    }\r\n  ],\r\n  \"userModules\": [\r\n    \"Administration\",\r\n    \"Atlas_Core\",\r\n    \"Atlas_Web_Content\",\r\n    \"ConcordSweep_create_module\",\r\n    \"ConcordSweep_rename_module\",\r\n    \"DataWidgets\",\r\n    \"FeedbackModule\",\r\n    \"FileUploader\",\r\n    \"MyFirstModule\",\r\n    \"NanoflowCommons\",\r\n    \"Sales\",\r\n    \"WebActions\"\r\n  ]\r\n}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -334,8 +481,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  24,
-        "timestamp":  "2026-05-14T01:16:12.1829614Z"
+        "elapsed_ms":  34,
+        "timestamp":  "2026-05-14T02:48:32.0652420Z"
     },
     {
         "name":  "read_domain_model",
@@ -348,12 +495,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  93871,
+                             "id":  706975,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\r\n  \"success\": true,\r\n  \"message\": \"Model retrieved successfully\",\r\n  \"data\": {\r\n    \"moduleName\": \"MyFirstModule\",\r\n    \"entities\": []\r\n  },\r\n  \"status\": \"success\"\r\n}"
+                                                                "text":  "{\r\n  \"success\": true,\r\n  \"message\": \"Model retrieved successfully\",\r\n  \"data\": {\r\n    \"moduleName\": \"MyFirstModule\",\r\n    \"entities\": [\r\n      {\r\n        \"name\": \"SweepEntityA_create_multiple_entities\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntityA_create_multiple_entities\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"SweepEntityA_create_multiple_entities_SweepEntityB_create_multiple_entities\",\r\n            \"parent\": \"SweepEntityB_create_multiple_entities\",\r\n            \"child\": \"SweepEntityA_create_multiple_entities\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"SweepEntityB_create_multiple_entities\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntityB_create_multiple_entities\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"SweepEntityA_create_multiple_entities_SweepEntityB_create_multiple_entities\",\r\n            \"parent\": \"SweepEntityB_create_multiple_entities\",\r\n            \"child\": \"SweepEntityA_create_multiple_entities\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"SweepEntity_create_domain_model_from_schema\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Title\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Customer\",\r\n        \"qualifiedName\": \"MyFirstModule.Customer\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Order\",\r\n        \"qualifiedName\": \"MyFirstModule.Order\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"SweepEntity_copy\",\r\n        \"qualifiedName\": \"MyFirstModule.SweepEntity_copy\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Customer\",\r\n        \"qualifiedName\": \"MyFirstModule.Customer\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [\r\n          {\r\n            \"name\": \"Name\",\r\n            \"type\": \"String\",\r\n            \"note\": \"MaxLength/defaultValue/EnumerationQualifiedName not surfaced by AttributeRef\"\r\n          }\r\n        ],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      },\r\n      {\r\n        \"name\": \"Order\",\r\n        \"qualifiedName\": \"MyFirstModule.Order\",\r\n        \"kind\": \"Persistent\",\r\n        \"generalization\": null,\r\n        \"documentation\": \"\",\r\n        \"attributes\": [],\r\n        \"associations\": [\r\n          {\r\n            \"name\": \"Customer_OrderItems\",\r\n            \"parent\": \"Order\",\r\n            \"child\": \"Customer\",\r\n            \"type\": \"one-to-many\"\r\n          }\r\n        ],\r\n        \"eventHandlers\": null\r\n      }\r\n    ]\r\n  },\r\n  \"status\": \"success\"\r\n}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -362,8 +509,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  24,
-        "timestamp":  "2026-05-14T01:16:12.2239541Z"
+        "elapsed_ms":  35,
+        "timestamp":  "2026-05-14T02:48:32.1192342Z"
     },
     {
         "name":  "read_project_info",
@@ -376,7 +523,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  999982,
+                             "id":  81975,
                              "result":  {
                                             "content":  [
                                                             {
@@ -390,8 +537,8 @@
         "error_summary":  "Failed to read project info: The given key \u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\u0027 was not present in the dictionary.",
         "severity":  "CRASH",
         "side_effect_check":  null,
-        "elapsed_ms":  25,
-        "timestamp":  "2026-05-14T01:16:12.2674631Z"
+        "elapsed_ms":  26,
+        "timestamp":  "2026-05-14T02:48:32.1631700Z"
     },
     {
         "name":  "query_model_elements",
@@ -406,12 +553,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  405112,
+                             "id":  961184,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":0,\"returned\":0,\"elements\":[],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
+                                                                "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":8,\"returned\":8,\"elements\":[{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_domain_model_from_schema\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -420,14 +567,14 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  23,
-        "timestamp":  "2026-05-14T01:16:12.3079745Z"
+        "elapsed_ms":  36,
+        "timestamp":  "2026-05-14T02:48:32.2193325Z"
     },
     {
         "name":  "query_associations",
         "family":  "DomainModel",
         "phase":  "read",
-        "status":  "FAIL",
+        "status":  "PASS",
         "expected":  "ok",
         "args":  {
                      "entity_name":  "Customer",
@@ -435,28 +582,28 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  986907,
+                             "id":  948176,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Entity \\u0027Customer\\u0027 not found\"}"
+                                                                "text":  "{\"success\":true,\"count\":1,\"query\":{\"entityName\":\"Customer\",\"secondEntity\":null,\"moduleName\":\"MyFirstModule\",\"direction\":\"both\"},\"associations\":[{\"name\":\"Customer_OrderItems\",\"parent\":\"Order\",\"child\":\"Customer\",\"type\":\"one-to-many\"}]}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Entity \u0027Customer\u0027 not found",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  25,
-        "timestamp":  "2026-05-14T01:16:12.3519734Z"
+        "elapsed_ms":  33,
+        "timestamp":  "2026-05-14T02:48:32.2768500Z"
     },
     {
         "name":  "read_attribute_details",
         "family":  "DomainModel",
         "phase":  "read",
-        "status":  "FAIL",
+        "status":  "PASS",
         "expected":  "ok",
         "args":  {
                      "entity_name":  "Customer",
@@ -464,22 +611,22 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  337109,
+                             "id":  432344,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Entity \\u0027Customer\\u0027 not found\"}"
+                                                                "text":  "{\"success\":true,\"attribute\":{\"name\":\"Name\",\"qualifiedName\":\"MyFirstModule.Customer/Name\",\"entity\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"String\",\"maxLength\":null,\"enumeration\":null,\"defaultValue\":null,\"note\":\"Extended attribute metadata (maxLength, enumeration, defaultValue, calculatedMicroflow) not exposed on Core Interop AttributeRef. Available: name, type (AttributeKind).\"}}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Entity \u0027Customer\u0027 not found",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  24,
-        "timestamp":  "2026-05-14T01:16:12.4014375Z"
+        "elapsed_ms":  36,
+        "timestamp":  "2026-05-14T02:48:32.3379848Z"
     },
     {
         "name":  "validate_name",
@@ -492,7 +639,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  559052,
+                             "id":  894036,
                              "result":  {
                                             "content":  [
                                                             {
@@ -506,8 +653,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  25,
-        "timestamp":  "2026-05-14T01:16:12.4654776Z"
+        "elapsed_ms":  29,
+        "timestamp":  "2026-05-14T02:48:32.4002887Z"
     },
     {
         "name":  "list_microflows",
@@ -520,12 +667,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  236834,
+                             "id":  633501,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"microflows\":[{\"name\":\"PopulateUserAttributes\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.PopulateUserAttributes\",\"parameterCount\":1,\"activityCount\":2,\"returnType\":null,\"returnIsList\":false},{\"name\":\"VAL_Feedback\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.VAL_Feedback\",\"parameterCount\":1,\"activityCount\":1,\"returnType\":\"Boolean\",\"returnIsList\":false},{\"name\":\"SUB_Feedback_Sanitize\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.SUB_Feedback_Sanitize\",\"parameterCount\":1,\"activityCount\":10,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ConvertBase64String\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.ConvertBase64String\",\"parameterCount\":1,\"activityCount\":0,\"returnType\":\"String\",\"returnIsList\":false},{\"name\":\"ConvertUUIDToURL\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.ConvertUUIDToURL\",\"parameterCount\":1,\"activityCount\":0,\"returnType\":\"String\",\"returnIsList\":false},{\"name\":\"SUB_Feedback_PostToAppInsights\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.SUB_Feedback_PostToAppInsights\",\"parameterCount\":1,\"activityCount\":0,\"returnType\":\"FeedbackModule.ResponseHelper\",\"returnIsList\":false},{\"name\":\"SUB_Feedback_SendToServer\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.SUB_Feedback_SendToServer\",\"parameterCount\":1,\"activityCount\":3,\"returnType\":\"FeedbackModule.ResponseHelper\",\"returnIsList\":false},{\"name\":\"NewAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.NewAccount\",\"parameterCount\":0,\"activityCount\":2,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ChangePassword\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ChangePassword\",\"parameterCount\":1,\"activityCount\":3,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ShowPasswordForm\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ShowPasswordForm\",\"parameterCount\":1,\"activityCount\":1,\"returnType\":null,\"returnIsList\":false},{\"name\":\"NewWebServiceAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.NewWebServiceAccount\",\"parameterCount\":0,\"activityCount\":3,\"returnType\":null,\"returnIsList\":false},{\"name\":\"SaveNewAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.SaveNewAccount\",\"parameterCount\":1,\"activityCount\":3,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ChangeMyPassword\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ChangeMyPassword\",\"parameterCount\":1,\"activityCount\":4,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ManageMyAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ManageMyAccount\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ShowMyPasswordForm\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ShowMyPasswordForm\",\"parameterCount\":1,\"activityCount\":1,\"returnType\":null,\"returnIsList\":false},{\"name\":\"MyFirstLogic\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.MyFirstLogic\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false}]}"
+                                                                "text":  "{\"microflows\":[{\"name\":\"PopulateUserAttributes\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.PopulateUserAttributes\",\"parameterCount\":1,\"activityCount\":2,\"returnType\":null,\"returnIsList\":false},{\"name\":\"VAL_Feedback\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.VAL_Feedback\",\"parameterCount\":1,\"activityCount\":1,\"returnType\":\"Boolean\",\"returnIsList\":false},{\"name\":\"SUB_Feedback_Sanitize\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.SUB_Feedback_Sanitize\",\"parameterCount\":1,\"activityCount\":10,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ConvertBase64String\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.ConvertBase64String\",\"parameterCount\":1,\"activityCount\":0,\"returnType\":\"String\",\"returnIsList\":false},{\"name\":\"ConvertUUIDToURL\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.ConvertUUIDToURL\",\"parameterCount\":1,\"activityCount\":0,\"returnType\":\"String\",\"returnIsList\":false},{\"name\":\"SUB_Feedback_PostToAppInsights\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.SUB_Feedback_PostToAppInsights\",\"parameterCount\":1,\"activityCount\":0,\"returnType\":\"FeedbackModule.ResponseHelper\",\"returnIsList\":false},{\"name\":\"SUB_Feedback_SendToServer\",\"module\":\"FeedbackModule\",\"qualifiedName\":\"FeedbackModule.SUB_Feedback_SendToServer\",\"parameterCount\":1,\"activityCount\":3,\"returnType\":\"FeedbackModule.ResponseHelper\",\"returnIsList\":false},{\"name\":\"NewAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.NewAccount\",\"parameterCount\":0,\"activityCount\":2,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ChangePassword\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ChangePassword\",\"parameterCount\":1,\"activityCount\":3,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ShowPasswordForm\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ShowPasswordForm\",\"parameterCount\":1,\"activityCount\":1,\"returnType\":null,\"returnIsList\":false},{\"name\":\"NewWebServiceAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.NewWebServiceAccount\",\"parameterCount\":0,\"activityCount\":3,\"returnType\":null,\"returnIsList\":false},{\"name\":\"SaveNewAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.SaveNewAccount\",\"parameterCount\":1,\"activityCount\":3,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ChangeMyPassword\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ChangeMyPassword\",\"parameterCount\":1,\"activityCount\":4,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ManageMyAccount\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ManageMyAccount\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ShowMyPasswordForm\",\"module\":\"Administration\",\"qualifiedName\":\"Administration.ShowMyPasswordForm\",\"parameterCount\":1,\"activityCount\":1,\"returnType\":null,\"returnIsList\":false},{\"name\":\"MyFirstLogic\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.MyFirstLogic\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ACT_ExampleRenamed\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.ACT_ExampleRenamed\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"CAL_Customer_FullName\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.CAL_Customer_FullName\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ACT_Example\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.ACT_Example\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false}]}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -534,14 +681,14 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  25,
-        "timestamp":  "2026-05-14T01:16:12.5089955Z"
+        "elapsed_ms":  29,
+        "timestamp":  "2026-05-14T02:48:32.4517467Z"
     },
     {
         "name":  "read_microflow_details",
         "family":  "Microflows",
         "phase":  "read",
-        "status":  "FAIL",
+        "status":  "PASS",
         "expected":  "ok",
         "args":  {
                      "microflow_name":  "ACT_Example",
@@ -549,22 +696,22 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  47159,
+                             "id":  735405,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Microflow \\u0027MyFirstModule.ACT_Example\\u0027 not found.\"}"
+                                                                "text":  "{\"success\":true,\"microflow\":{\"name\":\"ACT_Example\",\"qualifiedName\":\"MyFirstModule.ACT_Example\",\"module\":\"MyFirstModule\",\"documentation\":null,\"accessLevel\":\"CheckPerOperation\",\"returnType\":null,\"returnIsList\":false,\"parameterCount\":0,\"parameters\":[],\"activityCount\":0,\"activities\":[]}}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Microflow \u0027MyFirstModule.ACT_Example\u0027 not found.",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  25,
-        "timestamp":  "2026-05-14T01:16:12.5500973Z"
+        "elapsed_ms":  24,
+        "timestamp":  "2026-05-14T02:48:32.4930859Z"
     },
     {
         "name":  "list_nanoflows",
@@ -577,7 +724,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  942454,
+                             "id":  122956,
                              "result":  {
                                             "content":  [
                                                             {
@@ -591,22 +738,22 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  72,
-        "timestamp":  "2026-05-14T01:16:12.6386123Z"
+        "elapsed_ms":  84,
+        "timestamp":  "2026-05-14T02:48:32.5926194Z"
     },
     {
         "name":  "read_nanoflow_details",
         "family":  "Microflows",
         "phase":  "read",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
                      "nanoflow_name":  "MyNanoflow",
                      "module_name":  "MyFirstModule"
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  733973,
+                             "id":  305387,
                              "result":  {
                                             "content":  [
                                                             {
@@ -617,11 +764,11 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Nanoflow \u0027MyFirstModule.MyNanoflow\u0027 not found",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  32,
-        "timestamp":  "2026-05-14T01:16:12.6881177Z"
+        "elapsed_ms":  26,
+        "timestamp":  "2026-05-14T02:48:32.6597023Z"
     },
     {
         "name":  "list_scheduled_events",
@@ -634,7 +781,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  502759,
+                             "id":  75645,
                              "result":  {
                                             "content":  [
                                                             {
@@ -648,8 +795,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  31,
-        "timestamp":  "2026-05-14T01:16:12.7371206Z"
+        "elapsed_ms":  36,
+        "timestamp":  "2026-05-14T02:48:32.7146968Z"
     },
     {
         "name":  "list_pages",
@@ -662,7 +809,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  547611,
+                             "id":  37302,
                              "result":  {
                                             "content":  [
                                                             {
@@ -676,22 +823,22 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  135,
-        "timestamp":  "2026-05-14T01:16:12.8883263Z"
+        "elapsed_ms":  157,
+        "timestamp":  "2026-05-14T02:48:32.8923637Z"
     },
     {
         "name":  "read_page_details",
         "family":  "Pages",
         "phase":  "read",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
                      "page_name":  "Customer_Overview",
                      "module_name":  "MyFirstModule"
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  608214,
+                             "id":  320759,
                              "result":  {
                                             "content":  [
                                                             {
@@ -702,11 +849,11 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Page \u0027Customer_Overview\u0027 not found",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  36,
-        "timestamp":  "2026-05-14T01:16:12.9454874Z"
+        "elapsed_ms":  28,
+        "timestamp":  "2026-05-14T02:48:32.9388755Z"
     },
     {
         "name":  "list_workflows",
@@ -719,7 +866,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  779935,
+                             "id":  700344,
                              "result":  {
                                             "content":  [
                                                             {
@@ -733,22 +880,22 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  35,
-        "timestamp":  "2026-05-14T01:16:13.0055756Z"
+        "elapsed_ms":  37,
+        "timestamp":  "2026-05-14T02:48:32.9946406Z"
     },
     {
         "name":  "read_workflow_details",
         "family":  "Workflows",
         "phase":  "read",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
                      "workflow_name":  "MyWorkflow",
                      "module_name":  "MyFirstModule"
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  314494,
+                             "id":  835468,
                              "result":  {
                                             "content":  [
                                                             {
@@ -759,11 +906,11 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Workflow \u0027MyWorkflow\u0027 not found",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  25,
-        "timestamp":  "2026-05-14T01:16:13.0496588Z"
+        "elapsed_ms":  20,
+        "timestamp":  "2026-05-14T02:48:33.0364633Z"
     },
     {
         "name":  "list_constants",
@@ -776,7 +923,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  997054,
+                             "id":  388388,
                              "result":  {
                                             "content":  [
                                                             {
@@ -790,8 +937,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  43,
-        "timestamp":  "2026-05-14T01:16:13.1146507Z"
+        "elapsed_ms":  42,
+        "timestamp":  "2026-05-14T02:48:33.0994789Z"
     },
     {
         "name":  "list_enumerations",
@@ -804,12 +951,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  144646,
+                             "id":  757632,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"count\":0,\"enumerations\":[],\"skippedModules\":[{\"module\":\"Atlas_Core\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"FeedbackModule\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"Administration\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"Atlas_Web_Content\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"NanoflowCommons\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"WebActions\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"DataWidgets\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"FileUploader\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"}]}"
+                                                                "text":  "{\"success\":true,\"count\":1,\"enumerations\":[{\"name\":\"SweepEnum_create_enumeration\",\"qualifiedName\":\"MyFirstModule.SweepEnum_create_enumeration\",\"module\":\"MyFirstModule\",\"note\":\"Enumeration values not surfaced by IDomainModelHost; use read_domain_model for value detail\"}],\"skippedModules\":[{\"module\":\"Atlas_Core\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"FeedbackModule\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"Administration\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"Atlas_Web_Content\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"NanoflowCommons\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"WebActions\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"DataWidgets\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"},{\"module\":\"FileUploader\",\"error\":\"The given key \\u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\\u0027 was not present in the dictionary.\",\"note\":\"Module\\u0027s enum index isn\\u0027t queryable via this Studio Pro version\\u0027s extension API (often happens for system / App-Store-imported modules on 10.x). Skipped.\"}]}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -818,21 +965,21 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  30,
-        "timestamp":  "2026-05-14T01:16:13.1640800Z"
+        "elapsed_ms":  39,
+        "timestamp":  "2026-05-14T02:48:33.1628596Z"
     },
     {
         "name":  "list_rules",
         "family":  "Security",
         "phase":  "read",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
 
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  634064,
+                             "id":  974159,
                              "result":  {
                                             "content":  [
                                                             {
@@ -843,24 +990,24 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "success:false",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  42,
-        "timestamp":  "2026-05-14T01:16:13.2280345Z"
+        "elapsed_ms":  38,
+        "timestamp":  "2026-05-14T02:48:33.2305293Z"
     },
     {
         "name":  "read_security_info",
         "family":  "Security",
         "phase":  "read",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
 
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  901949,
+                             "id":  145612,
                              "result":  {
                                             "content":  [
                                                             {
@@ -871,24 +1018,24 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "success:false",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  24,
-        "timestamp":  "2026-05-14T01:16:13.3505637Z"
+        "elapsed_ms":  30,
+        "timestamp":  "2026-05-14T02:48:33.2823381Z"
     },
     {
         "name":  "read_entity_access_rules",
         "family":  "Security",
         "phase":  "read",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
 
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  4514,
+                             "id":  87917,
                              "result":  {
                                             "content":  [
                                                             {
@@ -899,24 +1046,24 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "success:false",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  36,
-        "timestamp":  "2026-05-14T01:16:13.4100735Z"
+        "elapsed_ms":  22,
+        "timestamp":  "2026-05-14T02:48:33.3263529Z"
     },
     {
         "name":  "read_microflow_security",
         "family":  "Security",
         "phase":  "read",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
 
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  872986,
+                             "id":  164115,
                              "result":  {
                                             "content":  [
                                                             {
@@ -927,24 +1074,24 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "success:false",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  36,
-        "timestamp":  "2026-05-14T01:16:13.4765854Z"
+        "elapsed_ms":  23,
+        "timestamp":  "2026-05-14T02:48:33.3748536Z"
     },
     {
         "name":  "audit_security",
         "family":  "Security",
         "phase":  "read",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
 
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  478628,
+                             "id":  574515,
                              "result":  {
                                             "content":  [
                                                             {
@@ -955,11 +1102,11 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "success:false",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  33,
-        "timestamp":  "2026-05-14T01:16:13.5435889Z"
+        "elapsed_ms":  31,
+        "timestamp":  "2026-05-14T02:48:33.4288571Z"
     },
     {
         "name":  "read_runtime_settings",
@@ -972,7 +1119,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  958692,
+                             "id":  670347,
                              "result":  {
                                             "content":  [
                                                             {
@@ -986,8 +1133,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  38,
-        "timestamp":  "2026-05-14T01:16:13.6081016Z"
+        "elapsed_ms":  33,
+        "timestamp":  "2026-05-14T02:48:33.5003840Z"
     },
     {
         "name":  "read_configurations",
@@ -1000,7 +1147,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  608272,
+                             "id":  482541,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1014,8 +1161,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  30,
-        "timestamp":  "2026-05-14T01:16:13.6633701Z"
+        "elapsed_ms":  29,
+        "timestamp":  "2026-05-14T02:48:33.5647054Z"
     },
     {
         "name":  "list_rest_services",
@@ -1028,7 +1175,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  770898,
+                             "id":  878590,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1042,8 +1189,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  27,
-        "timestamp":  "2026-05-14T01:16:13.7171014Z"
+        "elapsed_ms":  24,
+        "timestamp":  "2026-05-14T02:48:33.6097098Z"
     },
     {
         "name":  "read_version_control",
@@ -1056,7 +1203,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  620738,
+                             "id":  6195,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1070,21 +1217,21 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  50,
-        "timestamp":  "2026-05-14T01:16:13.7957160Z"
+        "elapsed_ms":  30,
+        "timestamp":  "2026-05-14T02:48:33.6662469Z"
     },
     {
         "name":  "get_app_status",
         "family":  "UiActions",
         "phase":  "read",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
 
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  431724,
+                             "id":  633291,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1098,21 +1245,21 @@
         "error_summary":  "{\"error\":\"Pending Task 15 \\u002B Task 1 spike \\u2014 10.x IApp surface verification\"}",
         "severity":  "CRASH",
         "side_effect_check":  null,
-        "elapsed_ms":  33,
-        "timestamp":  "2026-05-14T01:16:13.8617156Z"
+        "elapsed_ms":  32,
+        "timestamp":  "2026-05-14T02:48:33.7242619Z"
     },
     {
         "name":  "get_active_run_configuration",
         "family":  "UiActions",
         "phase":  "read",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
 
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  901383,
+                             "id":  501346,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1126,36 +1273,36 @@
         "error_summary":  "{\"error\":\"Pending Task 15 \\u2014 10.x ILocalRunConfigurationsService surface verification\"}",
         "severity":  "CRASH",
         "side_effect_check":  null,
-        "elapsed_ms":  35,
-        "timestamp":  "2026-05-14T01:16:13.9292366Z"
+        "elapsed_ms":  32,
+        "timestamp":  "2026-05-14T02:48:33.7835697Z"
     },
     {
         "name":  "create_module",
         "family":  "DomainModel",
         "phase":  "mutate",
-        "status":  "PASS",
+        "status":  "FAIL",
         "expected":  "ok",
         "args":  {
                      "module_name":  "ConcordSweep_create_module"
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  96205,
+                             "id":  333123,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"message\":\"Module \\u0027ConcordSweep_create_module\\u0027 created successfully\",\"module\":{\"name\":\"ConcordSweep_create_module\",\"fromAppStore\":false,\"entityCount\":0}}"
+                                                                "text":  "{\"error\":\"Module \\u0027ConcordSweep_create_module\\u0027 already exists\"}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  null,
-        "severity":  null,
+        "error_summary":  "Module \u0027ConcordSweep_create_module\u0027 already exists",
+        "severity":  "BUG",
         "side_effect_check":  null,
-        "elapsed_ms":  991,
-        "timestamp":  "2026-05-14T01:16:14.9552606Z"
+        "elapsed_ms":  26,
+        "timestamp":  "2026-05-14T02:48:33.8437027Z"
     },
     {
         "name":  "create_entity",
@@ -1169,7 +1316,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  725503,
+                             "id":  203243,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1191,12 +1338,12 @@
                                            },
                                   "raw_response":  {
                                                        "jsonrpc":  "2.0",
-                                                       "id":  959274,
+                                                       "id":  388647,
                                                        "result":  {
                                                                       "content":  [
                                                                                       {
                                                                                           "type":  "text",
-                                                                                          "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":1,\"returned\":1,\"elements\":[{\"name\":\"SweepEntity_create_entity\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_entity\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
+                                                                                          "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":9,\"returned\":9,\"elements\":[{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_domain_model_from_schema\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_entity\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_entity\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
                                                                                       }
                                                                                   ],
                                                                       "isError":  false
@@ -1204,8 +1351,8 @@
                                                    },
                                   "status":  "ran"
                               },
-        "elapsed_ms":  198,
-        "timestamp":  "2026-05-14T01:16:15.1803271Z"
+        "elapsed_ms":  151,
+        "timestamp":  "2026-05-14T02:48:34.0203227Z"
     },
     {
         "name":  "create_multiple_entities",
@@ -1226,12 +1373,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  120699,
+                             "id":  218258,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"message\":\"Successfully created 2 entities\",\"entities\":[{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"persistable\":true,\"entityType\":\"persistent\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"persistable\":true,\"entityType\":\"persistent\"}],\"auto_arranged\":true}"
+                                                                "text":  "{\"success\":true,\"message\":\"Successfully created 0 entities\",\"entities\":[],\"auto_arranged\":true}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -1240,8 +1387,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  325,
-        "timestamp":  "2026-05-14T01:16:15.5326693Z"
+        "elapsed_ms":  150,
+        "timestamp":  "2026-05-14T02:48:34.1934195Z"
     },
     {
         "name":  "create_domain_model_from_schema",
@@ -1267,12 +1414,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  471858,
+                             "id":  833030,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"message\":\"Successfully created domain model with 1 entities\",\"entities\":[{\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\"}],\"auto_arranged\":true}"
+                                                                "text":  "{\"success\":true,\"message\":\"Successfully created domain model with 0 entities\",\"entities\":[],\"auto_arranged\":true}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -1281,8 +1428,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  276,
-        "timestamp":  "2026-05-14T01:16:15.8448135Z"
+        "elapsed_ms":  69,
+        "timestamp":  "2026-05-14T02:48:34.2889343Z"
     },
     {
         "name":  "add_attribute",
@@ -1298,7 +1445,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  720566,
+                             "id":  377680,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1312,8 +1459,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  158,
-        "timestamp":  "2026-05-14T01:16:16.0297119Z"
+        "elapsed_ms":  143,
+        "timestamp":  "2026-05-14T02:48:34.4653081Z"
     },
     {
         "name":  "update_attribute",
@@ -1330,7 +1477,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  777550,
+                             "id":  538635,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1344,8 +1491,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  146,
-        "timestamp":  "2026-05-14T01:16:16.2055446Z"
+        "elapsed_ms":  133,
+        "timestamp":  "2026-05-14T02:48:34.6250245Z"
     },
     {
         "name":  "rename_attribute",
@@ -1361,7 +1508,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  257566,
+                             "id":  438328,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1375,8 +1522,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  537,
-        "timestamp":  "2026-05-14T01:16:16.7666053Z"
+        "elapsed_ms":  575,
+        "timestamp":  "2026-05-14T02:48:35.2245940Z"
     },
     {
         "name":  "set_calculated_attribute",
@@ -1391,12 +1538,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  380403,
+                             "id":  363838,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Entity \\u0027Customer\\u0027 not found\"}"
+                                                                "text":  "{\"error\":\"Attribute \\u0027FullName\\u0027 not found on entity \\u0027Customer\\u0027\"}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -1405,8 +1552,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  72,
-        "timestamp":  "2026-05-14T01:16:16.8806375Z"
+        "elapsed_ms":  46,
+        "timestamp":  "2026-05-14T02:48:35.3061274Z"
     },
     {
         "name":  "configure_system_attributes",
@@ -1422,7 +1569,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  434419,
+                             "id":  323116,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1436,8 +1583,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  172,
-        "timestamp":  "2026-05-14T01:16:17.0876939Z"
+        "elapsed_ms":  127,
+        "timestamp":  "2026-05-14T02:48:35.4684970Z"
     },
     {
         "name":  "add_event_handler",
@@ -1453,12 +1600,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  825206,
+                             "id":  709735,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Entity \\u0027Customer\\u0027 not found\"}"
+                                                                "text":  "{\"error\":\"Failed to add event handler: Microflow \\u0027MyFirstModule.BCO_Customer_BeforeCommit\\u0027 not found.\"}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -1467,8 +1614,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  50,
-        "timestamp":  "2026-05-14T01:16:17.2082261Z"
+        "elapsed_ms":  47,
+        "timestamp":  "2026-05-14T02:48:35.5457479Z"
     },
     {
         "name":  "set_documentation",
@@ -1484,7 +1631,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  219440,
+                             "id":  852120,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1498,8 +1645,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  142,
-        "timestamp":  "2026-05-14T01:16:17.3822871Z"
+        "elapsed_ms":  170,
+        "timestamp":  "2026-05-14T02:48:35.7569881Z"
     },
     {
         "name":  "rename_entity",
@@ -1514,7 +1661,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  206857,
+                             "id":  522004,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1536,12 +1683,12 @@
                                            },
                                   "raw_response":  {
                                                        "jsonrpc":  "2.0",
-                                                       "id":  571699,
+                                                       "id":  42157,
                                                        "result":  {
                                                                       "content":  [
                                                                                       {
                                                                                           "type":  "text",
-                                                                                          "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":4,\"returned\":4,\"elements\":[{\"name\":\"SweepEntityRenamed_rename_entity\",\"qualifiedName\":\"MyFirstModule.SweepEntityRenamed_rename_entity\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_domain_model_from_schema\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
+                                                                                          "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":9,\"returned\":9,\"elements\":[{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_domain_model_from_schema\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityRenamed_rename_entity\",\"qualifiedName\":\"MyFirstModule.SweepEntityRenamed_rename_entity\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
                                                                                       }
                                                                                   ],
                                                                       "isError":  false
@@ -1549,8 +1696,8 @@
                                                    },
                                   "status":  "ran"
                               },
-        "elapsed_ms":  513,
-        "timestamp":  "2026-05-14T01:16:17.9459158Z"
+        "elapsed_ms":  456,
+        "timestamp":  "2026-05-14T02:48:36.2376305Z"
     },
     {
         "name":  "set_entity_generalization",
@@ -1565,12 +1712,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  316220,
+                             "id":  185005,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Entity \\u0027Order\\u0027 not found in module \\u0027MyFirstModule\\u0027\"}"
+                                                                "text":  "{\"error\":\"Parent entity \\u0027Administration.FileDocument\\u0027 not found\"}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -1579,8 +1726,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  57,
-        "timestamp":  "2026-05-14T01:16:18.0344506Z"
+        "elapsed_ms":  28,
+        "timestamp":  "2026-05-14T02:48:36.2941643Z"
     },
     {
         "name":  "remove_entity_generalization",
@@ -1594,12 +1741,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  423309,
+                             "id":  939652,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Entity \\u0027Order\\u0027 not found\"}"
+                                                                "text":  "{\"error\":\"Entity \\u0027Order\\u0027 does not have a generalization to remove\"}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -1608,14 +1755,14 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  28,
-        "timestamp":  "2026-05-14T01:16:18.1139875Z"
+        "elapsed_ms":  22,
+        "timestamp":  "2026-05-14T02:48:36.3419479Z"
     },
     {
         "name":  "copy_model_element",
         "family":  "DomainModel",
         "phase":  "mutate",
-        "status":  "FAIL",
+        "status":  "PASS",
         "expected":  "ok",
         "args":  {
                      "element_type":  "entity",
@@ -1625,22 +1772,22 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  722099,
+                             "id":  785361,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Entity \\u0027Customer\\u0027 not found in module \\u0027MyFirstModule\\u0027.\"}"
+                                                                "text":  "{\"success\":true,\"elementType\":\"entity\",\"source\":\"Customer\",\"copy\":\"SweepEntity_copy\",\"targetQualifiedName\":\"MyFirstModule.SweepEntity_copy\"}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Entity \u0027Customer\u0027 not found in module \u0027MyFirstModule\u0027.",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  44,
-        "timestamp":  "2026-05-14T01:16:18.1955051Z"
+        "elapsed_ms":  169,
+        "timestamp":  "2026-05-14T02:48:36.5381326Z"
     },
     {
         "name":  "create_association",
@@ -1656,12 +1803,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  535886,
+                             "id":  143517,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Parent entity \\u0027Customer\\u0027 not found in module \\u0027MyFirstModule\\u0027\"}"
+                                                                "text":  "{\"success\":true,\"message\":\"Association \\u0027Customer_Orders\\u0027 created successfully\",\"association\":{\"name\":\"Customer_Orders\",\"parent\":\"Customer\",\"child\":\"Order\",\"type\":\"one-to-many\",\"parentDeleteBehavior\":\"delete_me_but_keep_references\",\"childDeleteBehavior\":\"delete_me_but_keep_references\",\"owner\":\"Default\"}}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -1670,14 +1817,14 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  64,
-        "timestamp":  "2026-05-14T01:16:18.2880221Z"
+        "elapsed_ms":  547,
+        "timestamp":  "2026-05-14T02:48:37.1144519Z"
     },
     {
         "name":  "create_multiple_associations",
         "family":  "DomainModel",
         "phase":  "mutate",
-        "status":  "PASS",
+        "status":  "FAIL",
         "expected":  "ok",
         "args":  {
                      "associations":  [
@@ -1691,22 +1838,22 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  743349,
+                             "id":  413994,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"message\":\"Successfully created 1 associations\",\"associations\":[{\"name\":\"SweepEntityA_create_multiple_entities_SweepEntityB_create_multiple_entities\",\"parent\":\"SweepEntityA_create_multiple_entities\",\"child\":\"SweepEntityB_create_multiple_entities\",\"type\":\"one-to-many\"}]}"
+                                                                "text":  "{\"error\":\"Failed to create associations: Name is not valid or is not unique\"}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  null,
-        "severity":  null,
+        "error_summary":  "Failed to create associations: Name is not valid or is not unique",
+        "severity":  "BUG",
         "side_effect_check":  null,
-        "elapsed_ms":  564,
-        "timestamp":  "2026-05-14T01:16:18.8971871Z"
+        "elapsed_ms":  51,
+        "timestamp":  "2026-05-14T02:48:37.2071261Z"
     },
     {
         "name":  "update_association",
@@ -1721,12 +1868,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  68790,
+                             "id":  746200,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Association \\u0027Customer_Orders\\u0027 not found in module \\u0027MyFirstModule\\u0027\"}"
+                                                                "text":  "{\"success\":true,\"message\":\"Association \\u0027Customer_Orders\\u0027 updated\",\"association\":\"Customer_Orders\",\"module\":\"MyFirstModule\",\"changes\":[\"owner \\u2192 both\"]}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -1735,8 +1882,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  54,
-        "timestamp":  "2026-05-14T01:16:18.9877036Z"
+        "elapsed_ms":  134,
+        "timestamp":  "2026-05-14T02:48:37.3712271Z"
     },
     {
         "name":  "rename_association",
@@ -1751,12 +1898,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  125338,
+                             "id":  41787,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Association \\u0027Customer_Orders\\u0027 not found in module \\u0027MyFirstModule\\u0027\"}"
+                                                                "text":  "{\"error\":\"Name is not valid or is not unique\"}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -1765,8 +1912,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  29,
-        "timestamp":  "2026-05-14T01:16:19.0737019Z"
+        "elapsed_ms":  60,
+        "timestamp":  "2026-05-14T02:48:37.4699269Z"
     },
     {
         "name":  "arrange_domain_model",
@@ -1779,7 +1926,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  171276,
+                             "id":  371068,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1793,8 +1940,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  177,
-        "timestamp":  "2026-05-14T01:16:19.2852614Z"
+        "elapsed_ms":  130,
+        "timestamp":  "2026-05-14T02:48:37.6305344Z"
     },
     {
         "name":  "manage_folders",
@@ -1808,7 +1955,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  828899,
+                             "id":  303969,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1822,8 +1969,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  61,
-        "timestamp":  "2026-05-14T01:16:19.3848937Z"
+        "elapsed_ms":  26,
+        "timestamp":  "2026-05-14T02:48:37.6818359Z"
     },
     {
         "name":  "rename_document",
@@ -1839,12 +1986,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  781753,
+                             "id":  425358,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Document \\u0027ACT_Example\\u0027 (type: microflow) not found in module \\u0027MyFirstModule\\u0027\"}"
+                                                                "text":  "{\"error\":\"Name is not valid or is not unique\"}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -1853,14 +2000,14 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  42,
-        "timestamp":  "2026-05-14T01:16:19.4677777Z"
+        "elapsed_ms":  36,
+        "timestamp":  "2026-05-14T02:48:37.7453570Z"
     },
     {
         "name":  "create_enumeration",
         "family":  "ConstantsEnums",
         "phase":  "mutate",
-        "status":  "PASS",
+        "status":  "FAIL",
         "expected":  "ok",
         "args":  {
                      "name":  "SweepEnum_create_enumeration",
@@ -1873,22 +2020,22 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  533306,
+                             "id":  353258,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"message\":\"Enumeration \\u0027SweepEnum_create_enumeration\\u0027 created with 3 values in module \\u0027MyFirstModule\\u0027\",\"enumeration\":{\"name\":\"SweepEnum_create_enumeration\",\"qualifiedName\":\"MyFirstModule.SweepEnum_create_enumeration\",\"module\":\"MyFirstModule\",\"values\":[{\"name\":\"Draft\",\"caption\":\"Draft\"},{\"name\":\"Submitted\",\"caption\":\"Submitted\"},{\"name\":\"Approved\",\"caption\":\"Approved\"}]}}"
+                                                                "text":  "{\"error\":\"Failed to create enumeration: Enumeration \\u0027SweepEnum_create_enumeration\\u0027 already exists in module \\u0027MyFirstModule\\u0027.\"}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  null,
-        "severity":  null,
+        "error_summary":  "Failed to create enumeration: Enumeration \u0027SweepEnum_create_enumeration\u0027 already exists in module \u0027MyFirstModule\u0027.",
+        "severity":  "BUG",
         "side_effect_check":  null,
-        "elapsed_ms":  674,
-        "timestamp":  "2026-05-14T01:16:20.1775080Z"
+        "elapsed_ms":  30,
+        "timestamp":  "2026-05-14T02:48:37.8044242Z"
     },
     {
         "name":  "update_enumeration",
@@ -1905,7 +2052,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  675279,
+                             "id":  673545,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1919,8 +2066,8 @@
         "error_summary":  "The given key \u0027Mendix.Modeler.ExtensionLoader.ModelProxies.Projects.ModuleProxy\u0027 was not present in the dictionary.",
         "severity":  "CRASH",
         "side_effect_check":  null,
-        "elapsed_ms":  59,
-        "timestamp":  "2026-05-14T01:16:20.2845961Z"
+        "elapsed_ms":  24,
+        "timestamp":  "2026-05-14T02:48:37.8567993Z"
     },
     {
         "name":  "rename_enumeration_value",
@@ -1931,40 +2078,40 @@
         "args":  {
                      "enumeration_name":  "SweepEnum_create_enumeration",
                      "value_name":  "Draft",
-                     "new_name":  "New",
+                     "new_name":  "NewDraft",
                      "module_name":  "MyFirstModule"
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  620763,
+                             "id":  247001,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"Invalid name \\u0027New\\u0027: The name \\u0027New\\u0027 is a reserved word.\"}"
+                                                                "text":  "{\"error\":\"Value \\u0027Draft\\u0027 not found in enumeration \\u0027SweepEnum_create_enumeration\\u0027.\"}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "Invalid name \u0027New\u0027: The name \u0027New\u0027 is a reserved word.",
+        "error_summary":  "Value \u0027Draft\u0027 not found in enumeration \u0027SweepEnum_create_enumeration\u0027.",
         "severity":  "BUG",
         "side_effect_check":  null,
-        "elapsed_ms":  38,
-        "timestamp":  "2026-05-14T01:16:20.3676097Z"
+        "elapsed_ms":  35,
+        "timestamp":  "2026-05-14T02:48:37.9218041Z"
     },
     {
         "name":  "create_constant",
         "family":  "ConstantsEnums",
         "phase":  "mutate",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
 
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  281031,
+                             "id":  720504,
                              "result":  {
                                             "content":  [
                                                             {
@@ -1975,24 +2122,24 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "success:false",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  34,
-        "timestamp":  "2026-05-14T01:16:20.4371330Z"
+        "elapsed_ms":  26,
+        "timestamp":  "2026-05-14T02:48:37.9833264Z"
     },
     {
         "name":  "update_constant",
         "family":  "ConstantsEnums",
         "phase":  "mutate",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
 
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  323415,
+                             "id":  267061,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2003,24 +2150,24 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "success:false",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  34,
-        "timestamp":  "2026-05-14T01:16:20.5046609Z"
+        "elapsed_ms":  29,
+        "timestamp":  "2026-05-14T02:48:38.0452141Z"
     },
     {
         "name":  "configure_constant_values",
         "family":  "ConstantsEnums",
         "phase":  "mutate",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
 
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  670659,
+                             "id":  282273,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2031,11 +2178,11 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "success:false",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  53,
-        "timestamp":  "2026-05-14T01:16:20.5881819Z"
+        "elapsed_ms":  39,
+        "timestamp":  "2026-05-14T02:48:38.1353636Z"
     },
     {
         "name":  "create_microflow",
@@ -2049,12 +2196,12 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  69303,
+                             "id":  370632,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"message\":\"Microflow \\u0027SweepMf_create_microflow\\u0027 created successfully in module \\u0027MyFirstModule\\u0027.\",\"document_id\":\"a67bdb30-e10b-4345-840b-e39621421423\",\"qualified_name\":\"MyFirstModule.SweepMf_create_microflow\",\"microflow\":{\"name\":\"SweepMf_create_microflow\",\"qualifiedName\":\"MyFirstModule.SweepMf_create_microflow\",\"module\":\"MyFirstModule\",\"returnType\":\"void\",\"parameterCount\":0}}"
+                                                                "text":  "{\"success\":true,\"message\":\"Microflow \\u0027SweepMf_create_microflow\\u0027 created successfully in module \\u0027MyFirstModule\\u0027.\",\"document_id\":\"e5a1d4a3-4893-4f9a-9bf6-a83ceee33342\",\"qualified_name\":\"MyFirstModule.SweepMf_create_microflow\",\"microflow\":{\"name\":\"SweepMf_create_microflow\",\"qualifiedName\":\"MyFirstModule.SweepMf_create_microflow\",\"module\":\"MyFirstModule\",\"returnType\":\"void\",\"parameterCount\":0}}"
                                                             }
                                                         ],
                                             "isError":  false
@@ -2069,12 +2216,12 @@
                                            },
                                   "raw_response":  {
                                                        "jsonrpc":  "2.0",
-                                                       "id":  528453,
+                                                       "id":  693334,
                                                        "result":  {
                                                                       "content":  [
                                                                                       {
                                                                                           "type":  "text",
-                                                                                          "text":  "{\"microflows\":[{\"name\":\"MyFirstLogic\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.MyFirstLogic\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"SweepMf_create_microflow\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.SweepMf_create_microflow\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false}]}"
+                                                                                          "text":  "{\"microflows\":[{\"name\":\"MyFirstLogic\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.MyFirstLogic\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ACT_ExampleRenamed\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.ACT_ExampleRenamed\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"CAL_Customer_FullName\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.CAL_Customer_FullName\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"ACT_Example\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.ACT_Example\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false},{\"name\":\"SweepMf_create_microflow\",\"module\":\"MyFirstModule\",\"qualifiedName\":\"MyFirstModule.SweepMf_create_microflow\",\"parameterCount\":0,\"activityCount\":0,\"returnType\":null,\"returnIsList\":false}]}"
                                                                                       }
                                                                                   ],
                                                                       "isError":  false
@@ -2082,8 +2229,8 @@
                                                    },
                                   "status":  "ran"
                               },
-        "elapsed_ms":  723,
-        "timestamp":  "2026-05-14T01:16:21.3549214Z"
+        "elapsed_ms":  738,
+        "timestamp":  "2026-05-14T02:48:38.9114360Z"
     },
     {
         "name":  "update_microflow",
@@ -2098,7 +2245,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  984675,
+                             "id":  668672,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2112,8 +2259,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  144,
-        "timestamp":  "2026-05-14T01:16:21.5459766Z"
+        "elapsed_ms":  129,
+        "timestamp":  "2026-05-14T02:48:39.0700117Z"
     },
     {
         "name":  "create_microflow_activity",
@@ -2131,7 +2278,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  92793,
+                             "id":  376359,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2145,8 +2292,8 @@
         "error_summary":  "Failed to create activity of type \u0027log\u0027.",
         "severity":  "BUG",
         "side_effect_check":  null,
-        "elapsed_ms":  64,
-        "timestamp":  "2026-05-14T01:16:21.6515133Z"
+        "elapsed_ms":  43,
+        "timestamp":  "2026-05-14T02:48:39.1422740Z"
     },
     {
         "name":  "create_microflow_activities_sequence",
@@ -2168,7 +2315,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  834591,
+                             "id":  363564,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2182,8 +2329,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  126,
-        "timestamp":  "2026-05-14T01:16:21.8295601Z"
+        "elapsed_ms":  50,
+        "timestamp":  "2026-05-14T02:48:39.2337990Z"
     },
     {
         "name":  "modify_microflow_activity",
@@ -2199,7 +2346,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  150933,
+                             "id":  103576,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2213,8 +2360,8 @@
         "error_summary":  "Invalid position 1. Microflow has 0 action activities (1-0)",
         "severity":  "BUG",
         "side_effect_check":  null,
-        "elapsed_ms":  53,
-        "timestamp":  "2026-05-14T01:16:21.9490830Z"
+        "elapsed_ms":  24,
+        "timestamp":  "2026-05-14T02:48:39.2895847Z"
     },
     {
         "name":  "insert_before_activity",
@@ -2233,7 +2380,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  598912,
+                             "id":  944189,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2247,8 +2394,8 @@
         "error_summary":  "Invalid before_position 1. Microflow has 0 action activities (1-0)",
         "severity":  "BUG",
         "side_effect_check":  null,
-        "elapsed_ms":  59,
-        "timestamp":  "2026-05-14T01:16:22.0496415Z"
+        "elapsed_ms":  30,
+        "timestamp":  "2026-05-14T02:48:39.3576165Z"
     },
     {
         "name":  "set_microflow_url",
@@ -2263,7 +2410,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  303501,
+                             "id":  36756,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2277,8 +2424,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  131,
-        "timestamp":  "2026-05-14T01:16:22.2217110Z"
+        "elapsed_ms":  140,
+        "timestamp":  "2026-05-14T02:48:39.5276494Z"
     },
     {
         "name":  "generate_overview_pages",
@@ -2295,22 +2442,22 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  7363,
+                             "id":  535902,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"error\":\"None of the requested entities were found in module \\u0027MyFirstModule\\u0027.\",\"success\":false,\"warnings\":[]}"
+                                                                "text":  "{\"error\":\"One or more of the passed entities does not have any attributes (Parameter \\u0027entities\\u0027)\",\"success\":false}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "None of the requested entities were found in module \u0027MyFirstModule\u0027.",
+        "error_summary":  "One or more of the passed entities does not have any attributes (Parameter \u0027entities\u0027)",
         "severity":  "BUG",
         "side_effect_check":  null,
-        "elapsed_ms":  54,
-        "timestamp":  "2026-05-14T01:16:22.3142472Z"
+        "elapsed_ms":  31,
+        "timestamp":  "2026-05-14T02:48:39.6042019Z"
     },
     {
         "name":  "set_runtime_settings",
@@ -2324,7 +2471,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  846665,
+                             "id":  189876,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2338,21 +2485,21 @@
         "error_summary":  "success:false",
         "severity":  "BUG",
         "side_effect_check":  null,
-        "elapsed_ms":  49,
-        "timestamp":  "2026-05-14T01:16:22.4037599Z"
+        "elapsed_ms":  35,
+        "timestamp":  "2026-05-14T02:48:39.6790168Z"
     },
     {
         "name":  "set_configuration",
         "family":  "ProjectSettings",
         "phase":  "mutate",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
                      "configuration_name":  "Default"
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  127769,
+                             "id":  154477,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2363,24 +2510,24 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "success:false",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  34,
-        "timestamp":  "2026-05-14T01:16:22.4758168Z"
+        "elapsed_ms":  41,
+        "timestamp":  "2026-05-14T02:48:39.7542517Z"
     },
     {
         "name":  "sync_filesystem",
         "family":  "ProjectSettings",
         "phase":  "mutate",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
 
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  998185,
+                             "id":  920377,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2391,11 +2538,11 @@
                                             "isError":  false
                                         }
                          },
-        "error_summary":  "success:false",
-        "severity":  "BUG",
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  34,
-        "timestamp":  "2026-05-14T01:16:22.5493653Z"
+        "elapsed_ms":  36,
+        "timestamp":  "2026-05-14T02:48:39.8432563Z"
     },
     {
         "name":  "manage_navigation",
@@ -2415,7 +2562,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  223575,
+                             "id":  47438,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2429,14 +2576,14 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  37,
-        "timestamp":  "2026-05-14T01:16:22.6218870Z"
+        "elapsed_ms":  30,
+        "timestamp":  "2026-05-14T02:48:39.9117755Z"
     },
     {
         "name":  "rename_module",
         "family":  "DomainModel",
         "phase":  "mutate",
-        "status":  "PASS",
+        "status":  "FAIL",
         "expected":  "ok",
         "args":  {
                      "module_name":  "ConcordSweep_create_module",
@@ -2444,22 +2591,22 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  699295,
+                             "id":  363022,
                              "result":  {
                                             "content":  [
                                                             {
                                                                 "type":  "text",
-                                                                "text":  "{\"success\":true,\"message\":\"Module renamed from \\u0027ConcordSweep_create_module\\u0027 to \\u0027ConcordSweep_rename_module\\u0027 (all qualified references updated)\",\"oldName\":\"ConcordSweep_create_module\",\"newName\":\"ConcordSweep_rename_module\"}"
+                                                                "text":  "{\"error\":\"Name is not valid or is not unique\"}"
                                                             }
                                                         ],
                                             "isError":  false
                                         }
                          },
-        "error_summary":  null,
-        "severity":  null,
+        "error_summary":  "Name is not valid or is not unique",
+        "severity":  "BUG",
         "side_effect_check":  null,
-        "elapsed_ms":  633,
-        "timestamp":  "2026-05-14T01:16:23.3006280Z"
+        "elapsed_ms":  30,
+        "timestamp":  "2026-05-14T02:48:39.9723633Z"
     },
     {
         "name":  "delete_document",
@@ -2473,7 +2620,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  198722,
+                             "id":  575580,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2487,8 +2634,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  725,
-        "timestamp":  "2026-05-14T01:16:24.0684548Z"
+        "elapsed_ms":  667,
+        "timestamp":  "2026-05-14T02:48:40.6713114Z"
     },
     {
         "name":  "exclude_document",
@@ -2503,7 +2650,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  161838,
+                             "id":  143336,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2517,8 +2664,8 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  73,
-        "timestamp":  "2026-05-14T01:16:24.1845027Z"
+        "elapsed_ms":  36,
+        "timestamp":  "2026-05-14T02:48:40.7611302Z"
     },
     {
         "name":  "delete_model_element",
@@ -2533,7 +2680,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  454868,
+                             "id":  275959,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2555,12 +2702,12 @@
                                            },
                                   "raw_response":  {
                                                        "jsonrpc":  "2.0",
-                                                       "id":  39794,
+                                                       "id":  526917,
                                                        "result":  {
                                                                       "content":  [
                                                                                       {
                                                                                           "type":  "text",
-                                                                                          "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":3,\"returned\":3,\"elements\":[{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_domain_model_from_schema\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
+                                                                                          "text":  "{\"success\":true,\"typeName\":\"DomainModels$Entity\",\"totalFound\":9,\"returned\":9,\"elements\":[{\"name\":\"SweepEntityA_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityA_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntityB_create_multiple_entities\",\"qualifiedName\":\"MyFirstModule.SweepEntityB_create_multiple_entities\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_create_domain_model_from_schema\",\"qualifiedName\":\"MyFirstModule.SweepEntity_create_domain_model_from_schema\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Customer\",\"qualifiedName\":\"MyFirstModule.Customer\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"Order\",\"qualifiedName\":\"MyFirstModule.Order\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"},{\"name\":\"SweepEntity_copy\",\"qualifiedName\":\"MyFirstModule.SweepEntity_copy\",\"module\":\"MyFirstModule\",\"type\":\"DomainModels$Entity\"}],\"note\":\"Results obtained via HostServices.DomainModel (embedded entities not accessible via GetUnitsOfType)\"}"
                                                                                       }
                                                                                   ],
                                                                       "isError":  false
@@ -2568,8 +2715,8 @@
                                                    },
                                   "status":  "ran"
                               },
-        "elapsed_ms":  206,
-        "timestamp":  "2026-05-14T01:16:24.4305481Z"
+        "elapsed_ms":  187,
+        "timestamp":  "2026-05-14T02:48:40.9892301Z"
     },
     {
         "name":  "save_all",
@@ -2582,7 +2729,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  473151,
+                             "id":  819723,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2596,40 +2743,52 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  66,
-        "timestamp":  "2026-05-14T01:16:24.5360747Z"
+        "elapsed_ms":  35,
+        "timestamp":  "2026-05-14T02:48:41.0810009Z"
     },
     {
         "name":  "run_app",
         "family":  "UiActions",
         "phase":  "lifecycle",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
 
                  },
         "raw_response":  null,
         "error_summary":  "The request was aborted: The operation has timed out.",
-        "severity":  "TRANSPORT",
+        "severity":  "TIMEOUT",
         "side_effect_check":  null,
-        "elapsed_ms":  30075,
-        "timestamp":  "2026-05-14T01:16:54.6615313Z"
+        "elapsed_ms":  30078,
+        "timestamp":  "2026-05-14T02:49:11.1947697Z"
     },
     {
         "name":  "stop_app",
         "family":  "UiActions",
         "phase":  "lifecycle",
-        "status":  "FAIL",
-        "expected":  "ok",
+        "status":  "PASS",
+        "expected":  "either",
         "args":  {
 
                  },
-        "raw_response":  null,
-        "error_summary":  "The request was aborted: The operation has timed out.",
-        "severity":  "TRANSPORT",
+        "raw_response":  {
+                             "jsonrpc":  "2.0",
+                             "id":  722352,
+                             "result":  {
+                                            "content":  [
+                                                            {
+                                                                "type":  "text",
+                                                                "text":  "{\"status\":\"wasnt_running\"}"
+                                                            }
+                                                        ],
+                                            "isError":  false
+                                        }
+                         },
+        "error_summary":  null,
+        "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  30014,
-        "timestamp":  "2026-05-14T01:17:24.7369558Z"
+        "elapsed_ms":  708,
+        "timestamp":  "2026-05-14T02:49:42.1706221Z"
     },
     {
         "name":  "refresh_project",
@@ -2642,7 +2801,7 @@
                  },
         "raw_response":  {
                              "jsonrpc":  "2.0",
-                             "id":  403452,
+                             "id":  239525,
                              "result":  {
                                             "content":  [
                                                             {
@@ -2656,7 +2815,7 @@
         "error_summary":  null,
         "severity":  null,
         "side_effect_check":  null,
-        "elapsed_ms":  782,
-        "timestamp":  "2026-05-14T01:17:25.5757561Z"
+        "elapsed_ms":  33,
+        "timestamp":  "2026-05-14T02:49:42.2572500Z"
     }
 ]

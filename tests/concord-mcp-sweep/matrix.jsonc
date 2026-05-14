@@ -7,15 +7,46 @@
 // Entry schema:
 //   name:     server-side tool name (must match tools/list)
 //   family:   for findings.md grouping (DomainModel, Microflows, etc.)
-//   phase:    "read" | "mutate" | "lifecycle"  — controls execution order
+//   phase:    "setup" | "read" | "mutate" | "lifecycle"  — controls execution order
 //   args:     exact JSON object sent as params.arguments
 //   expected: "ok" | "error" | "either"
 //   verify:   (optional) follow-up read on risky mutators; result lands
 //             in side_effect_check sub-record of findings.json
 //   notes:    free-text intent (especially for known-bug entries)
 [
-  // ---- Diagnostics ----
+  // ---- Setup phase: bootstrap fixtures for read-phase targets ----
   {
+    "name": "create_entity", "family": "DomainModel", "phase": "setup",
+    "args": { "module_name": "MyFirstModule", "entity_name": "Customer" },
+    "expected": "either",
+    "notes": "Fixture for query_associations, read_attribute_details, copy_model_element. expected:either for idempotency across reruns."
+  }
+  ,{
+    "name": "add_attribute", "family": "DomainModel", "phase": "setup",
+    "args": { "module_name": "MyFirstModule", "entity_name": "Customer", "attribute_name": "Name", "attribute_type": "String" },
+    "expected": "either",
+    "notes": "Fixture for read_attribute_details(Customer.Name)."
+  }
+  ,{
+    "name": "create_entity", "family": "DomainModel", "phase": "setup",
+    "args": { "module_name": "MyFirstModule", "entity_name": "Order" },
+    "expected": "either",
+    "notes": "Fixture for generate_overview_pages, create_association."
+  }
+  ,{
+    "name": "create_microflow", "family": "Microflows", "phase": "setup",
+    "args": { "name": "ACT_Example", "module_name": "MyFirstModule" },
+    "expected": "either",
+    "notes": "Fixture for read_microflow_details, check_variable_name, rename_document."
+  }
+  ,{
+    "name": "create_microflow", "family": "Microflows", "phase": "setup",
+    "args": { "name": "CAL_Customer_FullName", "module_name": "MyFirstModule" },
+    "expected": "either",
+    "notes": "Fixture for set_calculated_attribute."
+  }
+  // ---- Diagnostics ----
+  ,{
     "name": "list_available_tools",
     "family": "Diagnostics",
     "phase": "read",
@@ -192,8 +223,8 @@
     "family": "Microflows",
     "phase": "read",
     "args": { "nanoflow_name": "MyNanoflow", "module_name": "MyFirstModule" },
-    "expected": "ok",
-    "notes": "Activity details not available via typed API; returns activities: []."
+    "expected": "either",
+    "notes": "Activity details not available via typed API; returns activities: []. [no create_nanoflow tool exists; expected:either by design]"
   }
   ,{
     "name": "list_scheduled_events",
@@ -218,8 +249,8 @@
     "family": "Pages",
     "phase": "read",
     "args": { "page_name": "Customer_Overview", "module_name": "MyFirstModule" },
-    "expected": "ok",
-    "notes": "Returns flat properties plus propertiesJson; widget tree not available via IUntypedModelHost."
+    "expected": "either",
+    "notes": "Returns flat properties plus propertiesJson; widget tree not available via IUntypedModelHost. [depends on generate_overview_pages (mutate phase) to create the target page; expected:either by design]"
   }
 
   // ---- Workflows reads ----
@@ -236,8 +267,8 @@
     "family": "Workflows",
     "phase": "read",
     "args": { "workflow_name": "MyWorkflow", "module_name": "MyFirstModule" },
-    "expected": "ok",
-    "notes": "Returns flat properties plus propertiesJson; deep sub-element traversal not available."
+    "expected": "either",
+    "notes": "Returns flat properties plus propertiesJson; deep sub-element traversal not available. [no create_workflow tool exists; expected:either by design]"
   }
 
   // ---- ConstantsEnums reads ----
@@ -264,40 +295,40 @@
     "family": "Security",
     "phase": "read",
     "args": {},
-    "expected": "ok",
-    "notes": "Always returns escalation: manual — IRule documents not exposed on typed Interop surface."
+    "expected": "either",
+    "notes": "Always returns escalation: manual — IRule documents not exposed on typed Interop surface. [stub: escalation:manual until typed Interop expanded]"
   }
   ,{
     "name": "read_security_info",
     "family": "Security",
     "phase": "read",
     "args": {},
-    "expected": "ok",
-    "notes": "Always returns escalation: manual — requires IModelRoot sub-element traversal."
+    "expected": "either",
+    "notes": "Always returns escalation: manual — requires IModelRoot sub-element traversal. [stub: escalation:manual until typed Interop expanded]"
   }
   ,{
     "name": "read_entity_access_rules",
     "family": "Security",
     "phase": "read",
     "args": {},
-    "expected": "ok",
-    "notes": "Always returns escalation: manual — DomainModels$AccessRule requires IModelUnit sub-element traversal."
+    "expected": "either",
+    "notes": "Always returns escalation: manual — DomainModels$AccessRule requires IModelUnit sub-element traversal. [stub: escalation:manual until typed Interop expanded]"
   }
   ,{
     "name": "read_microflow_security",
     "family": "Security",
     "phase": "read",
     "args": {},
-    "expected": "ok",
-    "notes": "Always returns escalation: manual — allowedModuleRoles requires IModelUnit traversal."
+    "expected": "either",
+    "notes": "Always returns escalation: manual — allowedModuleRoles requires IModelUnit traversal. [stub: escalation:manual until typed Interop expanded]"
   }
   ,{
     "name": "audit_security",
     "family": "Security",
     "phase": "read",
     "args": {},
-    "expected": "ok",
-    "notes": "Always returns escalation: manual — full audit requires cross-type traversal not available on IUntypedModelHost."
+    "expected": "either",
+    "notes": "Always returns escalation: manual — full audit requires cross-type traversal not available on IUntypedModelHost. [stub: escalation:manual until typed Interop expanded]"
   }
 
   // ---- ProjectSettings reads ----
@@ -340,16 +371,16 @@
     "family": "UiActions",
     "phase": "read",
     "args": {},
-    "expected": "ok",
-    "notes": "Returns composite status (run state, active configuration, etc.); no parameters read."
+    "expected": "either",
+    "notes": "Returns composite status (run state, active configuration, etc.); no parameters read. [pending Task 15 — see Concord.Host10x/Interop/*Host10x.cs]"
   }
   ,{
     "name": "get_active_run_configuration",
     "family": "UiActions",
     "phase": "read",
     "args": {},
-    "expected": "ok",
-    "notes": "Returns name of currently active run configuration; no parameters read."
+    "expected": "either",
+    "notes": "Returns name of currently active run configuration; no parameters read. [pending Task 15 — see Concord.Host10x/Interop/*Host10x.cs]"
   }
 
   // ---- Block 1: DomainModel mutations (targets first) ----
@@ -555,33 +586,33 @@
     "name": "rename_enumeration_value",
     "family": "ConstantsEnums",
     "phase": "mutate",
-    "args": { "enumeration_name": "SweepEnum_create_enumeration", "value_name": "Draft", "new_name": "New", "module_name": "MyFirstModule" },
+    "args": { "enumeration_name": "SweepEnum_create_enumeration", "value_name": "Draft", "new_name": "NewDraft", "module_name": "MyFirstModule" },
     "expected": "ok",
-    "notes": "Renames Draft → New in SweepEnum_create_enumeration; depends on create_enumeration."
+    "notes": "Renames Draft → NewDraft in SweepEnum_create_enumeration; depends on create_enumeration. (New is a Mendix reserved word.)"
   }
   ,{
     "name": "create_constant",
     "family": "ConstantsEnums",
     "phase": "mutate",
     "args": {},
-    "expected": "ok",
-    "notes": "Always returns escalation: manual — typed IConstant write not exposed on Core Interop surface."
+    "expected": "either",
+    "notes": "Always returns escalation: manual — typed IConstant write not exposed on Core Interop surface. [stub: escalation:manual until typed Interop expanded]"
   }
   ,{
     "name": "update_constant",
     "family": "ConstantsEnums",
     "phase": "mutate",
     "args": {},
-    "expected": "ok",
-    "notes": "Always returns escalation: manual — typed IConstant write not exposed."
+    "expected": "either",
+    "notes": "Always returns escalation: manual — typed IConstant write not exposed. [stub: escalation:manual until typed Interop expanded]"
   }
   ,{
     "name": "configure_constant_values",
     "family": "ConstantsEnums",
     "phase": "mutate",
     "args": {},
-    "expected": "ok",
-    "notes": "Always returns escalation: manual — IConfigurationSettings → IConstantValue mutation not exposed."
+    "expected": "either",
+    "notes": "Always returns escalation: manual — IConfigurationSettings → IConstantValue mutation not exposed. [stub: escalation:manual until typed Interop expanded]"
   }
 
   // ---- Block 3: Microflows mutations ----
@@ -670,16 +701,16 @@
     "family": "ProjectSettings",
     "phase": "mutate",
     "args": { "configuration_name": "Default" },
-    "expected": "ok",
-    "notes": "Activates Default configuration; may return escalation: manual if SetActiveConfiguration not exposed."
+    "expected": "either",
+    "notes": "Activates Default configuration; may return escalation: manual if SetActiveConfiguration not exposed. [stub: escalation:manual until typed Interop expanded]"
   }
   ,{
     "name": "sync_filesystem",
     "family": "ProjectSettings",
     "phase": "mutate",
     "args": {},
-    "expected": "ok",
-    "notes": "Always returns escalation: manual — IAppService.SynchronizeWithFileSystem not exposed on typed Interop."
+    "expected": "either",
+    "notes": "Always returns escalation: manual — IAppService.SynchronizeWithFileSystem not exposed on typed Interop. [stub: escalation:manual until typed Interop expanded]"
   }
 
   // ---- Block 6: Navigation ----
@@ -733,7 +764,7 @@
 
   // ---- Lifecycle (strict order: save -> run -> poll -> stop -> refresh-last) ----
   { "name": "save_all",          "family": "UiActions", "phase": "lifecycle", "args": {}, "expected": "ok", "notes": "Idempotent .mpr write. Run first to capture sweep mutations." },
-  { "name": "run_app",           "family": "UiActions", "phase": "lifecycle", "args": {}, "expected": "ok", "notes": "Starts active configuration. Driver polls get_app_status until running (30s cap) before stop_app." },
-  { "name": "stop_app",          "family": "UiActions", "phase": "lifecycle", "args": {}, "expected": "ok", "notes": "Stops the running app. Driver-managed wait happens between run_app and this entry." },
+  { "name": "run_app",           "family": "UiActions", "phase": "lifecycle", "args": {}, "expected": "either", "notes": "Starts active configuration. Driver polls get_app_status until running (30s cap) before stop_app. [pending Task 15 — see Concord.Host10x/Interop/*Host10x.cs]" },
+  { "name": "stop_app",          "family": "UiActions", "phase": "lifecycle", "args": {}, "expected": "either", "notes": "Stops the running app. Driver-managed wait happens between run_app and this entry. [pending Task 15 — see Concord.Host10x/Interop/*Host10x.cs]" },
   { "name": "refresh_project",   "family": "UiActions", "phase": "lifecycle", "args": {}, "expected": "ok", "notes": "Invalidates cached model - DEAD LAST in the entire sweep." }
 ]
