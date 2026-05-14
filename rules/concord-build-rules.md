@@ -64,7 +64,7 @@ The 45-tool catalog Concord installs alongside the Studio Pro MCP. Use these whe
 - `modify_microflow_activity` — surgically modify a single microflow activity without rewriting the entire flow.
 - `insert_before_activity` — insert a new activity immediately before an existing one in a microflow.
 
-**Pages** — page lifecycle operations beyond what `ped_create_document` handles:
+**Page lifecycle** — operations beyond what `ped_create_document` handles:
 - `generate_overview_pages` — scaffold list + detail pages from an entity. Use this (Tier 2) before reaching for Maia (Tier 3) for simple entity CRUD.
 - `delete_document` — delete a page or other document from the project. Use when `ped_*` remove isn't available for the doc type.
 

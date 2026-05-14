@@ -14,6 +14,8 @@ using Xunit;
 // nothing reaches into HostServices.RunStateProbe / .UiAutomation.
 public class DoctrineSyncTests
 {
+    // string[] (not HashSet) — iterated in a foreach below, no .Contains() lookup needed.
+    // Skip11x further down uses HashSet because it's queried via LINQ .Contains().
     private static readonly string[] ForbiddenIn10x = new[]
     {
         "mcp__mendix-studio-pro__",
@@ -108,8 +110,9 @@ public class DoctrineSyncTests
         // Sanity check: the 11.x bundle should mostly use mcp__concord-mcp__<tool>
         // for clarity, but bare tool names are acceptable in skill snippets and
         // recipe blocks. This test does not enforce prefix consistency — it
-        // asserts only that when the concord-mcp prefix IS used, it's spelled
-        // correctly (no underscore-separator typos).
+        // asserts only that this specific underscore-separator typo
+        // (mcp__concord_mcp__) does not appear. Other malformations (case
+        // errors, missing underscores) are not currently guarded.
         var repoRoot = RepoRootFinder.Find();
         var bundleFiles = EnumerateMdFiles(Path.Combine(repoRoot, "rules"))
             .Concat(EnumerateMdFiles(Path.Combine(repoRoot, "skills")));
