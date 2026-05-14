@@ -331,8 +331,13 @@ if ($Phase.Count -gt 0) {
 
 # Stable phase ordering: read -> mutate -> lifecycle. Preserves
 # in-phase original order from matrix.jsonc.
+# NOTE: Sort-Object -Stable requires PowerShell 7+; for Windows PowerShell 5.1
+# compatibility we tag each entry with its original index and use it as a
+# tie-breaker, which achieves the same stable-sort semantics.
 $phaseOrder = @{ "read" = 0; "mutate" = 1; "lifecycle" = 2 }
-$entries = $entries | Sort-Object @{ Expression = { $phaseOrder[$_.phase] }; Ascending = $true }
+$i = 0
+$entries = $entries | ForEach-Object { Add-Member -InputObject $_ -NotePropertyName _idx -NotePropertyValue ($i++) -PassThru }
+$entries = $entries | Sort-Object @{ Expression = { $phaseOrder[$_.phase] }; Ascending = $true }, @{ Expression = { $_._idx }; Ascending = $true }
 
 if ($DryRun) {
     Write-Host "[concord-mcp-sweep] -DryRun: planned execution" -ForegroundColor Yellow
