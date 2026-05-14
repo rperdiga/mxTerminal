@@ -4,6 +4,18 @@ namespace Terminal.Mcp;
 /// Tools that ship on Studio Pro 11.x. Studio Pro's built-in MCP covers
 /// the rest; including those would create model-side ambiguity.
 /// </summary>
+/// <remarks>
+/// <para><b>DOCTRINE SYNC:</b> The shipped 11.x rules and skills in
+/// <c>rules/concord-build-rules.md</c>, <c>rules/concord-model-discipline.md</c>,
+/// <c>rules/concord-pages-and-themes.md</c>, and <c>skills/**/SKILL.md</c>
+/// reference every tool in this allowlist (minus <c>maia__force_tier</c>, a
+/// debug-only tool deliberately excluded). When a tool is added, removed, or
+/// renamed here, the doctrine must be refreshed too — otherwise the agent
+/// will reference a tool that doesn't exist or miss one that does.</para>
+/// <para><b>Test guard:</b> <c>DoctrineSyncTests</c> in
+/// <c>Concord.Core.Tests</c> asserts the bundle text references every
+/// non-skipped tool. It fails on the same PR that introduces drift.</para>
+/// </remarks>
 public static class Studio11xAllowlist
 {
     private static readonly HashSet<string> _names = new(StringComparer.OrdinalIgnoreCase)
