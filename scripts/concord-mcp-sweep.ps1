@@ -375,9 +375,10 @@ try {
                 try {
                     $statusEnv = Invoke-McpToolCall -Name "get_app_status" -Arguments @{}
                     $payload = $statusEnv.result.content[0].text | ConvertFrom-Json
-                    # The status payload shape isn't pinned by source-level schema;
-                    # check the most common signals.
-                    if ($payload.running -eq $true -or $payload.status -eq "running" -or $payload.is_running -eq $true) {
+                    # AppStatusInfo (ActionResult.cs:22) serialises Running as a string
+                    # "running" | "stopped" | "unknown" — not a boolean. The fallback
+                    # branches guard against future schema evolution.
+                    if ($payload.Running -eq "running" -or $payload.status -eq "running" -or $payload.is_running -eq $true) {
                         $isRunning = $true
                         break
                     }
