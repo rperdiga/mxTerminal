@@ -1,6 +1,6 @@
 ﻿# Concord MCP tool sweep -- findings
 
-Generated: 2026-05-14T09:03:08.1610563-04:00  
+Generated: 2026-05-14T11:24:39.9954878-04:00  
 Endpoint: `http://127.0.0.1:7783/mcp`  
 Matrix: `c:\Extensions\Terminal\tests\concord-mcp-sweep\matrix.jsonc`
 
@@ -16,150 +16,150 @@ Matrix: `c:\Extensions\Terminal\tests\concord-mcp-sweep\matrix.jsonc`
 
 ### Passes
 
-- `list_constants` (42 ms)
-- `list_enumerations` (32 ms)
-- `create_enumeration` (462 ms)
-- `update_enumeration` (196 ms)
-- `rename_enumeration_value` (173 ms)
-- `create_constant` (25 ms)
-- `update_constant` (22 ms)
-- `configure_constant_values` (26 ms)
+- `list_constants` (46 ms)
+- `list_enumerations` (33 ms)
+- `create_enumeration` (573 ms)
+- `update_enumeration` (177 ms)
+- `rename_enumeration_value` (140 ms)
+- `create_constant` (24 ms)
+- `update_constant` (23 ms)
+- `configure_constant_values` (22 ms)
 
 ## Diagnostics
 
 ### Passes
 
-- `list_available_tools` (38 ms)
-- `list_available_tools_domain` (31 ms)
-- `analyze_project_patterns` (361 ms)
-- `check_model` (47 ms)
-- `check_project_errors` (28 ms)
-- `check_variable_name` (54 ms)
-- `diagnose_associations` (56 ms)
-- `get_last_error` (30 ms)
-- `get_last_error_domain` (26 ms)
-- `get_studio_pro_logs` (47 ms)
-- `list_java_actions` (81 ms)
+- `list_available_tools` (55 ms)
+- `list_available_tools_domain` (30 ms)
+- `analyze_project_patterns` (286 ms)
+- `check_model` (44 ms)
+- `check_project_errors` (25 ms)
+- `check_variable_name` (39 ms)
+- `diagnose_associations` (48 ms)
+- `get_last_error` (56 ms)
+- `get_last_error_domain` (30 ms)
+- `get_studio_pro_logs` (42 ms)
+- `list_java_actions` (60 ms)
 
 ## DomainModel
 
 ### Passes
 
-- `create_entity` (261 ms)
-- `add_attribute` (195 ms)
-- `create_entity` (161 ms)
-- `add_attribute` (115 ms)
-- `list_modules` (29 ms)
-- `read_domain_model` (64 ms)
-- `read_project_info` (66 ms)
-- `query_model_elements` (52 ms)
-- `query_associations` (59 ms)
-- `read_attribute_details` (40 ms)
-- `validate_name` (35 ms)
-- `create_module` (733 ms)
-- `create_entity` (203 ms)
-- `create_multiple_entities` (299 ms)
-- `create_domain_model_from_schema` (298 ms)
-- `add_attribute` (163 ms)
-- `update_attribute` (173 ms)
-- `rename_attribute` (305 ms)
-- `set_calculated_attribute` (27 ms)
-- `configure_system_attributes` (179 ms)
-- `add_event_handler` (34 ms)
-- `set_documentation` (175 ms)
-- `rename_entity` (317 ms)
-- `set_entity_generalization` (27 ms)
+- `create_entity` (348 ms)
+- `add_attribute` (255 ms)
+- `create_entity` (137 ms)
+- `add_attribute` (154 ms)
+- `list_modules` (28 ms)
+- `read_domain_model` (56 ms)
+- `read_project_info` (62 ms)
+- `query_model_elements` (46 ms)
+- `query_associations` (55 ms)
+- `read_attribute_details` (27 ms)
+- `validate_name` (34 ms)
+- `create_module` (704 ms)
+- `create_entity` (152 ms)
+- `create_multiple_entities` (281 ms)
+- `create_domain_model_from_schema` (264 ms)
+- `add_attribute` (138 ms)
+- `update_attribute` (64 ms)
+- `rename_attribute` (369 ms)
+- `set_calculated_attribute` (30 ms)
+- `configure_system_attributes` (164 ms)
+- `add_event_handler` (35 ms)
+- `set_documentation` (150 ms)
+- `rename_entity` (359 ms)
+- `set_entity_generalization` (23 ms)
 - `remove_entity_generalization` (25 ms)
-- `copy_model_element` (181 ms)
-- `create_association` (329 ms)
-- `create_multiple_associations` (278 ms)
-- `update_association` (180 ms)
-- `rename_association` (329 ms)
-- `arrange_domain_model` (160 ms)
-- `manage_folders` (92 ms)
-- `rename_document` (313 ms)
-- `rename_module` (393 ms)
-- `delete_model_element` (164 ms)
+- `copy_model_element` (180 ms)
+- `create_association` (382 ms)
+- `create_multiple_associations` (329 ms)
+- `update_association` (182 ms)
+- `rename_association` (303 ms)
+- `arrange_domain_model` (182 ms)
+- `manage_folders` (54 ms)
+- `rename_document` (361 ms)
+- `rename_module` (538 ms)
+- `delete_model_element` (178 ms)
 
 ## Microflows
 
 ### Passes
 
-- `create_microflow` (785 ms)
-- `create_microflow` (515 ms)
-- `list_microflows` (67 ms)
-- `read_microflow_details` (41 ms)
-- `list_nanoflows` (94 ms)
-- `read_nanoflow_details` (38 ms)
-- `list_scheduled_events` (37 ms)
-- `create_microflow` (785 ms)
-- `update_microflow` (178 ms)
-- `create_microflow_activity` (215 ms)
-- `create_microflow_activities_sequence` (77 ms)
-- `modify_microflow_activity` (189 ms)
-- `insert_before_activity` (164 ms)
-- `set_microflow_url` (156 ms)
+- `create_microflow` (825 ms)
+- `create_microflow` (568 ms)
+- `list_microflows` (54 ms)
+- `read_microflow_details` (42 ms)
+- `list_nanoflows` (97 ms)
+- `read_nanoflow_details` (35 ms)
+- `list_scheduled_events` (30 ms)
+- `create_microflow` (628 ms)
+- `update_microflow` (139 ms)
+- `create_microflow_activity` (199 ms)
+- `create_microflow_activities_sequence` (82 ms)
+- `modify_microflow_activity` (185 ms)
+- `insert_before_activity` (162 ms)
+- `set_microflow_url` (143 ms)
 
 ## Navigation
 
 ### Passes
 
-- `manage_navigation` (164 ms)
+- `manage_navigation` (199 ms)
 
 ## Pages
 
 ### Passes
 
-- `list_pages` (193 ms)
-- `read_page_details` (26 ms)
-- `generate_overview_pages` (2426 ms)
-- `delete_document` (526 ms)
-- `exclude_document` (461 ms)
+- `list_pages` (188 ms)
+- `read_page_details` (30 ms)
+- `generate_overview_pages` (2271 ms)
+- `delete_document` (452 ms)
+- `exclude_document` (469 ms)
 
 ## ProjectSettings
 
 ### Passes
 
-- `read_runtime_settings` (53 ms)
-- `read_configurations` (61 ms)
-- `list_rest_services` (30 ms)
-- `read_version_control` (37 ms)
+- `read_runtime_settings` (48 ms)
+- `read_configurations` (39 ms)
+- `list_rest_services` (35 ms)
+- `read_version_control` (46 ms)
 - `set_runtime_settings` (50 ms)
-- `set_configuration` (25 ms)
+- `set_configuration` (28 ms)
 - `sync_filesystem` (23 ms)
 
 ## Security
 
 ### Passes
 
-- `list_rules` (23 ms)
-- `read_security_info` (23 ms)
-- `read_entity_access_rules` (24 ms)
-- `read_microflow_security` (24 ms)
-- `audit_security` (22 ms)
+- `list_rules` (24 ms)
+- `read_security_info` (22 ms)
+- `read_entity_access_rules` (23 ms)
+- `read_microflow_security` (20 ms)
+- `audit_security` (21 ms)
 
 ## UiActions
 
 ### Passes
 
-- `get_app_status` (31 ms)
-- `get_active_run_configuration` (26 ms)
-- `save_all` (41 ms)
+- `get_app_status` (313 ms)
+- `get_active_run_configuration` (24 ms)
+- `save_all` (37 ms)
 - `run_app` (30075 ms)
-- `stop_app` (659 ms)
-- `refresh_project` (30 ms)
+- `stop_app` (296 ms)
+- `refresh_project` (29 ms)
 
 ## Workflows
 
 ### Passes
 
-- `list_workflows` (33 ms)
-- `read_workflow_details` (26 ms)
+- `list_workflows` (32 ms)
+- `read_workflow_details` (25 ms)
 
 
 ---
 
-> **Note:** This findings.md is auto-regenerated by the sweep driver and overwrites hand-curated content on each run. The sections below were restored from `findings.before-fresh-sweep.md` after a fresh-state validation cycle on 2026-05-14. See [phase4-fresh-state-validation.md](phase4-fresh-state-validation.md) for the diff result and matrix-tightening recommendations.
+> **Note:** This findings.md is auto-regenerated by the sweep driver and overwrites hand-curated content on each run. The sections below were restored from `findings.before-bug001-resweep.md` after the post-bug_001 fresh-state validation cycle on 2026-05-14. See [phase4-fresh-state-validation.md](phase4-fresh-state-validation.md) for the full bucket diff, methodology, and matrix-tightening rationale.
 
 ## Phase 4 — Manual Studio Pro verification
 
@@ -183,9 +183,9 @@ These are surface gaps observed during Phase 2/3 that were not in scope to fix:
 
 2. **Microflow activity allowlist trimmed to 9 type families** — `create_microflow_activity` now only supports activity types the host's `CreateActivity` switch actually authors (`create_object`, `change_object`, `retrieve`, `commit`, `rollback`, `delete`, `create_list`, `microflow_call`, `java_action_call`). Expanding to `log`, `change_attribute`, `aggregate_list`, etc. requires implementing them in `MicroflowAuthoringHost1{0,1}x.CreateActivity`. Tracked in commit `7420ab0`.
 
-3. **Task-15 deferred** — `get_app_status`, `get_active_run_configuration`, `run_app`, `stop_app` are `NotImplementedException` stubs in `Concord.Host10x\Interop\*Host10x.cs` awaiting Task 15 / W4 branch implementation. Matrix entries are `expected:either` so they don't pollute counts. (Update 2026-05-14: `stop_app` actually short-circuits cleanly when no app is running; only the other three are observed FAILs.)
+3. **Task-15 deferred (partially closed by 4ef888c)** — Originally: `get_app_status`, `get_active_run_configuration`, `run_app`, `stop_app` were `NotImplementedException` stubs in `Concord.Host{10,11}x\Interop\*Host*.cs`. Update 2026-05-14 (after 4ef888c): `get_app_status` and `get_active_run_configuration` are now implemented via `StudioProAppHost{10,11}x` / `RunConfigurationsHost{10,11}x` against `IModel.Root` and `ILocalRunConfigurationsService`. `stop_app` continues to short-circuit cleanly on already-stopped state. Only `run_app` remains a TIMEOUT — its 30s sweep result is the F5-hotkey UI-automation path in `StudioProUiAutomation`, which is a separate Task-15 surface from the IApp/IRunConfigurations work bug_001 fixed.
 
-4. **VS Code file-watcher locks `findings.md` during sweep writes** — the driver's `Set-Content` is vulnerable to file-watcher contention. ~~Future driver iterations should either write to `$env:TEMP` and copy on completion, or use `[System.IO.File]::WriteAllText` with explicit share mode.~~ (Resolved 2026-05-14: in-loop MD write removed; MD now rendered once at end-of-run. See [scripts/concord-mcp-sweep.ps1:430](../../scripts/concord-mcp-sweep.ps1#L430).)
+4. **VS Code file-watcher locks `findings.md` during sweep writes** — the driver's `Set-Content` is vulnerable to file-watcher contention. ~~Future driver iterations should either write to `$env:TEMP` and copy on completion, or use `[System.IO.File]::WriteAllText` with explicit share mode.~~ (Resolved 2026-05-14 in commit `4a9fe1e`: in-loop MD write removed; MD now rendered once at end-of-run.)
 
-5. **Idempotency on test project re-runs** — `create_module`, `create_enumeration`, `rename_enumeration_value`, `create_multiple_associations`, `rename_module`, `rename_attribute`, `generate_overview_pages` all reclassified to `expected:either` because the test project (`Test_10_24_13`) accumulates state across sweep runs. The "right" fix is either per-run teardown (delete sweep artifacts before each run) or per-run unique-name suffixing. The matrix patches deferred this — `expected:either` is the pragmatic short-term resolution. (Update 2026-05-14: fresh-state validation confirmed all 7 idempotency-flagged entries raw-PASS on first hit. 6 of the 7 are being flipped to `expected:ok`; `generate_overview_pages` is a cascade failure mode, not idempotency, and stays `either`. See [phase4-fresh-state-validation.md](phase4-fresh-state-validation.md).)
+5. **Idempotency on test project re-runs** — `create_module`, `create_enumeration`, `rename_enumeration_value`, `create_multiple_associations`, `rename_module`, `rename_attribute`, `generate_overview_pages` all reclassified to `expected:either` because the test project (`Test_10_24_13`) accumulates state across sweep runs. (Update 2026-05-14: 7 idempotency-flagged entries flipped to `expected:ok` in commit `74d73e1` after fresh-state validation confirmed raw-PASS on first hit. `generate_overview_pages` is a cascade failure mode, not idempotency, and stays `either`. See [phase4-fresh-state-validation.md](phase4-fresh-state-validation.md).)
 

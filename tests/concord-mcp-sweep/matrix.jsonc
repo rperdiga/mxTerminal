@@ -377,16 +377,16 @@
     "family": "UiActions",
     "phase": "read",
     "args": {},
-    "expected": "either",
-    "notes": "Returns composite status (run state, active configuration, etc.); no parameters read. [pending Task 15 — see Concord.Host10x/Interop/*Host10x.cs]"
+    "expected": "ok",
+    "notes": "Returns composite status (run state, active configuration, etc.); no parameters read. [was pending Task 15; implemented in 4ef888c via StudioProAppHost{10,11}x against IModel.Root + RunStateProbe; tightened to expected:ok 2026-05-14 after post-bug_001 fresh-state validation]"
   }
   ,{
     "name": "get_active_run_configuration",
     "family": "UiActions",
     "phase": "read",
     "args": {},
-    "expected": "either",
-    "notes": "Returns name of currently active run configuration; no parameters read. [pending Task 15 — see Concord.Host10x/Interop/*Host10x.cs]"
+    "expected": "ok",
+    "notes": "Returns name of currently active run configuration; no parameters read. [was pending Task 15; implemented in 4ef888c via RunConfigurationsHost{10,11}x against ILocalRunConfigurationsService; tightened to expected:ok 2026-05-14 after post-bug_001 fresh-state validation]"
   }
 
   // ---- Block 1: DomainModel mutations (targets first) ----

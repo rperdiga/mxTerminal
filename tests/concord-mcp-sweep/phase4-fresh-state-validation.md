@@ -70,3 +70,43 @@ Flip the 7 entries with explicit `[idempotency: ...]` notes (handoff finding #5)
 - **Driver overwrites findings.md on every run**, destroying hand-curated content (Phase 4 checklist, Phase 3 follow-up notes). Backup at `findings.before-fresh-sweep.md` preserved the original; this writeup lives in a separate file to avoid the same fate. Future driver improvement: preserve managed-section delimiters or write auto-output to a distinct filename (e.g., `findings.auto.md`).
 - **Fresh-state and accumulated-state runs are not interchangeable.** After flipping the 7 idempotency-eithers to `ok`, runs against accumulated state may surface FAILs. The sweep workflow should standardize on fresh-state runs OR add teardown discipline before each run.
 - The driver patch in this cycle ([scripts/concord-mcp-sweep.ps1:430](../../scripts/concord-mcp-sweep.ps1#L430)) is the minimum fix for the file-watcher lock. A more robust fix would use `[System.IO.File]::WriteAllText` with explicit `FileShare.ReadWrite`, but the simpler patch (move MD write to end-of-run only) is sufficient and reduces per-entry I/O.
+
+---
+
+## Post-bug_001 re-validation (2026-05-14 later that day)
+
+After this doc landed in commit `74d73e1`, ultrareview surfaced four findings (see `docs/superpowers/handoffs/2026-05-14-ultrareview-fixes-pending-replay.md`), which were addressed in commit `4ef888c`. bug_001 specifically implements `StudioProAppHost{10,11}x` and `RunConfigurationsHost{10,11}x` against `IModel.Root` and `ILocalRunConfigurationsService` — directly affecting two of the three persistent FAILs catalogued above.
+
+To measure the effect, the sweep was re-run on the same fresh-state setup (new blank-app 10.24.13 project; pristine `MyFirstModule`; pre-flight verified empty) and diffed against the validated-PASS baseline preserved as `findings.before-bug001-resweep.json`.
+
+### Re-validation result
+
+| Bucket (pre-bug_001 raw → post-bug_001 raw) | Count | Interpretation |
+|---|---|---|
+| PASS → PASS | 91 | All previously-passing tools still pass — no regressions from bug_001 |
+| FAIL → PASS | 2 | `get_app_status` and `get_active_run_configuration` now function on fresh state |
+| FAIL → FAIL | 1 | `run_app` still TIMEOUT — bug_001 did not touch the UI-automation start path |
+| PASS → FAIL | 0 | No regressions |
+
+### Updated state of the 3 originally-persistent FAILs
+
+| Tool | Pre-bug_001 | Post-bug_001 | Resolution |
+|---|---|---|---|
+| `get_app_status` | CRASH (Task 15 / Task 1 spike) | PASS (313 ms) | Resolved by 4ef888c bug_001 |
+| `get_active_run_configuration` | CRASH (Task 15) | PASS (24 ms) | Resolved by 4ef888c bug_001 |
+| `run_app` | TIMEOUT (30s) | TIMEOUT (30s) | Still pending — needs UI-automation work in `StudioProUiAutomation` (not the IApp/RunConfigurations surfaces bug_001 fixed) |
+
+### Matrix follow-up applied
+
+Flipped two additional entries from `expected: "either"` → `expected: "ok"` based on the re-validation:
+
+- `get_app_status` ([matrix.jsonc:376-382](matrix.jsonc#L376-L382))
+- `get_active_run_configuration` ([matrix.jsonc:384-390](matrix.jsonc#L384-L390))
+
+`run_app` and `stop_app` remain `expected: "either"` until the UI-automation start path is implemented (or `stop_app`'s short-circuit-on-stopped behavior is documented as the intended permanent fast path on no-op). `refresh_project` is already `expected: "ok"` and continues to PASS.
+
+After this follow-up: matrix has 57 `expected: "ok"` / 37 `expected: "either"` across 94 entries.
+
+### Methodology drift caveat
+
+The baseline-vs-fresh comparison this time uses `findings.before-bug001-resweep.json` (not the original `findings.before-fresh-sweep.json` from the earlier cycle). The earlier backup is a different snapshot — heavily-mutated `Test_10_24_13` state — and isn't directly comparable to this fresh-state re-run. Both backups are kept locally (gitignored) as historical references.
