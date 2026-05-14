@@ -113,8 +113,18 @@ function Test-SweepEntry {
         $rawEnvelope = Invoke-McpToolCall -Name $Entry.name -Arguments $entryArgs
     } catch {
         $status = "FAIL"
-        $severity = "TRANSPORT"
         $errorSummary = $_.Exception.Message
+        # Distinguish socket/connection timeouts from other transport errors.
+        # The driver's Invoke-WebRequest call has a 30s default TimeoutSec; when
+        # it fires, the exception message typically contains "timed out" or
+        # "operation has timed out". Connection-aborted-by-host (the 30s app
+        # start case for run_app/stop_app) also produces a transport-like
+        # exception but is more usefully classified as TIMEOUT for triage.
+        if ($errorSummary -match 'timed out|operation has timed out|established connection was aborted|operation was canceled') {
+            $severity = "TIMEOUT"
+        } else {
+            $severity = "TRANSPORT"
+        }
     }
 
     if ($null -eq $status) {
@@ -317,6 +327,53 @@ Write-Host "  tools/list returned $($serverTools.Count) tools"
 $entries = Read-SweepMatrix -Path $Matrix
 Write-Host "  matrix has $($entries.Count) entries"
 
+# Cross-check matrix vs server tools/list. Drift is logged as MISSING (server
+# has it, matrix doesn't) or EXTRA (matrix has it, server doesn't). Does not
+# abort the run; surfaces as findings entries with synthesized records so
+# triage sees the gap.
+$serverNames = @($serverTools | ForEach-Object { $_.name })
+$matrixNames = @($entries | ForEach-Object { $_.name })
+$missing = @($serverNames | Where-Object { $_ -notin $matrixNames })
+$extra   = @($matrixNames | Where-Object { $_ -notin $serverNames })
+if ($missing.Count -gt 0 -or $extra.Count -gt 0) {
+    Write-Host "  drift: $($missing.Count) MISSING, $($extra.Count) EXTRA" -ForegroundColor Yellow
+} else {
+    Write-Host "  matrix matches server tools/list exactly"
+}
+$driftFindings = @()
+foreach ($n in $missing) {
+    $driftFindings += [PSCustomObject]@{
+        name              = $n
+        family            = "Unknown"
+        phase             = "drift"
+        status            = "FAIL"
+        expected          = "n/a"
+        args              = @{}
+        raw_response      = $null
+        error_summary     = "Server advertises this tool via tools/list but no matrix entry covers it. Add a matrix entry."
+        severity          = "MISSING"
+        side_effect_check = $null
+        elapsed_ms        = 0
+        timestamp         = (Get-Date).ToUniversalTime().ToString("o")
+    }
+}
+foreach ($n in $extra) {
+    $driftFindings += [PSCustomObject]@{
+        name              = $n
+        family            = "Unknown"
+        phase             = "drift"
+        status            = "FAIL"
+        expected          = "n/a"
+        args              = @{}
+        raw_response      = $null
+        error_summary     = "Matrix has this tool but tools/list does not advertise it. Server may have removed it or matrix is stale."
+        severity          = "MISSING"
+        side_effect_check = $null
+        elapsed_ms        = 0
+        timestamp         = (Get-Date).ToUniversalTime().ToString("o")
+    }
+}
+
 # Apply -Only filter (tool-name subset).
 if ($Only.Count -gt 0) {
     $entries = @($entries | Where-Object { $Only -contains $_.name })
@@ -352,6 +409,7 @@ if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out
 Write-Host "[concord-mcp-sweep] executing" -ForegroundColor Cyan
 Write-Host "  ledger: $jsonPath + $mdPath"
 $results = @()
+$results += $driftFindings   # prepend drift entries so they appear first in findings.json
 try {
     foreach ($entry in $entries) {
         Write-Host -NoNewline ("  -> {0} ... " -f $entry.name)
@@ -376,7 +434,7 @@ try {
                     $statusEnv = Invoke-McpToolCall -Name "get_app_status" -Arguments @{}
                     $payload = $statusEnv.result.content[0].text | ConvertFrom-Json
                     # AppStatusInfo (ActionResult.cs:22) serialises Running as a string
-                    # "running" | "stopped" | "unknown" — not a boolean. The fallback
+                    # "running" | "stopped" | "unknown" -- not a boolean. The fallback
                     # branches guard against future schema evolution.
                     if ($payload.Running -eq "running" -or $payload.status -eq "running" -or $payload.is_running -eq $true) {
                         $isRunning = $true
