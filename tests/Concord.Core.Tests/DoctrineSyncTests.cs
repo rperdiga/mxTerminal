@@ -1,50 +1,19 @@
 namespace Concord.Core.Tests;
 
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using FluentAssertions;
 using Terminal;
-using Terminal.Interop;
-using Terminal.Maia;
 using Terminal.Mcp;
 using Xunit;
 
-[Collection("HostServices")]
-public class DoctrineSyncTests : IDisposable
+// No HostServices fakes needed here: these tests only enumerate tool names
+// from a catalog and substring-match against on-disk markdown. Bootstrap
+// Register() methods populate the catalog without invoking any tool, so
+// nothing reaches into HostServices.RunStateProbe / .UiAutomation.
+public class DoctrineSyncTests
 {
-    private sealed class FakeProbe : IRunStateProbe
-    {
-        public string? GetActiveUrl() => null;
-        public int? GetActivePort() => null;
-        public Task<RunState> IsRunningAsync(CancellationToken ct = default)
-            => Task.FromResult(RunState.Stopped);
-    }
-    private sealed class FakeUi : IStudioProUiAutomation
-    {
-        public bool TriggerRun() => false;
-        public bool TriggerStop() => false;
-        public bool TriggerRefreshFromDisk() => false;
-        public bool TriggerSaveAll() => false;
-        public string? LastFailureReason => null;
-    }
-
-    public DoctrineSyncTests()
-    {
-        HostServices.Reset();
-        HostServices.SetRunStateProbe(new FakeProbe());
-        HostServices.SetUiAutomation(new FakeUi());
-    }
-
-    public void Dispose()
-    {
-        HostServices.Reset();
-        ToolCatalogRegistry.Active = null;
-    }
-
     private static readonly string[] ForbiddenIn10x = new[]
     {
         "mcp__mendix-studio-pro__",
@@ -78,7 +47,6 @@ public class DoctrineSyncTests : IDisposable
         // Enumerate the 10.x tool surface via the existing bootstrap pattern.
         var catalog = new ToolCatalog(TargetMode.Studio10x);
         UiActionsBootstrap.Register(catalog);
-        // SpmcpToolBootstrap10x lives in Concord.Host10x.
         Concord.Host10x.Spmcp.SpmcpToolBootstrap10x.Register(catalog);
         // Maia is intentionally NOT registered for the 10.x doctrine — even
         // though Host10x may register it at runtime, the bundle excludes it
@@ -96,6 +64,11 @@ public class DoctrineSyncTests : IDisposable
                 .Concat(EnumerateMdFiles(Path.Combine(repoRoot, "skills-10x")))
                 .Select(File.ReadAllText));
 
+        // Bare-name substring match (not "mcp__concord-mcp__<name>") is
+        // intentional: the §1 catalog listing in rules-10x/concord-build-rules.md
+        // enumerates tools by bare name, which satisfies the assertion.
+        // Bare names are also unambiguous — no registered concord-mcp tool name
+        // is a substring of another.
         var missing = expected.Where(t => !bundleText.Contains(t)).ToList();
         missing.Should().BeEmpty(
             "every concord-mcp tool registered on 10.x must be referenced at least once in rules-10x/ or skills-10x/. " +
