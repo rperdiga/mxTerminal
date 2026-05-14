@@ -361,6 +361,34 @@ try {
         $results += $r
         Write-FindingsJson -Results $results -Path $jsonPath
         Write-FindingsMarkdown -Results $results -Path $mdPath
+
+        # Lifecycle wait: after run_app succeeds, poll get_app_status until
+        # the app reports running, capped at 30s. Keeps the stop_app call
+        # from racing against a still-starting app.
+        if ($entry.name -eq "run_app" -and $r.status -eq "PASS") {
+            Write-Host -NoNewline "    polling get_app_status until running (30s cap) "
+            $deadline = (Get-Date).AddSeconds(30)
+            $isRunning = $false
+            while ((Get-Date) -lt $deadline) {
+                Start-Sleep -Seconds 1
+                Write-Host -NoNewline "."
+                try {
+                    $statusEnv = Invoke-McpToolCall -Name "get_app_status" -Arguments @{}
+                    $payload = $statusEnv.result.content[0].text | ConvertFrom-Json
+                    # The status payload shape isn't pinned by source-level schema;
+                    # check the most common signals.
+                    if ($payload.running -eq $true -or $payload.status -eq "running" -or $payload.is_running -eq $true) {
+                        $isRunning = $true
+                        break
+                    }
+                } catch { }
+            }
+            if ($isRunning) {
+                Write-Host " running" -ForegroundColor Green
+            } else {
+                Write-Host " timed out (continuing anyway)" -ForegroundColor Yellow
+            }
+        }
     }
 }
 finally {

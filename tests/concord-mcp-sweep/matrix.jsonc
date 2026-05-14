@@ -728,4 +728,12 @@
     "verify": { "name": "query_model_elements", "args": { "type_name": "DomainModels$Entity", "module_name": "MyFirstModule", "max_results": 50 } },
     "notes": "Deletes SweepEntityRenamed_rename_entity; closes create→rename→delete cycle. Depends on rename_entity."
   }
+
+  ,
+
+  // ---- Lifecycle (strict order: save -> run -> poll -> stop -> refresh-last) ----
+  { "name": "save_all",          "family": "UiActions", "phase": "lifecycle", "args": {}, "expected": "ok", "notes": "Idempotent .mpr write. Run first to capture sweep mutations." },
+  { "name": "run_app",           "family": "UiActions", "phase": "lifecycle", "args": {}, "expected": "ok", "notes": "Starts active configuration. Driver polls get_app_status until running (30s cap) before stop_app." },
+  { "name": "stop_app",          "family": "UiActions", "phase": "lifecycle", "args": {}, "expected": "ok", "notes": "Stops the running app. Driver-managed wait happens between run_app and this entry." },
+  { "name": "refresh_project",   "family": "UiActions", "phase": "lifecycle", "args": {}, "expected": "ok", "notes": "Invalidates cached model - DEAD LAST in the entire sweep." }
 ]
