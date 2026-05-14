@@ -187,6 +187,96 @@ function Test-SweepEntry {
     }
 }
 
+# --- Ledger writers ----------------------------------------------------
+
+function Write-FindingsJson {
+    param(
+        [Parameter(Mandatory)][object[]]$Results,
+        [Parameter(Mandatory)][string]$Path
+    )
+    $tmp = "$Path.tmp"
+    ($Results | ConvertTo-Json -Depth 30) | Set-Content -Path $tmp -Encoding utf8
+    # Atomic rename so a crash mid-write can't leave a half-file at $Path.
+    Move-Item -Path $tmp -Destination $Path -Force
+}
+
+function Write-FindingsMarkdown {
+    param(
+        [Parameter(Mandatory)][object[]]$Results,
+        [Parameter(Mandatory)][string]$Path
+    )
+    $pass = @($Results | Where-Object { $_.status -eq 'PASS' }).Count
+    $fail = @($Results | Where-Object { $_.status -eq 'FAIL' }).Count
+    $skip = @($Results | Where-Object { $_.status -eq 'SKIP' }).Count
+    $total = $Results.Count
+
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine("# Concord MCP tool sweep -- findings")
+    [void]$sb.AppendLine("")
+    [void]$sb.AppendLine("Generated: $(Get-Date -Format o)  ")
+    [void]$sb.AppendLine("Endpoint: ``$Endpoint``  ")
+    [void]$sb.AppendLine("Matrix: ``$Matrix``")
+    [void]$sb.AppendLine("")
+    [void]$sb.AppendLine("## Summary")
+    [void]$sb.AppendLine("")
+    [void]$sb.AppendLine("| Status | Count |")
+    [void]$sb.AppendLine("|---|---|")
+    [void]$sb.AppendLine("| PASS | $pass / $total |")
+    [void]$sb.AppendLine("| FAIL | $fail / $total |")
+    [void]$sb.AppendLine("| SKIP | $skip / $total |")
+    [void]$sb.AppendLine("")
+
+    # Banner if read phase is mostly broken
+    $readResults = @($Results | Where-Object { $_.phase -eq 'read' })
+    if ($readResults.Count -gt 0) {
+        $readFailRatio = @($readResults | Where-Object { $_.status -eq 'FAIL' }).Count / $readResults.Count
+        if ($readFailRatio -gt 0.5) {
+            [void]$sb.AppendLine("> **WARNING -- LIKELY SERVER MISCONFIGURATION** -- more than 50% of read-phase tools failed. Investigate server/project state before triaging individual entries.")
+            [void]$sb.AppendLine("")
+        }
+    }
+
+    $families = $Results | Select-Object -ExpandProperty family -Unique | Sort-Object
+    foreach ($fam in $families) {
+        [void]$sb.AppendLine("## $fam")
+        [void]$sb.AppendLine("")
+        $famResults = @($Results | Where-Object { $_.family -eq $fam })
+        $famFails = @($famResults | Where-Object { $_.status -eq 'FAIL' })
+        $famPasses = @($famResults | Where-Object { $_.status -eq 'PASS' })
+
+        if ($famFails.Count -gt 0) {
+            [void]$sb.AppendLine("### Failures")
+            [void]$sb.AppendLine("")
+            foreach ($r in $famFails) {
+                $sev = if ($r.severity) { $r.severity } else { "unclassified" }
+                [void]$sb.AppendLine("#### ``$($r.name)`` -- **$sev**")
+                [void]$sb.AppendLine("")
+                [void]$sb.AppendLine("- Phase: ``$($r.phase)``")
+                [void]$sb.AppendLine("- Expected: ``$($r.expected)``")
+                [void]$sb.AppendLine("- Elapsed: $($r.elapsed_ms) ms")
+                [void]$sb.AppendLine("- Args:")
+                [void]$sb.AppendLine('  ```json')
+                [void]$sb.AppendLine("  $($r.args | ConvertTo-Json -Depth 10 -Compress)")
+                [void]$sb.AppendLine('  ```')
+                [void]$sb.AppendLine("- Error: $($r.error_summary)")
+                [void]$sb.AppendLine("- Resolution: _pending triage_")
+                [void]$sb.AppendLine("")
+            }
+        }
+
+        if ($famPasses.Count -gt 0) {
+            [void]$sb.AppendLine("### Passes")
+            [void]$sb.AppendLine("")
+            foreach ($r in $famPasses) {
+                [void]$sb.AppendLine("- ``$($r.name)`` ($($r.elapsed_ms) ms)")
+            }
+            [void]$sb.AppendLine("")
+        }
+    }
+
+    Set-Content -Path $Path -Value $sb.ToString() -Encoding utf8
+}
+
 # --- Pre-flight ---------------------------------------------------------
 
 Write-Host "[concord-mcp-sweep] pre-flight" -ForegroundColor Cyan
@@ -205,7 +295,12 @@ if ($DryRun) {
     exit 0
 }
 
+$jsonPath = Join-Path $OutDir "findings.json"
+$mdPath = Join-Path $OutDir "findings.md"
+if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out-Null }
+
 Write-Host "[concord-mcp-sweep] executing" -ForegroundColor Cyan
+Write-Host "  ledger: $jsonPath + $mdPath"
 $results = @()
 foreach ($entry in $entries) {
     Write-Host -NoNewline ("  -> {0} ... " -f $entry.name)
@@ -213,5 +308,9 @@ foreach ($entry in $entries) {
     $color = if ($r.status -eq "PASS") { "Green" } else { "Red" }
     Write-Host ("{0} ({1} ms){2}" -f $r.status, $r.elapsed_ms, $(if ($r.severity) { " [$($r.severity)]" } else { "" })) -ForegroundColor $color
     $results += $r
+    # Atomic-write after every entry so partial findings survive a crash.
+    Write-FindingsJson -Results $results -Path $jsonPath
+    Write-FindingsMarkdown -Results $results -Path $mdPath
 }
 Write-Host "[concord-mcp-sweep] complete: $($results.Where{$_.status -eq 'PASS'}.Count) PASS / $($results.Where{$_.status -eq 'FAIL'}.Count) FAIL / $($results.Where{$_.status -eq 'SKIP'}.Count) SKIP" -ForegroundColor Cyan
+Write-Host "  artifacts: $jsonPath, $mdPath" -ForegroundColor Cyan
