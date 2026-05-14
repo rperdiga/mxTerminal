@@ -375,7 +375,7 @@
     "name": "create_multiple_entities",
     "family": "DomainModel",
     "phase": "mutate",
-    "args": { "module_name": "MyFirstModule", "entities": [{ "entity_name": "SweepEntityA" }, { "entity_name": "SweepEntityB" }] },
+    "args": { "module_name": "MyFirstModule", "entities": [{ "entity_name": "SweepEntityA_create_multiple_entities" }, { "entity_name": "SweepEntityB_create_multiple_entities" }] },
     "expected": "ok",
     "notes": "Creates two additional sweep entities; auto-arranges domain model after creation."
   }
@@ -383,7 +383,7 @@
     "name": "create_domain_model_from_schema",
     "family": "DomainModel",
     "phase": "mutate",
-    "args": { "module_name": "MyFirstModule", "schema": { "entities": [{ "name": "SweepEntity_schema", "attributes": [{ "name": "Title", "type": "String" }] }] } },
+    "args": { "module_name": "MyFirstModule", "schema": { "entities": [{ "name": "SweepEntity_create_domain_model_from_schema", "attributes": [{ "name": "Title", "type": "String" }] }] } },
     "expected": "ok",
     "notes": "Creates entity from JSON schema; auto-arranges after creation."
   }
@@ -407,9 +407,9 @@
     "name": "rename_attribute",
     "family": "DomainModel",
     "phase": "mutate",
-    "args": { "entity_name": "SweepEntity_create_entity", "attribute_name": "SweepAttr_add_attribute", "new_name": "SweepAttr_renamed", "module_name": "MyFirstModule" },
+    "args": { "entity_name": "SweepEntity_create_entity", "attribute_name": "SweepAttr_add_attribute", "new_name": "SweepAttr_rename_attribute", "module_name": "MyFirstModule" },
     "expected": "ok",
-    "notes": "Renames SweepAttr_add_attribute → SweepAttr_renamed; depends on add_attribute."
+    "notes": "Renames SweepAttr_add_attribute → SweepAttr_rename_attribute; depends on add_attribute."
   }
   ,{
     "name": "set_calculated_attribute",
@@ -488,7 +488,7 @@
     "name": "create_multiple_associations",
     "family": "DomainModel",
     "phase": "mutate",
-    "args": { "associations": [{ "name": "SweepEntityA_SweepEntityB", "parent": "SweepEntityA", "child": "SweepEntityB" }], "module_name": "MyFirstModule" },
+    "args": { "associations": [{ "name": "SweepEntityA_create_multiple_entities_SweepEntityB_create_multiple_entities", "parent": "SweepEntityA_create_multiple_entities", "child": "SweepEntityB_create_multiple_entities" }], "module_name": "MyFirstModule" },
     "expected": "ok",
     "notes": "Creates association between sweep-created entities; depends on create_multiple_entities."
   }
