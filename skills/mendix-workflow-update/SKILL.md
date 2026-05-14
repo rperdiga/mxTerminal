@@ -6,6 +6,10 @@ description: Use BEFORE removing any element from an existing Mendix workflow vi
 ## Tools in this environment
 
 - `ped_*` (e.g. `ped_read_document`, `ped_update_document`) → `mcp__mendix-studio-pro__ped_*` (preferred — operate via the Studio Pro model API).
+- concord-mcp tier-2 augmentation tools for workflow mutation work:
+  - `mcp__concord-mcp__audit_security` — run after mutating a workflow to verify that security rules on affected user tasks and referenced documents remain consistent.
+  - `mcp__concord-mcp__analyze_project_patterns` — after restructuring a workflow, detect pattern inconsistencies introduced by the change (e.g., a new parallel split missing a guard condition).
+  - `mcp__concord-mcp__set_documentation` — when adding or reworking workflow steps, use to attach docstrings that explain the intent of non-obvious mutations (outcome conditions, assignment logic changes, boundary event semantics).
 
 The skill body uses the short names (`ped_update_document`, etc.) inline to stay readable. This header tells you which actual MCP tool to call.
 

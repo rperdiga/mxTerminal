@@ -8,11 +8,20 @@ This file owns the rules for **everything you can see in the rendered app** — 
 
 ---
 
-## 2. Pages always go through Maia, never `ped_*`
+## 2. Pages — 4-tier ordering; Maia is Tier 3, not Tier 1
 
-Doctrine, not preference. The Maia system prompt published with Studio Pro 11.10+ says (paraphrased): use `pg_*` tools exclusively for all page reading, creation, and modification — never use PED for pages.
+Before reaching for Maia, work through the tier ordering (§1 of `concord-build-rules.md`):
 
-The `pg_*` tools live inside Maia and are not exposed to your tool surface from inside Concord. To reach them, drive Maia via the Concord bridge.
+1. **Tier 1 — `mcp__mendix-studio-pro__ped_create_document` / `ped_update_document`** for simple pages whose content is basic widgets with no rich layout. PED can scaffold a bare page and wire simple data containers. The page skeleton plus a `ped_update_document` body covers many CRUD detail pages.
+2. **Tier 2 — `mcp__concord-mcp__generate_overview_pages`** for list/detail scaffolding off an entity. Call this before Maia when the task is "give me an overview + detail page for `<Module>.<Entity>`." Generates two linked pages with standard Atlas layout in one call.
+3. **Tier 3 — Maia** (`mcp__concord-mcp__maia__*`, Windows only) — when Tiers 1+2 don't reach the page's content. Use Maia for rich layout, dynamic widgets, custom interaction patterns, page-level navigation wiring that `manage_navigation` doesn't cover, and any page that needs `pg_write_page`-style authoring.
+4. **Tier 4 — Direct filesystem** for `.scss` / theme variants and other file-level assets. Never for the page document itself (`.mpr`-resident; writing the page doc as a file corrupts the model).
+
+**Entry condition check before Maia:** confirm Tier 1 PED and Tier 2 `generate_overview_pages` don't already cover the operation. The Maia bridge adds latency and has its own failure modes; don't reach for it when a simpler path exists.
+
+**Once you're on the Maia path (per §1 Tier 3 entry conditions), the ladder below governs how you operate.** The Maia operational doctrine — retry budgets, recovery ladder, 3-consecutive-failure stop rule, tiebreakers — is correct and unchanged. Only the entry conditions have shifted.
+
+The Maia system prompt published with Studio Pro 11.10+ says (paraphrased): use `pg_*` tools exclusively for all page reading, creation, and modification — never use PED for pages. The `pg_*` tools live inside Maia and are not exposed to your tool surface from inside Concord. To reach them, drive Maia via the Concord bridge.
 
 **Read `.claude/skills/mendix-page-gen/SKILL.md` first.** It carries the canonical JSON template, the widget catalog, and the verification recipe.
 
@@ -114,7 +123,7 @@ A class of Mendix doc types and configuration is **PED-unreachable** — you can
 | Doc type / setting | What it controls | Path to handle |
 |---|---|---|
 | **`Pages$Layout`** | Custom top bar, sidebar, footer chrome | Maia: *"Create a new layout `<Module>.<LayoutName>` based on `Atlas_Core.Atlas_TopBar` with these chrome components: ..."*. Manual fallback: App Explorer → right-click module → Add layout (or duplicate Atlas layout, then customize). PED can verify existence (`ped_find_document`) and let pages reference it via `Pages$LayoutCall`, but cannot author its widgets. See §10. |
-| **`Navigation$NavigationDocument`** | App menu items, default home page per role, app title, app icon, favicon, login page, PWA settings | Maia or manual: *App ▸ Navigation*. Set the menu items the build needs, the default home page (e.g. `<Module>.Page_Home`), and the app title. App icon / favicon: open the **Web** profile → set Title-bar icon (16/32 px) and Application icon (≥256 px). Mendix regenerates `icon-16.png`, `icon-32.png`, `favicon.ico`, `apple-touch-icon.png`, manifest icons at deploy time. |
+| **`Navigation$NavigationDocument`** | App menu items, default home page per role, app title, app icon, favicon, login page, PWA settings | **`mcp__concord-mcp__manage_navigation` (Tier 2, preferred):** edits the navigation graph programmatically — add/remove/reorder menu items and set role-based home pages without a UI handoff. Use this first; the Studio Pro UI handoff for navigation is no longer needed for menu and home-page wiring. For app title and icon/favicon assets (binary uploads), fall back to Maia or manual: *App ▸ Navigation* → **Web** profile → Title-bar icon (16/32 px) + Application icon (≥256 px). Mendix regenerates `icon-16.png`, `icon-32.png`, `favicon.ico`, `apple-touch-icon.png`, manifest icons at deploy time. |
 | **After-Startup microflow** | Runs automatically when the app boots (e.g. seed-data) | App ▸ Settings ▸ Runtime tab ▸ After Startup → `<Module>.<MicroflowName>`. Manual UI step. |
 | **Mark-as-UI-resources** | Marks a module as a theme module so its SCSS compiles in the right load order | Right-click module → Mark as UI resources module. Icon turns green. Manual UI step (`markAsUIResource` is not on the MCP surface). See §11. |
 | **`Menus$MenuDocument`** | Side-menu documents distinct from the project Navigation menu | Maia or manual; PED can read schemas but not author menu items. |
@@ -204,7 +213,7 @@ When the user asks for custom styling, branding, or anything beyond default Atla
    - `custom-variables.scss` — brand variables (you create).
    - `design-properties.json` — optional widget design properties.
    
-   Use `mcp__mendix-studio-pro__write_file` (the `/themes` domain is registered).
+   Use `mcp__mendix-studio-pro__write_file` (the `/themes` domain is registered — Tier 1 file-domain path). For files outside the registered roots (e.g. a custom CSS file in a sibling directory that hasn't been registered as a file domain), use direct FS via Bash/PowerShell (Tier 4 — see §1 of `concord-build-rules.md`). Summary: `/themes/**` and `/jsactions/**` → always Tier 1 `write_file`; anything else that's not the `.mpr` → Tier 4 direct FS is acceptable.
 5. **Wire the import.** In `theme/web/custom-variables.scss` add only:
    ```scss
    @import "../../themesource/<modulename>/web/custom-variables.scss";

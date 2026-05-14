@@ -6,6 +6,10 @@ description: Use BEFORE any mutation of an existing Mendix microflow via `mcp__m
 ## Tools in this environment
 
 - `ped_read_document`, `ped_update_document` → `mcp__mendix-studio-pro__ped_read_document`, `mcp__mendix-studio-pro__ped_update_document`.
+- `mcp__concord-mcp__modify_microflow_activity` — one-shot mutation of an existing activity's properties without a full replace cycle. Use when you need to change a single property (e.g., commit mode, caption, expression) on an activity that is already connected to the flow. Prefer `ped_update_document` for structural changes (adding/removing objects or flows); use this tool for targeted in-place edits.
+- `mcp__concord-mcp__insert_before_activity` — inserts a new activity before a named existing activity, maintaining flow connections. Use when ordered insertion at a specific position is required and rebuilding flows manually would be error-prone. The existing `ped_update_document` Insert recipe (above) remains the primary path; reach for this tool when the insertion point is unambiguous by activity name.
+- `mcp__concord-mcp__exclude_document` — excludes a microflow from compilation. Rare; use only when the user explicitly asks to exclude a microflow (e.g., to suppress errors during development without deleting it).
+- `mcp__concord-mcp__set_microflow_url` — exposes a microflow as a published URL endpoint. Use when the user asks to make a microflow callable via REST or to set its URL path.
 
 The skill body uses the short names inline. This header tells you which actual MCP tool to call.
 

@@ -6,6 +6,10 @@ description: Use when creating or updating any Mendix workflow. Covers end-activ
 ## Tools in this environment
 
 - `ped_*` (e.g. `ped_read_document`, `ped_update_document`, `ped_get_schema`) → `mcp__mendix-studio-pro__ped_*` (preferred — operate via the Studio Pro model API).
+- concord-mcp tier-2 augmentation tools for workflow work:
+  - `mcp__concord-mcp__audit_security` — run a security audit before shipping a workflow; surfaces missing access rules on the workflow and its referenced microflows and pages.
+  - `mcp__concord-mcp__analyze_project_patterns` — heuristic detection of workflow shape inconsistencies (e.g., missing due-date configuration, unguarded parallel splits); use when the workflow behaves unexpectedly or when a pre-ship sanity check is warranted.
+  - `mcp__concord-mcp__set_documentation` — add or update docstrings on workflow steps; use to document non-obvious user-task assignment logic, boundary conditions, or outcome semantics.
 
 The skill body uses the short names inline to stay readable. This header tells you which actual MCP tool to call.
 

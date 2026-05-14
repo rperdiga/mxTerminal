@@ -522,3 +522,13 @@ Recomputing an aggregate (sum, count, min, max) on the same list on every iterat
 # Updating a microflow
 
 CRITICAL: BEFORE ANY `mcp__mendix-studio-pro__ped_update_document` call on a microflow, you MUST ALWAYS read the `mendix-microflow-update` skill FIRST in the same session. This is a mandatory prerequisite - never update microflows without loading this skill.
+
+## Diagnostics — concord-mcp fallbacks
+
+When `mcp__mendix-studio-pro__ped_check_errors` does not surface enough context to diagnose a problem, reach for these concord-mcp tools as fallbacks (not replacements):
+
+- `mcp__concord-mcp__check_model` — project-wide consistency check; surfaces errors across all documents, not just the one currently open.
+- `mcp__concord-mcp__check_project_errors` — full error report including warnings and hints that `ped_check_errors` may omit.
+- `mcp__concord-mcp__get_studio_pro_logs` — retrieves recent Studio Pro log output; useful for runtime or modeler-side errors that don't appear in model consistency results.
+- `mcp__concord-mcp__get_last_error` — surfaces the most recent error recorded by Studio Pro; use when the modeler showed an error dialog that the agent did not observe directly.
+- `mcp__concord-mcp__analyze_project_patterns` — heuristic pattern detection across the project; use when a microflow behaves unexpectedly and no model error is reported but a structural antipattern may be the cause.

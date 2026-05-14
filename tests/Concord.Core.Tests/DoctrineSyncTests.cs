@@ -76,6 +76,52 @@ public class DoctrineSyncTests
             $"Missing: {string.Join(", ", missing)}");
     }
 
+    private static readonly HashSet<string> Skip11x = new()
+    {
+        "maia__force_tier", // debug-only; explicitly excluded by existing rules
+    };
+
+    [Fact]
+    public void Bundle_11x_references_every_studio11x_allowlist_tool()
+    {
+        var expected = Studio11xAllowlist.All
+            .Where(t => !Skip11x.Contains(t))
+            .ToList();
+        expected.Should().NotBeEmpty();
+
+        var repoRoot = RepoRootFinder.Find();
+        var bundleText = string.Concat(
+            EnumerateMdFiles(Path.Combine(repoRoot, "rules"))
+                .Concat(EnumerateMdFiles(Path.Combine(repoRoot, "skills")))
+                .Select(File.ReadAllText));
+
+        var missing = expected.Where(t => !bundleText.Contains(t)).ToList();
+        missing.Should().BeEmpty(
+            "every tool in Studio11xAllowlist must be referenced at least once in rules/ or skills/. " +
+            "If a tool is intentionally excluded from the doctrine, add it to Skip11x in DoctrineSyncTests with a reason. " +
+            $"Missing: {string.Join(", ", missing)}");
+    }
+
+    [Fact]
+    public void Bundle_11x_consistently_uses_the_concord_mcp_prefix_or_omits_it_intentionally()
+    {
+        // Sanity check: the 11.x bundle should mostly use mcp__concord-mcp__<tool>
+        // for clarity, but bare tool names are acceptable in skill snippets and
+        // recipe blocks. This test does not enforce prefix consistency — it
+        // asserts only that when the concord-mcp prefix IS used, it's spelled
+        // correctly (no underscore-separator typos).
+        var repoRoot = RepoRootFinder.Find();
+        var bundleFiles = EnumerateMdFiles(Path.Combine(repoRoot, "rules"))
+            .Concat(EnumerateMdFiles(Path.Combine(repoRoot, "skills")));
+
+        foreach (var file in bundleFiles)
+        {
+            var content = File.ReadAllText(file);
+            content.Should().NotContain("mcp__concord_mcp__",
+                $"{RelativeTo(repoRoot, file)} uses underscore-separator instead of dash in the concord-mcp prefix");
+        }
+    }
+
     internal static IEnumerable<string> EnumerateMdFiles(string root)
     {
         if (!Directory.Exists(root)) return Enumerable.Empty<string>();

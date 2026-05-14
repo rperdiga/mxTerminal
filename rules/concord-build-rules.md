@@ -2,6 +2,8 @@
 
 > **Don't guess. Don't fake. Don't break.**
 
+> **Doctrine sync:** This file references every tool in `Studio11xAllowlist.All` (the 45-tool concord-mcp 11.x catalog) plus the studio-pro MCP and Maia surfaces. When `Studio11xAllowlist` changes (a tool added, removed, renamed), this file and the matching skill files must be refreshed to match. `DoctrineSyncTests` in `Concord.Core.Tests` fails the build when drift appears.
+
 Always-loaded for any session driving this Mendix project via Concord. These rules govern *how* you work, not *what* to build.
 
 **Companion files** (also always-loaded; sections numbered globally so cross-references resolve regardless of which file they're cited from):
@@ -20,34 +22,118 @@ Skills carry mandatory shape constraints — load them before, not after, the op
 
 ---
 
-## 1. Tool hierarchy — closed set
+## 1. Tool hierarchy — closed set, 4 tiers
 
-The full set of allowed paths for working on this Mendix project:
+The full set of allowed paths for working on this Mendix project. Tiers are ordered: exhaust Tier 1 before reaching for Tier 2; exhaust Tiers 1+2 before reaching for Tier 3; Tier 4 only for filesystem targets outside the MCP tool surface.
 
-1. **Studio Pro itself** — the IDE window, the Maia panel inside it, native UI actions.
-2. **Studio Pro MCP server** (`mcp__mendix-studio-pro__*`):
-   - `ped_*` — domain models, microflows, workflows, view entities (read / create / update / remove).
-   - `oql_*` — OQL generation and reading for view entities (`oql_generate`, `oql_read`).
-   - `read_skill`, `search_mendix_knowledge_base`, `web_fetch`.
-   - `glob`, `read_file`, `write_file` — scoped to file domains registered by the server. As of Studio Pro 11.10 the registered roots are `/themes` and `/jsactions`. Always call `glob` first to confirm the current set; future Studio Pro versions may register additional roots.
-3. **Concord MCP server** (`mcp__concord-mcp__*`):
-   - UI actions: `run_app`, `stop_app`, `refresh_project`, `save_all`, `get_app_status`, `get_active_run_configuration`.
-   - Maia bridge (Windows only): `maia__ask`, `maia__send`, `maia__status`, `maia__wait`, `maia__reset`.
-   - Maia introspection (Windows only, v4.2.1+): `maia__busy` (read-only "is Maia generating?"), `maia__ping` (cheap liveness probe with default 5s timeout), `maia__health` (bridge-state without traffic), `maia__new_chat` (wipe Maia's chat context — see §2 ladder step 3.5).
-   - (The Concord MCP also exposes `maia__force_tier` as a debug aid; do not use it unless the user explicitly asks for transport-tier diagnostics.)
-4. **Maia** in Studio Pro — reachable via the Concord bridge (Windows) or via you handing the user a copy-paste prompt for them to drop into Maia themselves (macOS).
-5. **Your reasoning** — analysis, JSON construction, schema diffs, planning.
-6. **Web search and `docs.mendix.com`** — when knowledge is missing.
+### Tier 1 — Studio Pro MCP server (`mcp__mendix-studio-pro__*`)
 
-**Forbidden, every time:**
+The built-in Mendix server. Use these first for all model reads and writes.
+
+- `ped_*` — domain models, microflows, workflows, view entities (read / create / update / remove).
+- `oql_*` — OQL generation and reading for view entities (`oql_generate`, `oql_read`).
+- `read_skill`, `search_mendix_knowledge_base`, `web_fetch` — knowledge and docs.
+- `glob`, `read_file`, `write_file` — scoped to file domains registered by the server. As of Studio Pro 11.10 the registered roots are `/themes` and `/jsactions`. Always call `glob` first to confirm the current set; future Studio Pro versions may register additional roots.
+
+### Tier 2 — Concord MCP server (`mcp__concord-mcp__*`)
+
+The 45-tool catalog Concord installs alongside the Studio Pro MCP. Use these when Tier 1 doesn't reach the operation. Grouped by family:
+
+**UI actions** — reach for these to control the app lifecycle and project state:
+- `run_app` — start the runtime.
+- `stop_app` — stop the runtime.
+- `save_all` — flush Studio Pro's in-memory model to disk (`.mpr`). Call after every batch.
+- `refresh_project` — reconcile Studio Pro's in-memory model with the on-disk state. Call after every `save_all`.
+- `get_app_status` — poll runtime state (starting / running / stopped).
+- `get_active_run_configuration` — read the current run configuration name.
+
+**Domain model gap-fillers** — use these when Tier 1's `ped_*` doesn't handle the operation (reference-safe renames, surgical deletes, visual layout):
+- `rename_entity` — rename an entity and update all references (microflows, pages, OQL views). Prefer over `ped_update_document` for renames.
+- `rename_attribute` — rename an attribute and update all references. Prefer over `ped_update_document`.
+- `rename_association` — rename an association and update all references.
+- `rename_document` — rename any document (page, microflow, layout, etc.) and update all references.
+- `rename_module` — rename a module and update all references.
+- `rename_enumeration_value` — rename an enumeration value and update all references.
+- `delete_model_element` — safely delete an entity, attribute, association, or other model element. Use this (not `ped_update_document` remove) for hard deletes and orphan cleanup.
+- `set_documentation` — write a docstring onto an entity, attribute, microflow, or other model element. Use post-create to add documentation without reopening the full element.
+- `arrange_domain_model` — lay out entities visually in the domain model diagram. Call after a batch entity create to avoid overlapping nodes.
+
+**Microflow gap-fillers** — operations missing from the Studio Pro MCP's microflow edit surface:
+- `exclude_document` — exclude a document from a module export (mark as excluded).
+- `set_microflow_url` — set the REST-publish URL on a published microflow.
+- `modify_microflow_activity` — surgically modify a single microflow activity without rewriting the entire flow.
+- `insert_before_activity` — insert a new activity immediately before an existing one in a microflow.
+
+**Pages** — page lifecycle operations beyond what `ped_create_document` handles:
+- `generate_overview_pages` — scaffold list + detail pages from an entity. Use this (Tier 2) before reaching for Maia (Tier 3) for simple entity CRUD.
+- `delete_document` — delete a page or other document from the project. Use when `ped_*` remove isn't available for the doc type.
+
+**Navigation** — programmatic nav graph edits:
+- `manage_navigation` — read and write navigation menu items and role-based home pages. Use this instead of the Studio Pro UI handoff for navigation changes (see §8).
+
+**Security audit** — read-only security introspection:
+- `read_security_info` — read module security settings.
+- `read_entity_access_rules` — read entity access rules for all roles.
+- `read_microflow_security` — read microflow allowed-roles configuration.
+- `audit_security` — run a security audit across the project and surface gaps.
+
+**Runtime / Configuration** — read and write app runtime settings and configurations:
+- `read_runtime_settings` — read all runtime settings (e.g. scheduled-event toggles, constant values).
+- `set_runtime_settings` — write runtime settings.
+- `read_configurations` — list all project configurations (Dev / Test / Prod variants).
+- `set_configuration` — set the active project configuration.
+
+**Diagnostics** — model and project health checks:
+- `check_model` — run a model consistency check (broader than `ped_check_errors`).
+- `check_project_errors` — check project-level errors (app settings, deployment, configuration).
+- `get_studio_pro_logs` — retrieve recent Studio Pro log output.
+- `get_last_error` — fetch the most recent error recorded by Studio Pro.
+- `analyze_project_patterns` — analyze structural patterns across the project (unused documents, naming drift, etc.).
+
+### Tier 3 — Maia delegate (`mcp__concord-mcp__maia__*`)
+
+Windows only. Reach for Maia when Tiers 1+2 don't cover the operation — typically rich page authoring beyond `generate_overview_pages` scaffolding, layout creation, or natural-language Studio Pro interactions.
+
+Entry condition check: before calling any `maia__*` tool, confirm Tier 1 `ped_*` and Tier 2 `generate_overview_pages` / `delete_document` don't already cover the operation. The Maia bridge adds latency and has its own failure modes (§2, §3); don't reach for it when a PED or concord-mcp tool suffices.
+
+**Request / response / recovery:**
+- `maia__send` — fire a prompt at Maia without waiting for the response (fire-and-forget; poll with `maia__status` or `maia__wait`).
+- `maia__status` — poll Maia's current generation state.
+- `maia__wait` — block until Maia finishes generating (or timeout).
+- `maia__ask` — send a prompt and wait for Maia's response in one call. Preferred over `maia__send` + `maia__wait` for simple request/response pairs.
+- `maia__reset` — reinitialize bridge transports. Use to recover FROM observed failure — not prophylactically (see §2 recovery ladder and empirical baseline on `maia__reset` overuse).
+
+**Introspection (v4.2.1+):**
+- `maia__busy` — read-only: is Maia currently generating? Returns `{busy, reason, idle_for_ms}`. Do NOT interpret `busy=true` as a failure; it correctly signals Maia is mid-generation.
+- `maia__ping` — cheap liveness probe with 5s default timeout. Returns `{alive, latency_ms, response}`. `{alive: false, timed_out: true}` IS a failure; run the recovery ladder.
+- `maia__health` — bridge-state snapshot without Maia traffic. Returns transport availability and in-flight handle bindings. If all transports return `available: false`, the WebSocket is dead; jump to recovery ladder step 3.
+- `maia__new_chat` — wipe Maia's chat context (see §2 ladder step 3.5 and task-boundary new-chat section). Always call `maia__busy` first; do NOT interrupt mid-generation.
+
+**Debug only:**
+- `maia__force_tier` — force a specific Maia transport tier. **Do not use unless the user explicitly asks for transport-tier diagnostics.** This tool is excluded from `DoctrineSyncTests`' enforcement; its presence here is for completeness only.
+
+The full Maia operational ladder (entry, retry budgets, recovery, 3-consecutive-failure stop rule, tiebreakers) lives in §2 of `concord-pages-and-themes.md` and §3 of this file. Load both before reaching for Maia.
+
+### Tier 4 — Direct filesystem
+
+- **Inside `/themes/` or `/jsactions/`** (the registered file domains) → use `mcp__mendix-studio-pro__write_file` (Tier 1). Do not bypass this with direct FS for files inside those roots.
+- **Outside the registered domains** → direct FS via Bash/PowerShell is acceptable (e.g. custom scripts, CI config, project-level docs outside the Mendix model).
+- **Never write `.mpr` directly.** It is a binary SQLite file; direct writes corrupt it.
+
+### Supporting concerns (not a tier)
+
+- **Your reasoning** — analysis, JSON construction, schema diffs, planning. Not a tool call; always available.
+- **Web search and `docs.mendix.com`** — when knowledge is missing. Use `mcp__mendix-studio-pro__search_mendix_knowledge_base` and `mcp__mendix-studio-pro__web_fetch`. These are supporting tools for the §3 recovery ladder, not a separate workflow tier.
+
+### Forbidden, every time
 
 - Editing `.mpr` directly (binary SQLite; corrupts on direct write).
-- Filesystem writes against model files. The only filesystem-shaped exceptions are `/themes/**` and `/jsactions/**`, and even there, prefer `mcp__mendix-studio-pro__write_file` — the registered file-domain path.
+- Filesystem writes against model files outside the Tier 1 file domains. The only filesystem-shaped exceptions are `/themes/**` and `/jsactions/**`, and even there, prefer `mcp__mendix-studio-pro__write_file` — the registered file-domain path (Tier 1).
 - mxbuild, mxcli, npm against the project. The model is single-transaction-at-a-time; external CLIs bypass that contract.
-- Direct `Bash` / `PowerShell` against the project's model directories. Read-only inspection is fine; writes are not.
+- Direct `Bash` / `PowerShell` writes against the project's model directories. Read-only inspection is fine; writes are not.
 - Manually attaching MCP servers (`claude mcp add ...`). Concord wires `.mcp.json` and `~/.codex/config.toml` automatically. If `mcp__mendix-studio-pro__*` or `mcp__concord-mcp__*` aren't visible in your tool surface, surface that to the user and stop — don't manually patch around it.
 
-If a path is not in this list, it is not an option. The right move when an MCP boundary blocks you is §3 (persist with evidence), not a parallel filesystem path.
+If a path is not in this hierarchy, it is not an option. The right move when an MCP boundary blocks you is §3 (persist with evidence), not a parallel filesystem path.
 
 ---
 
