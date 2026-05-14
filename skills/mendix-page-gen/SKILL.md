@@ -1,12 +1,14 @@
 ---
 name: mendix-page-gen
-description: Use when creating or modifying a Mendix page. Includes the widget catalog (LayoutGrid, DataView, ActionButton, TextBox, TextArea, DatePicker, CheckBox, RadioButtonGroup, DynamicText, DivContainer, TabContainer, Datagrid, etc.), the page-parameter rules, the data-source patterns, the validation checklist, and the Maia delegation pattern (since `pg_read_page` and `pg_write_page` are not exposed in this environment, all page reads/writes go through Maia). Trigger when the user asks to create a new page, modify an existing page, add a widget, change a layout, or wire a button to a microflow.
+description: Use when creating or modifying a Mendix page. Includes the tiered entry conditions (ped_* for simple pages → generate_overview_pages for list/detail scaffolding → Maia delegation for rich authoring → filesystem for .scss only), the widget catalog (LayoutGrid, DataView, ActionButton, TextBox, TextArea, DatePicker, CheckBox, RadioButtonGroup, DynamicText, DivContainer, TabContainer, Datagrid, etc.), the page-parameter rules, the data-source patterns, the validation checklist, the Maia delegation ladder (JSON construction, maia__ask, ped_check_errors verification, retry budget, refresh), and delete_document for page removal. Trigger when the user asks to create a new page, modify an existing page, add a widget, change a layout, or wire a button to a microflow.
 ---
 
 ## Tools in this environment
 
 - `pg_read_page`, `pg_write_page` → **NOT exposed in this environment.** Delegate to Maia (see "Maia delegation" below).
-- `ped_check_errors`, `ped_create_document`, `ped_read_document` → `mcp__mendix-studio-pro__ped_*`. Used to verify pages after Maia writes them, and to create the page shell when CustomWidgets are involved.
+- `ped_check_errors`, `ped_create_document`, `ped_read_document`, `ped_update_document` → `mcp__mendix-studio-pro__ped_*`. Used to verify pages after Maia writes them, to create page shells, and for simple page content (Tier 1).
+- `mcp__concord-mcp__generate_overview_pages` — scaffolds list/detail pages from an entity (Tier 2). Prefer over manual JSON construction or Maia delegation for standard overview/form patterns.
+- `mcp__concord-mcp__delete_document` — removes a page document with cascade cleanup. Use for page deletion; do not remove pages via raw `ped_update_document` operations.
 - `mcp__concord-mcp__refresh_project` — refresh Studio Pro after a page write.
 
 ## Maia delegation
@@ -40,6 +42,26 @@ When a page needs a CustomWidget:
 2. Delegate to Maia per the recipe above to write the shell.
 3. Tell the user: "I created the page shell. Please drag the `<widget name>` widget into the `<placeholder name>` container in Studio Pro — `ped_*` and `pg_*` cannot insert custom widgets reliably."
 4. After the user confirms, call `mcp__concord-mcp__refresh_project` and verify with `ped_check_errors`.
+
+# Page Authoring Entry Conditions
+
+Before reaching for Maia, evaluate which tier fits the task. Work top-to-bottom and stop at the first tier that covers the need.
+
+**Tier 1 — `mcp__mendix-studio-pro__ped_create_document` / `ped_update_document`**
+Use for simple pages where content is static or structurally predictable: basic widgets (buttons, text, labels), no rich dynamic data binding, no custom layout. `ped_*` is deterministic and does not require a Maia session. Prefer it for scaffolding, stub pages, and page shells.
+
+**Tier 2 — `mcp__concord-mcp__generate_overview_pages`**
+Use when the user wants a list or detail page scaffolded directly from a domain entity. This tool generates the overview structure (grid + form) without requiring manual JSON construction or a Maia call. Invoke it before attempting a manual build or a Maia delegation for this class of page.
+
+**Tier 3 — Maia delegate (see "Maia delegation" below)**
+Use for richer authoring: custom widgets, complex layouts, dynamic interaction patterns, or any page that exceeds what `ped_*` and `generate_overview_pages` can produce. Once you're on the Maia path, the ladder documented in "Maia delegation" governs how you operate — JSON construction, `maia__ask`, direct `ped_check_errors` verification, retry budget, and refresh.
+
+**Tier 4 — Direct filesystem**
+For `.scss` / theme variant files only. Never write the page document itself via the filesystem.
+
+**Page removal:** Use `mcp__concord-mcp__delete_document` to remove a page document. Do not use `ped_update_document` to remove a page from the module's document list — `delete_document` handles cascade cleanup (navigation references, etc.) that a raw remove does not.
+
+---
 
 # Page Generation Common Skills
 

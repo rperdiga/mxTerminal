@@ -120,8 +120,8 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         log?.Info($"InitWebView indexUri={indexUri} theme-from-probe={themeQuery ?? "<none>"}");
         // Resolve once at Open(); the path is stable for the lifetime of the
         // extension (it's the deployed extensions/Concord/skills/ folder).
-        var bundledSkillsRoot = extensionFileService.ResolvePath("skills");
-        var bundledRulesRoot = extensionFileService.ResolvePath("rules");
+        var bundledSkillsRoot = extensionFileService.ResolvePath("skills-10x");
+        var bundledRulesRoot = extensionFileService.ResolvePath("rules-10x");
         log?.Info($"[skills] bundled-root={bundledSkillsRoot}");
         log?.Info($"[rules] bundled-root={bundledRulesRoot}");
 
@@ -447,8 +447,8 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 SkillClients = Array.Empty<string>(),
             };
 
-            var bundledSkillsRoot = extensionFileService.ResolvePath("skills");
-            var bundledRulesRoot = extensionFileService.ResolvePath("rules");
+            var bundledSkillsRoot = extensionFileService.ResolvePath("skills-10x");
+            var bundledRulesRoot = extensionFileService.ResolvePath("rules-10x");
 
             var touched = SettingsApplyHelper.ApplyAll(
                 dir,
@@ -566,8 +566,8 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
                 SkillClients = Array.Empty<string>(),
             };
 
-            var bundledSkillsRoot = extensionFileService.ResolvePath("skills");
-            var bundledRulesRoot = extensionFileService.ResolvePath("rules");
+            var bundledSkillsRoot = extensionFileService.ResolvePath("skills-10x");
+            var bundledRulesRoot = extensionFileService.ResolvePath("rules-10x");
 
             var touched = SettingsApplyHelper.ApplyAll(
                 dir,
@@ -630,8 +630,8 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
             log.Info($"[settings-repair] restored defaults for McpServerEnabled+empty-McpClients or SkillsEnabled+empty-SkillClients");
             repaired.Save(dir);
 
-            var bundledSkillsRoot = extensionFileService.ResolvePath("skills");
-            var bundledRulesRoot = extensionFileService.ResolvePath("rules");
+            var bundledSkillsRoot = extensionFileService.ResolvePath("skills-10x");
+            var bundledRulesRoot = extensionFileService.ResolvePath("rules-10x");
             var touched = SettingsApplyHelper.ApplyAll(
                 dir,
                 bundledSkillsRoot,

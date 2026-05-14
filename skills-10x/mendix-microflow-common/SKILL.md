@@ -1,13 +1,23 @@
 ---
 name: mendix-microflow-common
-description: Use BEFORE creating any new Mendix microflow. Covers the pre-creation planning checklist (trace flow paths, verify gateway rules, check loop boundaries, identify annotation points), naming conventions (ACT_/CAL_/VAL_/OCH_/DS_/SUB_ prefixes), layout rules (parameters above start event, 200px horizontal / 100px vertical spacing, decision split conventions, error handler placement), the loop performance anti-patterns (no Show Message / Commit / Retrieve / Delete / REST / aggregate inside a loop), the XPath-vs-Expressions distinction, and variable scope rules. Trigger when the user describes a new microflow they want to create.
+description: Use BEFORE creating any new Mendix microflow on Studio Pro 10.24.13–11.9.x. Covers the pre-creation planning checklist (trace flow paths, verify gateway rules, check loop boundaries, identify annotation points), naming conventions (ACT_/CAL_/VAL_/OCH_/DS_/SUB_ prefixes), layout rules (parameters above start event, 200px horizontal / 100px vertical spacing, decision split conventions, error handler placement), the loop performance anti-patterns (no Show Message / Commit / Retrieve / Delete / REST / aggregate inside a loop), the XPath-vs-Expressions distinction, and variable scope rules. Trigger when the user describes a new microflow they want to create.
 ---
 
 ## Tools in this environment
 
-- `ped_*` (e.g. `ped_create_document`, `ped_read_document`, `ped_update_document`) → `mcp__mendix-studio-pro__ped_*` (preferred — operate via the Studio Pro model API).
+This skill is for **Studio Pro 10.24.13–11.9.x** (concord-mcp tool surface). The Mendix studio-pro MCP server and Maia are **not available** on this version.
 
-The skill body uses the short names inline. This header tells you which actual MCP tool to call.
+Tools relevant to this skill:
+
+- `mcp__concord-mcp__list_microflows` — list all microflows in the project or a module.
+- `mcp__concord-mcp__read_microflow_details` — read the current structure of a microflow before modifying it.
+- `mcp__concord-mcp__check_variable_name` — validate a proposed variable name before use.
+- `mcp__concord-mcp__check_project_errors` — run the full consistency check after changes.
+- `mcp__concord-mcp__get_last_error` — retrieve the most recent error from the runtime.
+- `mcp__concord-mcp__get_studio_pro_logs` — read Studio Pro logs for diagnostic detail.
+- `mcp__concord-mcp__analyze_project_patterns` — identify structural patterns across the project.
+
+For microflow mutations, load the `mendix-microflow-update` skill before calling any mutation tool.
 
 # Microflow Creation - MANDATORY Pre-Creation Checklist
 
@@ -321,7 +331,7 @@ Add annotations to microflows when logic becomes non-trivial to help future deve
 ✅ **Align elements**: Use grid snapping for professional appearance
 ✅ **Balance flow direction**: Don't overcomplicate vertical flows
 ✅ **Clear end events**: Every path should lead to an appropriate end event
-✅ **Extract cohesive reusable logic**: When logic is cohesive and reusable, extract it into a separate Microflow and call it form our main Microflow.
+✅ **Extract cohesive reusable logic**: When logic is cohesive and reusable, extract it into a separate Microflow and call it from our main Microflow.
 
 ## Anti-Patterns (DO NOT USE)
 
@@ -521,14 +531,4 @@ Recomputing an aggregate (sum, count, min, max) on the same list on every iterat
 
 # Updating a microflow
 
-CRITICAL: BEFORE ANY `mcp__mendix-studio-pro__ped_update_document` call on a microflow, you MUST ALWAYS read the `mendix-microflow-update` skill FIRST in the same session. This is a mandatory prerequisite - never update microflows without loading this skill.
-
-## Diagnostics — concord-mcp fallbacks
-
-When `mcp__mendix-studio-pro__ped_check_errors` does not surface enough context to diagnose a problem, reach for these concord-mcp tools as fallbacks (not replacements):
-
-- `mcp__concord-mcp__check_model` — project-wide consistency check; surfaces errors across all documents, not just the one currently open.
-- `mcp__concord-mcp__check_project_errors` — full error report including warnings and hints that `ped_check_errors` may omit.
-- `mcp__concord-mcp__get_studio_pro_logs` — retrieves recent Studio Pro log output; useful for runtime or modeler-side errors that don't appear in model consistency results.
-- `mcp__concord-mcp__get_last_error` — surfaces the most recent error recorded by Studio Pro; use when the modeler showed an error dialog that the agent did not observe directly.
-- `mcp__concord-mcp__analyze_project_patterns` — heuristic pattern detection across the project; use when a microflow behaves unexpectedly and no model error is reported but a structural antipattern may be the cause.
+CRITICAL: BEFORE ANY `mcp__concord-mcp__update_microflow` call on a microflow, you MUST ALWAYS read the `mendix-microflow-update` skill FIRST in the same session. This is a mandatory prerequisite - never update microflows without loading this skill.

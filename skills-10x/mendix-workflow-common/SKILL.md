@@ -1,21 +1,57 @@
 ---
 name: mendix-workflow-common
-description: Use when creating or updating any Mendix workflow. Covers end-activity rules, outcome semantics (single-outcome flows must continue inline, multi-outcome flows branch), the user-targeting decision table (NoUserTargeting / XPathUserTargeting / XPathGroupTargeting / Microflow targeting), and workflow-specific expression rules ($WorkflowContext and $WorkflowInstance only). Trigger when the user describes a new workflow, modifies user-task assignments, adds decision splits, or writes workflow expressions.
+description: Use when creating or updating any Mendix workflow on Studio Pro 10.24.13–11.9.x. Documents the available inspection tools (list_workflows, read_workflow_details), the authoring surface limitation (workflow structure is authored in Studio Pro's native editor), end-activity rules, outcome semantics, user-targeting decision table, and workflow expression rules. Trigger when the user describes a new workflow, asks about workflow structure, modifies user-task assignments, or writes workflow expressions.
 ---
 
 ## Tools in this environment
 
-- `ped_*` (e.g. `ped_read_document`, `ped_update_document`, `ped_get_schema`) → `mcp__mendix-studio-pro__ped_*` (preferred — operate via the Studio Pro model API).
-- concord-mcp tier-2 augmentation tools for workflow work:
-  - `mcp__concord-mcp__audit_security` — run a security audit before shipping a workflow; surfaces missing access rules on the workflow and its referenced microflows and pages.
-  - `mcp__concord-mcp__analyze_project_patterns` — heuristic detection of workflow shape inconsistencies (e.g., missing due-date configuration, unguarded parallel splits); use when the workflow behaves unexpectedly or when a pre-ship sanity check is warranted.
-  - `mcp__concord-mcp__set_documentation` — add or update docstrings on workflow steps; use to document non-obvious user-task assignment logic, boundary conditions, or outcome semantics.
+This skill is for **Studio Pro 10.24.13–11.9.x** (concord-mcp tool surface). The Mendix studio-pro MCP server and Maia are **not available** on this version.
 
-The skill body uses the short names inline to stay readable. This header tells you which actual MCP tool to call.
+Tools relevant to workflows on 10.x:
+
+- `mcp__concord-mcp__list_workflows` — list all workflow documents in the project or a module.
+- `mcp__concord-mcp__read_workflow_details` — read the structure of an existing workflow, including activities, outcomes, and user-targeting configuration.
+- `mcp__concord-mcp__check_project_errors` — validate project consistency after any related change (e.g., after modifying a microflow called by a workflow).
+- `mcp__concord-mcp__analyze_project_patterns` — identify structural patterns in the project that relate to workflow context entities or microflows.
+
+**What is NOT available on 10.x:**
+
+There are no dedicated workflow-mutation tools in the concord-mcp surface on 10.x. Adding or removing workflow activities, configuring user tasks, or modifying workflow outcomes must be done in Studio Pro's native workflow editor.
+
+**What the agent can do on 10.x:**
+
+- Inspect existing workflows with `list_workflows` and `read_workflow_details`.
+- Explain workflow structure and doctrine to guide Studio Pro editing.
+- Assist with writing expressions used in workflow activities (see Expressions section below).
+- Assist with writing XPath constraints for user-targeting configurations.
+- Identify the microflows wired to workflow activities and assist with modifying those microflows (using concord-mcp microflow tools).
+
+---
 
 # General
 
 Always make sure to follow and double check the CRITICAL/MANDATORY CHECKS, absolutely do not deviate from these instructions!
+
+## Inspecting Workflows
+
+**List workflows:**
+
+```
+mcp__concord-mcp__list_workflows
+  module: <ModuleName>   (optional — omit for all modules)
+```
+
+**Read workflow details:**
+
+```
+mcp__concord-mcp__read_workflow_details
+  module: <ModuleName>
+  workflowName: <WorkflowName>
+```
+
+Use `read_workflow_details` to understand the current structure before making any recommendations for Studio Pro edits.
+
+---
 
 ## End Activity - Critical Rules
 
@@ -91,7 +127,6 @@ When a **user role or attribute** is explicitly named (e.g. "assign to managers"
 When a **workflow group** is explicitly referenced:
 
 - Use `Workflows$XPathGroupTargeting` with an `xPathConstraint` that filters workflow groups
-- **CRITICAL**: You MUST get the schema for `Workflows$XPathGroupTargeting` before creating it
 - The constraint filters `System.WorkflowUserGroup` entities
 
 ### Microflow-based Targeting
@@ -99,7 +134,6 @@ When a **workflow group** is explicitly referenced:
 When **complex business logic** is needed (e.g., "assign to the employee's direct manager"):
 
 - Use `Workflows$MicroflowUserTargeting` (returns list of users) or `Workflows$MicroflowGroupTargeting` (returns list of groups)
-- **CRITICAL**: You MUST get the schema before creating it
 - The microflow receives the workflow context as a parameter and must return a list of the appropriate type
 
 ### Common Mistakes to Avoid
@@ -145,4 +179,15 @@ For general expression syntax, refer to the `mendix-microflow-syntax` skill.
 - User task `dueDate` property
 - WaitForTimerActivity `delay` property
 
-**CRITICAL CHECK**: Before writing ANY workflow expression, verify that all variables reference either `$WorkflowContext`, `$WorkflowInstance`. If unsure what variables are available, ask the user.
+**CRITICAL CHECK**: Before writing ANY workflow expression, verify that all variables reference either `$WorkflowContext` or `$WorkflowInstance`. If unsure what variables are available, ask the user.
+
+---
+
+## Workflow for Studio Pro Editing Guidance
+
+Because the agent cannot mutate workflow structure on 10.x, the recommended approach is:
+
+1. Call `mcp__concord-mcp__read_workflow_details` to read the current workflow structure.
+2. Explain the required changes in terms of Studio Pro's workflow editor (activity types, outcome configuration, targeting settings).
+3. If a workflow activity calls a microflow, assist with modifying that microflow using the `mendix-microflow-update` skill and concord-mcp microflow tools.
+4. After the user makes changes in Studio Pro, call `mcp__concord-mcp__check_project_errors` to surface any consistency issues.

@@ -16,5 +16,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Concord.Core\Concord.Core.csproj" />
+    <ProjectReference Include="..\..\src\Concord.Host10x\Concord.Host10x.csproj" />
   </ItemGroup>
 </Project>

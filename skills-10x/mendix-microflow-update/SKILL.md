@@ -1,17 +1,23 @@
 ---
 name: mendix-microflow-update
-description: Use BEFORE any mutation of an existing Mendix microflow via `mcp__mendix-studio-pro__ped_update_document` — covers auto-deletion of flows on object remove, the mandatory re-read-after-mutation rule, edge-to-edge 70px spacing math, batching rules (multi-remove safe, add+remove on same path forbidden), and step-by-step recipes for replace and insert. Trigger when the user asks to add, remove, replace, or rearrange microflow activities, flows, splits, loops, or end events on an existing microflow.
+description: Use BEFORE any mutation of an existing Mendix microflow on Studio Pro 10.24.13–11.9.x — covers auto-deletion of flows on object remove, the mandatory re-read-after-mutation rule, edge-to-edge 70px spacing math, batching rules (multi-remove safe, add+remove on same path forbidden), and step-by-step recipes for replace and insert. Trigger when the user asks to add, remove, replace, or rearrange microflow activities, flows, splits, loops, or end events on an existing microflow.
 ---
 
 ## Tools in this environment
 
-- `ped_read_document`, `ped_update_document` → `mcp__mendix-studio-pro__ped_read_document`, `mcp__mendix-studio-pro__ped_update_document`.
-- `mcp__concord-mcp__modify_microflow_activity` — one-shot mutation of an existing activity's properties without a full replace cycle. Use when you need to change a single property (e.g., commit mode, caption, expression) on an activity that is already connected to the flow. Prefer `ped_update_document` for structural changes (adding/removing objects or flows); use this tool for targeted in-place edits.
-- `mcp__concord-mcp__insert_before_activity` — inserts a new activity before a named existing activity, maintaining flow connections. Use when ordered insertion at a specific position is required and rebuilding flows manually would be error-prone. The existing `ped_update_document` Insert recipe (above) remains the primary path; reach for this tool when the insertion point is unambiguous by activity name.
-- `mcp__concord-mcp__exclude_document` — excludes a microflow from compilation. Rare; use only when the user explicitly asks to exclude a microflow (e.g., to suppress errors during development without deleting it).
-- `mcp__concord-mcp__set_microflow_url` — exposes a microflow as a published URL endpoint. Use when the user asks to make a microflow callable via REST or to set its URL path.
+This skill is for **Studio Pro 10.24.13–11.9.x** (concord-mcp tool surface). The Mendix studio-pro MCP server and Maia are **not available** on this version.
 
-The skill body uses the short names inline. This header tells you which actual MCP tool to call.
+Tools relevant to this skill:
+
+- `mcp__concord-mcp__read_microflow_details` — read a microflow before any mutation. Always call this first.
+- `mcp__concord-mcp__update_microflow` — apply structural mutations to a microflow (remove, add, reorder objects/flows).
+- `mcp__concord-mcp__modify_microflow_activity` — modify properties of an existing activity in-place (without structural remove/add).
+- `mcp__concord-mcp__insert_before_activity` — insert a new activity before a target activity in the flow sequence.
+- `mcp__concord-mcp__create_microflow_activity` — create a single new activity and add it to a microflow.
+- `mcp__concord-mcp__create_microflow_activities_sequence` — create and wire a sequence of new activities in one call.
+- `mcp__concord-mcp__check_project_errors` — validate the project after mutations.
+
+The skill body uses the concord-mcp tool names throughout.
 
 # Removing & Replacing Objects in Microflows
 
@@ -20,7 +26,7 @@ The skill body uses the short names inline. This header tells you which actual M
 **RULE 1 — Auto-deletion**: Removing an object from `/objectCollection/objects` automatically deletes ALL flows connected to it. NEVER manually remove those flows — they are already gone.
 Removing a flow does NOT delete connected objects.
 
-**RULE 2 — Re-read after every mutation**: After ANY `ped_update_document` that adds or removes elements, you MUST call `ped_read_document` before your next `ped_update_document`.
+**RULE 2 — Re-read after every mutation**: After ANY `mcp__concord-mcp__update_microflow` that adds or removes elements, you MUST call `mcp__concord-mcp__read_microflow_details` before your next `mcp__concord-mcp__update_microflow`.
 WHY: Removing index 2 shifts everything after it down by 1. If "Activity C" was at index 3, it is now at index 2. If you skip re-reading and use `$id(/objects/3)`, you will reference the WRONG object.
 
 **RULE 3**: Carefully plan the layout when you add new objects. NEVER OVERLAP OBJECTS. ALWAYS adjust the `relativeMiddlePoint` property when you are placing new objects into an existing flow.
@@ -52,7 +58,7 @@ Before adding ANY object to a microflow, resizing ANY existing object, or adding
 
 STEP 1 — Read and record actual sizes:
 
-- Call `ped_read_document` to obtain the current `size.width` and `size.height` of every existing object.
+- Call `mcp__concord-mcp__read_microflow_details` to obtain the current `size.width` and `size.height` of every existing object.
 - Use these actual values for size and position — NEVER substitute defaults for objects that already exist in the microflow.
 - For each existing object: occupied_x = (relativeMiddlePoint.x - size.width/2, relativeMiddlePoint.x + size.width/2)
 - For each existing object: occupied_y = (relativeMiddlePoint.y - size.height/2, relativeMiddlePoint.y + size.height/2)
@@ -124,24 +130,24 @@ CRITICAL: Skipping this calculation is FORBIDDEN and results in unprofessional m
 Setup: Start→A→B→C→End (objects at indices 0–4, 4 flows connecting objects).
 
 **Step 1 — Remove B:**
-TOOL CALL: ped_update_document: operations: [{path: "/objectCollection/objects", operation: {type: "remove", index: 2}}]
+TOOL CALL: `mcp__concord-mcp__update_microflow`: operations: [{path: "/objectCollection/objects", operation: {type: "remove", index: 2}}]
 TOOL EFFECT: B deleted, flows A→B and B→C auto-deleted.
 
 **Step 2 — STOP. Re-read:**
-TOOL CALL: ped_read_document: paths: ["/objectCollection/objects", "/flows"]
+TOOL CALL: `mcp__concord-mcp__read_microflow_details`: paths: ["/objectCollection/objects", "/flows"]
 TOOL RESULT: objects: [Start, A, C, End] — flows: [Start→A, C→End]
 NOTE: C shifted 3→2, End shifted 4→3. Only two flows remain. A and C are not connected.
 
 **Step 3 — Add D:**
-TOOL CALL: ped_update_document: operations: [{path: "/objectCollection/objects", operation: {type: "add", value: {$Type: "...", ...}}}]
+TOOL CALL: `mcp__concord-mcp__update_microflow`: operations: [{path: "/objectCollection/objects", operation: {type: "add", value: {$Type: "...", ...}}}]
 TOOL RESULT: Success.
 
 **Step 4 — STOP. Re-read:**
-TOOL CALL: ped_read_document: paths: ["/objectCollection/objects", "/flows"]
+TOOL CALL: `mcp__concord-mcp__read_microflow_details`: paths: ["/objectCollection/objects", "/flows"]
 TOOL RESULT: objects: [Start, A, C, End, D] — flows: [Start→A, C→End]
 
 **Step 5 — Reconnect using ONLY Step 4 indices:**
-TOOL CALL: ped_update_document: operations: [
+TOOL CALL: `mcp__concord-mcp__update_microflow`: operations: [
 {path: "/flows", operation: {type: "add", value: {
 $Type: "Microflows$SequenceFlow",
 originId: "$id(/objectCollection/objects/1)", ← A
@@ -160,7 +166,7 @@ TOOL RESULT: objects: [Start, A, C, End, D] — flows: [Start→A, C→End, A→
 Setup: Start→A→B→C→End (same example as in the previous recipe). Remember flow at index 2 is B→C.
 
 **Step 1 — Remove B→C flow AND add D (different paths → safe to batch):**
-TOOL CALL: ped_update_document: operations: [
+TOOL CALL: `mcp__concord-mcp__update_microflow`: operations: [
 {path: "/flows", operation: {type: "remove", index: 2}},
 {path: "/objectCollection/objects", operation: {type: "add", value: {$Type: "...", ...}}}
 ]
@@ -168,11 +174,11 @@ TOOL RESULT: Success.
 NOTE: If B is an ExclusiveSplit, note the caseValue from the B→C flow BEFORE this step.
 
 **Step 2 — STOP. Re-read:**
-TOOL CALL: ped_read_document: paths: ["/objectCollection/objects", "/flows"]
+TOOL CALL: `mcp__concord-mcp__read_microflow_details`: paths: ["/objectCollection/objects", "/flows"]
 TOOL RESULT: objects: [Start, A, B, C, End, D] — flows: [Start→A, A→B, C→End]
 
 **Step 3 — Reconnect using ONLY Step 2 indices:**
-TOOL CALL: ped_update_document: operations: [
+TOOL CALL: `mcp__concord-mcp__update_microflow`: operations: [
 {path: "/flows", operation: {type: "add", value: {
 $Type: "Microflows$SequenceFlow",
 originId: "$id(/objectCollection/objects/2)", ← B
@@ -186,3 +192,23 @@ destinationId: "$id(/objectCollection/objects/3)", ← C
 }}}
 ]
 TOOL RESULT: objects: [Start, A, B, C, End, D] — flows: [Start→A, A→B, C→End, B→D, D→C]
+
+## Recipe: Insert Before an Activity Using insert_before_activity
+
+Use `mcp__concord-mcp__insert_before_activity` when you want to add a new activity immediately before an existing target activity, without manually managing flows.
+
+1. Identify the target activity name from `mcp__concord-mcp__read_microflow_details`.
+2. Call `mcp__concord-mcp__insert_before_activity` with the microflow name, target activity name, and the new activity definition.
+3. Re-read with `mcp__concord-mcp__read_microflow_details` to confirm the new activity appears in the correct position and flows are correctly wired.
+4. Call `mcp__concord-mcp__check_project_errors` to confirm no consistency errors were introduced.
+
+## Recipe: Modify Activity Properties In-Place
+
+Use `mcp__concord-mcp__modify_microflow_activity` when you need to change properties of an existing activity (e.g., changing an expression, updating an entity reference, toggling commit) WITHOUT restructuring the flow.
+
+1. Read the current activity details with `mcp__concord-mcp__read_microflow_details`.
+2. Call `mcp__concord-mcp__modify_microflow_activity` with the microflow name, activity name, and the property changes.
+3. Re-read to verify the change took effect.
+4. Call `mcp__concord-mcp__check_project_errors`.
+
+Do NOT use `modify_microflow_activity` to change an activity's type — use the Replace recipe above instead.

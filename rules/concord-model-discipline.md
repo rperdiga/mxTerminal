@@ -21,6 +21,19 @@ Doctrine from the Maia system prompt — don't re-derive these:
 - **`ped_check_errors`** runs after ALL mutations for the current task complete, not between intermediate steps.
 - **Single-shot fix rule** (Maia doctrine, hard limit). After `ped_check_errors` reports errors you get *exactly one* `ped_update_document` to fix them. Re-run `ped_check_errors`. If errors remain on a NON-Page doc (microflow, entity, view entity) → **STOP and REPORT.** Do not retry. Surface the verbatim errors and the fix attempt; the user decides next steps. **For Pages**, before escalating, route through §3's Maia-as-page-fixer tiebreaker — Maia gets one more attempt on the page before user homework. Maia CANNOT edit non-page docs reliably, so the tiebreaker does not apply to them.
 
+### Concord-mcp domain model gap-fillers
+
+`ped_update_document` is not reference-aware — if you rename an entity attribute using `ped_update_document /name set "NewName"`, microflows, pages, and OQL views that reference the old name will break. Use the Concord-mcp (Tier 2) rename tools instead:
+
+- **`mcp__concord-mcp__rename_attribute`** — rename an attribute and update all references project-wide. Prefer over `ped_update_document` for any attribute rename.
+- **`mcp__concord-mcp__rename_entity`** — rename an entity and update all references. Prefer over `ped_update_document` for entity renames.
+- **`mcp__concord-mcp__rename_association`** — rename an association and update all references.
+- **`mcp__concord-mcp__rename_document`** — rename any document (page, microflow, layout, etc.) and update all references. Prefer over `ped_update_document /name`.
+- **`mcp__concord-mcp__rename_module`** — rename a module and update all references. (Note: module rename is also achievable via Studio Pro UI right-click → Rename; use whichever path is available.)
+- **`mcp__concord-mcp__rename_enumeration_value`** — rename an enumeration value and update all references.
+- **`mcp__concord-mcp__delete_model_element`** — safely delete an entity, attribute, association, enumeration value, or other model element. Use this for hard deletes; `ped_update_document` remove works for array-element removal within a document but doesn't handle cross-document reference cleanup.
+- **`mcp__concord-mcp__arrange_domain_model`** — lay out entities in the domain model diagram. Call after a batch entity create to avoid overlapping nodes and ensure the domain model is readable.
+
 ### Reserved words
 
 Names rejected by Mendix (case-insensitive). Includes all Java keywords plus Mendix-specific identifiers. The full list from Mendix is `type`, `MendixObject`, `__filename__`, `changedby`, `changeddate`, `context`, `createddate`, `currentUser`, `empty`, `guid`, `id`, `object`, `owner`, `submetaobjectname`, `con`, plus the predefined-variable names `currentDeviceType`, `currentIndex`, `currentSession`, `latestError`, `latestSoapFault`, `latestHttpResponse`. Any Java keyword (`class`, `interface`, `enum`, etc.) is also reserved.
@@ -41,6 +54,8 @@ Even if the user explicitly asks for a reserved word, substitute. Standard patte
 - **Empty string `""` is not a valid expression.** For `dynamicClasses` and similar expression-typed string properties, omit the property entirely if you don't want a value — `""` fails the model checker.
 - **Order matters in batch updates.** Referenced elements must be added before referencing elements. `$id(/path)` references for newly-added items don't always resolve across array boundaries within the same call — when in doubt, split into two calls and read the new IDs between.
 - **After any mutation, re-read before the next mutation.** Removing an element shifts subsequent indices; the `mendix-microflow-update` skill has the canonical recipe.
+
+**Adding documentation post-create:** `ped_update_document` can set a `documentation` property on many document types, but the shape varies by type and often requires knowing the internal JSON path. Use **`mcp__concord-mcp__set_documentation`** instead — it provides a uniform interface for adding or updating docstrings on entities, attributes, microflows, and other model elements without needing to look up the internal PED path.
 
 ---
 
@@ -69,6 +84,8 @@ The fix:
 3. **Then** re-read.
 
 If the read still doesn't match expectations after save → refresh → re-read, surface to the user with the verbatim read output and what you expected to see. Do not continue spinning on the same document; that's the loop §3 forbids in a different shape.
+
+**Orphan cleanup — safe-delete path:** When removing an entity, attribute, association, or enumeration value that has become orphaned, use **`mcp__concord-mcp__delete_model_element`** rather than `ped_update_document` remove operations. `delete_model_element` performs reference-aware cleanup — it checks for and surfaces outstanding references before deleting, preventing dangling cross-document references that silently break microflows and pages.
 
 When the user describes an app to clone or build, derive the **journey arc** they're really asking for — *Browse → Detail → Action → Side-effect → User-facing list/evidence* — and deliver every step. Specify the arc explicitly in your plan (§13) so the user can check it. Renames mid-build cause downstream churn (and module name is immutable per §9), so commit to entity / page / microflow names in the plan, not in the writes.
 
