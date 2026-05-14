@@ -407,13 +407,18 @@ namespace Terminal.Spmcp.Tools
         await Task.CompletedTask;
         try
         {
-            var entityNamesArray = arguments["entity_names"]?.AsArray();
+            // Robust array parsing: accepts JsonArray AND string-encoded
+            // array shapes (Claude Code v2.1 stringifies complex args when
+            // tools/list has no input schema). Aliases cover the names Claude
+            // tries when guessing — captured from terminal.log on a real
+            // failed call: entity_names, entityNames, entities.
+            var entityNamesArray = Terminal.Spmcp.Utils.Utils.GetArrayParam(arguments, "entity_names", "entityNames", "entities");
             var generateIndexSnippet = arguments["generate_index_snippet"]?.GetValue<bool>() ?? true;
 
             if (entityNamesArray == null || !entityNamesArray.Any())
             {
                 return JsonSerializer.Serialize(new {
-                    error = "Invalid request format or no entity names provided",
+                    error = "Invalid request format or no entity names provided. Use the 'entity_names' parameter as a JSON array of strings (e.g. [\"Customer\",\"Order\"]).",
                     success = false
                 });
             }
@@ -432,7 +437,7 @@ namespace Terminal.Spmcp.Tools
                 });
             }
 
-            var overviewModuleName = arguments["module_name"]?.ToString();
+            var overviewModuleName = Terminal.Spmcp.Utils.Utils.GetParam(arguments, "module_name", "moduleName", "module");
             if (string.IsNullOrWhiteSpace(overviewModuleName))
             {
                 var error = "module_name is required for GenerateOverviewPages.";
@@ -1035,8 +1040,8 @@ namespace Terminal.Spmcp.Tools
                     }
                 }
 
-                // Resolve parameters
-                var parametersArray = arguments["parameters"]?.AsArray();
+                // Resolve parameters — accept stringified arrays + name variants.
+                var parametersArray = Terminal.Spmcp.Utils.Utils.GetArrayParam(arguments, "parameters", "params", "microflow_parameters");
                 var mfParams = new List<MicroflowParameter>();
                 if (parametersArray != null)
                 {
@@ -2244,8 +2249,8 @@ namespace Terminal.Spmcp.Tools
                 _logger.LogInformation("=== CreateMicroflowActivitiesSequence (HostServices) ===");
                 _logger.LogInformation($"Raw arguments received: {arguments?.ToJsonString()}");
 
-                var microflowName = arguments["microflow_name"]?.ToString();
-                var activitiesArray = arguments["activities"]?.AsArray();
+                var microflowName = Terminal.Spmcp.Utils.Utils.GetParam(arguments, "microflow_name", "microflowName", "microflow");
+                var activitiesArray = Terminal.Spmcp.Utils.Utils.GetArrayParam(arguments, "activities", "activity_sequence", "activitiesSequence");
 
                 _logger.LogInformation($"Extracted microflowName: '{microflowName}'");
                 _logger.LogInformation($"Extracted activities count: {activitiesArray?.Count ?? 0}");
@@ -2700,33 +2705,51 @@ namespace Terminal.Spmcp.Tools
 
         public async Task<string> ListJavaActions(JsonObject parameters)
         {
+            await Task.CompletedTask;
             try
             {
                 var moduleName = parameters?["module_name"]?.ToString();
-                ModuleId? moduleFilter = null;
+                var result = new List<object>();
+                var skipped = new List<object>();
+
+                IReadOnlyList<ModuleId> targetModules;
                 if (!string.IsNullOrEmpty(moduleName))
                 {
                     var moduleId = HostServices.Model.GetModuleByName(moduleName);
                     if (moduleId == null)
                         return JsonSerializer.Serialize(new { error = $"Module '{moduleName}' not found" });
-                    moduleFilter = moduleId;
+                    targetModules = new[] { moduleId.Value };
+                }
+                else
+                {
+                    targetModules = HostServices.Model.ListModules();
                 }
 
-                var javaActions = HostServices.MicroflowAuthoring.ListJavaActions(moduleFilter);
-                var result = javaActions.Select(jad => new
+                foreach (var moduleId in targetModules)
                 {
-                    name = jad.Document.QualifiedName,
-                    qualifiedName = jad.Document.QualifiedName,
-                    module = jad.Module,
-                    parameterCount = jad.ParameterNames.Count,
-                    parameters = jad.ParameterNames.Select(p => new { name = p }).ToList<object>()
-                }).ToList<object>();
+                    var jaList = Utils.Utils.TryPerModule(moduleId,
+                        () => HostServices.MicroflowAuthoring.ListJavaActions(moduleId),
+                        skipped, "ListJavaActions", _logger);
+                    if (jaList == null) continue;
+                    foreach (var jad in jaList)
+                    {
+                        result.Add(new
+                        {
+                            name = jad.Document.QualifiedName,
+                            qualifiedName = jad.Document.QualifiedName,
+                            module = jad.Module,
+                            parameterCount = jad.ParameterNames.Count,
+                            parameters = jad.ParameterNames.Select(p => new { name = p }).ToList<object>()
+                        });
+                    }
+                }
 
                 return JsonSerializer.Serialize(new
                 {
                     success = true,
                     totalJavaActions = result.Count,
-                    javaActions = result
+                    javaActions = result,
+                    skippedModules = skipped.Count == 0 ? null : skipped,
                 });
             }
             catch (Exception ex)

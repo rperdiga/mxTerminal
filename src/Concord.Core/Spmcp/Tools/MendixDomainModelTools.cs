@@ -339,12 +339,15 @@ namespace Terminal.Spmcp.Tools
                         }
                         else
                         {
-                            var rawValues = parameters["enumeration_values"]?.AsArray()
+                            // Same robust-array shape as CreateEnumeration —
+                            // accept stringified arrays + parameter-name variants.
+                            var valuesNode = Utils.Utils.GetArrayParam(parameters, "enumeration_values", "values", "enum_values", "enumerationValues");
+                            var rawValues = valuesNode
                                 ?.Select(v => v?.ToString())
                                 ?.Where(v => !string.IsNullOrEmpty(v))
                                 ?.ToList();
                             if (rawValues == null || rawValues.Count == 0)
-                                return JsonSerializer.Serialize(new { error = "Enumeration type requires 'enumeration_values' array or 'enumeration_name' to reference an existing enumeration" });
+                                return JsonSerializer.Serialize(new { error = "Enumeration type requires 'enumeration_values' array (e.g. [\"Draft\",\"Submitted\"]) or 'enumeration_name' to reference an existing enumeration" });
                             enumValues = rawValues!;
                         }
                     }
@@ -584,13 +587,18 @@ namespace Terminal.Spmcp.Tools
             {
                 var name = Utils.Utils.GetParam(parameters, "name", "enumeration_name", "enumerationName");
                 var moduleName = parameters?["module_name"]?.ToString();
-                var valuesArray = parameters?["values"]?.AsArray();
+                // Accept both real arrays AND string-encoded JSON arrays —
+                // some MCP clients (Claude Code v2.1.x without an input
+                // schema) conservatively stringify complex args. Also accept
+                // common parameter-name variants since GetParam-style aliases
+                // are the established pattern across SPMCP tools.
+                var valuesArray = Utils.Utils.GetArrayParam(parameters, "values", "enumeration_values", "enum_values", "enumerationValues");
 
                 if (string.IsNullOrEmpty(name))
                     return JsonSerializer.Serialize(new { error = "Enumeration name is required. Use the 'name' parameter (aliases accepted: 'enumeration_name')." });
 
                 if (valuesArray == null || valuesArray.Count == 0)
-                    return JsonSerializer.Serialize(new { error = "At least one value is required for enumeration" });
+                    return JsonSerializer.Serialize(new { error = "At least one value is required for enumeration. Use the 'values' parameter as a JSON array of strings (e.g. [\"Draft\",\"Submitted\"]) or objects with name+caption (e.g. [{\"name\":\"Draft\",\"caption\":\"Draft\"}])." });
 
                 // Resolve module name
                 if (string.IsNullOrWhiteSpace(moduleName))
@@ -673,9 +681,14 @@ namespace Terminal.Spmcp.Tools
                 }
 
                 var result = new List<object>();
+                var skipped = new List<object>();
                 foreach (var moduleId in allModuleIds)
                 {
-                    var enumerations = HostServices.DomainModel.ListEnumerations(moduleId);
+                    var enumerations = Utils.Utils.TryPerModule(moduleId,
+                        () => HostServices.DomainModel.ListEnumerations(moduleId),
+                        skipped, "ListEnumerations", _logger);
+                    if (enumerations == null) continue;
+
                     foreach (var enumRef in enumerations)
                     {
                         var dotIdx = enumRef.QualifiedName.IndexOf('.');
@@ -696,7 +709,11 @@ namespace Terminal.Spmcp.Tools
                 {
                     success = true,
                     count = result.Count,
-                    enumerations = result
+                    enumerations = result,
+                    // Only surface skipped[] when there were errors — keeps
+                    // the response clean for the success-path users hit ~99%
+                    // of the time.
+                    skippedModules = skipped.Count == 0 ? null : skipped,
                 });
             }
             catch (Exception ex)
@@ -720,14 +737,39 @@ namespace Terminal.Spmcp.Tools
                     return JsonSerializer.Serialize(new { error = "No modules found in the project" });
                 }
 
-                var moduleInfos = allModuleIds.Select(moduleId =>
-                {
-                    var entityRefs = HostServices.DomainModel.ListEntities(moduleId);
-                    var enumerationRefs = HostServices.DomainModel.ListEnumerations(moduleId);
-                    var microflowDocs = HostServices.Model.ListModuleDocuments(moduleId, "Microflow");
-                    var constantDocs = HostServices.Model.ListModuleDocuments(moduleId, "Constant");
+                var moduleInfos = new List<object>();
+                var skippedModules = new List<object>();
 
-                    // Count associations by reading entity shapes
+                // Running totals — accumulated in the loop so we don't need to
+                // cast List<object> elements back to their anonymous type.
+                int totalEntities = 0, totalAssociations = 0,
+                    totalMicroflows = 0, totalConstants = 0, totalEnumerations = 0;
+
+                foreach (var moduleId in allModuleIds)
+                {
+                    var entityRefs = Utils.Utils.TryPerModule(moduleId,
+                        () => HostServices.DomainModel.ListEntities(moduleId),
+                        skippedModules, "ListEntities", _logger);
+                    if (entityRefs == null) continue;
+
+                    var enumerationRefs = Utils.Utils.TryPerModule(moduleId,
+                        () => HostServices.DomainModel.ListEnumerations(moduleId),
+                        skippedModules, "ListEnumerations", _logger);
+                    if (enumerationRefs == null) continue;
+
+                    var microflowDocs = Utils.Utils.TryPerModule(moduleId,
+                        () => HostServices.Model.ListModuleDocuments(moduleId, "Microflow"),
+                        skippedModules, "ListModuleDocuments(Microflow)", _logger);
+                    if (microflowDocs == null) continue;
+
+                    var constantDocs = Utils.Utils.TryPerModule(moduleId,
+                        () => HostServices.Model.ListModuleDocuments(moduleId, "Constant"),
+                        skippedModules, "ListModuleDocuments(Constant)", _logger);
+                    if (constantDocs == null) continue;
+
+                    // Count associations by reading entity shapes.
+                    // Inner try/catch is intentional — it guards against per-entity
+                    // shape failures (a different exception class than ModuleProxy).
                     var seenAssocNames = new HashSet<string>();
                     foreach (var entityRef in entityRefs)
                     {
@@ -740,30 +782,42 @@ namespace Terminal.Spmcp.Tools
                         catch { }
                     }
 
-                    return new
+                    var entityCount      = entityRefs.Count;
+                    var associationCount = seenAssocNames.Count;
+                    var microflowCount   = microflowDocs.Count;
+                    var constantCount    = constantDocs.Count;
+                    var enumerationCount = enumerationRefs.Count;
+
+                    totalEntities      += entityCount;
+                    totalAssociations  += associationCount;
+                    totalMicroflows    += microflowCount;
+                    totalConstants     += constantCount;
+                    totalEnumerations  += enumerationCount;
+
+                    moduleInfos.Add(new
                     {
                         name = moduleId.Name,
-                        entityCount = entityRefs.Count,
-                        associationCount = seenAssocNames.Count,
-                        microflowCount = microflowDocs.Count,
-                        constantCount = constantDocs.Count,
-                        enumerationCount = enumerationRefs.Count,
+                        entityCount,
+                        associationCount,
+                        microflowCount,
+                        constantCount,
+                        enumerationCount,
                         entities = entityRefs.Select(e =>
                         {
                             var dotIdx = e.QualifiedName.IndexOf('.');
                             return dotIdx >= 0 ? e.QualifiedName.Substring(dotIdx + 1) : e.QualifiedName;
                         }).ToList()
-                    };
-                }).ToList();
+                    });
+                }
 
                 var totals = new
                 {
-                    modules = moduleInfos.Count,
-                    entities = moduleInfos.Sum(m => m.entityCount),
-                    associations = moduleInfos.Sum(m => m.associationCount),
-                    microflows = moduleInfos.Sum(m => m.microflowCount),
-                    constants = moduleInfos.Sum(m => m.constantCount),
-                    enumerations = moduleInfos.Sum(m => m.enumerationCount)
+                    modules      = moduleInfos.Count,
+                    entities     = totalEntities,
+                    associations = totalAssociations,
+                    microflows   = totalMicroflows,
+                    constants    = totalConstants,
+                    enumerations = totalEnumerations
                 };
 
                 return JsonSerializer.Serialize(new
@@ -774,7 +828,8 @@ namespace Terminal.Spmcp.Tools
                     mendixVersion = projectInfo.MendixVersion,
                     appId = projectInfo.AppId,
                     totals,
-                    modules = moduleInfos
+                    modules = moduleInfos,
+                    skippedModules = skippedModules.Count == 0 ? null : skippedModules
                 }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true });
             }
             catch (Exception ex)
@@ -937,8 +992,8 @@ namespace Terminal.Spmcp.Tools
                     ? EntityKind.NonPersistent
                     : EntityKind.Persistent;
 
-                // Build attribute specs from JSON
-                var attributeSpecs = BuildAttributeSpecs(parameters["attributes"]?.AsArray());
+                // Build attribute specs from JSON — accept stringified arrays + name variants.
+                var attributeSpecs = BuildAttributeSpecs(Utils.Utils.GetArrayParam(parameters, "attributes", "attribute_list", "attrs"));
 
                 var generalization = parameters["generalization"]?.ToString();
                 var documentation = parameters["documentation"]?.ToString();
@@ -1076,9 +1131,9 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                var entitiesArray = parameters["entities"]?.AsArray();
+                var entitiesArray = Utils.Utils.GetArrayParam(parameters, "entities", "entity_list", "entityList");
                 if (entitiesArray == null)
-                    return JsonSerializer.Serialize(new { error = "Entities array is required" });
+                    return JsonSerializer.Serialize(new { error = "Entities array is required. Use the 'entities' parameter as a JSON array of entity-spec objects." });
 
                 // Extract global persistable parameter (default to true for backward compatibility)
                 bool globalPersistable = true;
@@ -1193,12 +1248,12 @@ namespace Terminal.Spmcp.Tools
         {
             try
             {
-                    var associationsArray = parameters["associations"]?.AsArray();
+                    var associationsArray = Utils.Utils.GetArrayParam(parameters, "associations", "association_list", "associationList", "assocs");
 
                     if (associationsArray == null)
                     {
                         return JsonSerializer.Serialize(new {
-                            error = "Missing required 'associations' array parameter",
+                            error = "Missing required 'associations' array parameter. Provide a JSON array of association-spec objects.",
                             message = "To create multiple associations, you must provide an 'associations' array containing association objects",
                             required_parameters = new {
                                 associations = new {
@@ -2767,6 +2822,7 @@ namespace Terminal.Spmcp.Tools
 
                 // Resolve the EnumerationRef via HostServices
                 EnumerationRef? foundEnumRef = null;
+                ModuleId foundModuleId = default;
                 var moduleIds = string.IsNullOrEmpty(moduleName)
                     ? HostServices.Model.ListModules()
                     : HostServices.Model.GetModuleByName(moduleName) is ModuleId mid
@@ -2782,7 +2838,7 @@ namespace Terminal.Spmcp.Tools
                             var simpleName = dot >= 0 ? e.QualifiedName.Substring(dot + 1) : e.QualifiedName;
                             return simpleName.Equals(enumerationName, StringComparison.OrdinalIgnoreCase);
                         });
-                    if (candidate.QualifiedName != null) { foundEnumRef = candidate; break; }
+                    if (candidate.QualifiedName != null) { foundEnumRef = candidate; foundModuleId = modId; break; }
                 }
 
                 if (foundEnumRef == null)
@@ -2834,11 +2890,29 @@ namespace Terminal.Spmcp.Tools
                 if (changes.Count == 0)
                     return JsonSerializer.Serialize(new { error = "No changes specified. Provide at least one of: add_values, remove_values, rename_values" });
 
-                HostServices.DomainModel.UpdateEnumeration(
-                    foundEnumRef.Value,
-                    addValues: addValues,
-                    removeValues: removeValues,
-                    renameValues: renameValues);
+                var skipped = new List<object>();
+                var updated = Utils.Utils.TryPerModule<bool>(
+                    foundModuleId,
+                    () =>
+                    {
+                        HostServices.DomainModel.UpdateEnumeration(
+                            foundEnumRef.Value,
+                            addValues: addValues,
+                            removeValues: removeValues,
+                            renameValues: renameValues);
+                        return true;
+                    },
+                    skipped, "UpdateEnumeration", _logger);
+
+                if (updated != true)
+                {
+                    return JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        error = $"Module '{foundModuleId.Name}' is not queryable on this Studio Pro version; ModuleProxy not registered. Try a different module or edit the enumeration via the Studio Pro UI.",
+                        details = skipped,
+                    });
+                }
 
                 _logger.LogInformation($"Updated enumeration '{enumerationName}': {string.Join(", ", changes)}");
                 return JsonSerializer.Serialize(new
