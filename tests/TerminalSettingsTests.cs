@@ -388,3 +388,91 @@ public class UpgradeApplyDecisionTests
         TerminalPaneExtension.IsUpgradeApplyNeeded(stamp, current).Should().Be(expected);
     }
 }
+
+public class TerminalSettingsRepairTests
+{
+    [Fact]
+    public void TryRepair_NoChange_OnConsistentSettings()
+    {
+        var (repaired, changed) = TerminalSettings.TryRepair(TerminalSettings.Defaults());
+        changed.Should().BeFalse();
+        repaired.Should().BeEquivalentTo(TerminalSettings.Defaults());
+    }
+
+    [Fact]
+    public void TryRepair_RestoresMcpClients_WhenServerEnabledButClientsEmpty()
+    {
+        // The Bug-1 regression scenario: JS Save sent mcpClients=[] while
+        // McpServerEnabled stayed true, leaving the settings in a state where
+        // no subsequent apply would re-wire concord-mcp. Repair restores the
+        // default client list so the next apply rewrites the entry.
+        var broken = TerminalSettings.Defaults() with
+        {
+            McpServerEnabled = true,
+            McpClients = Array.Empty<string>(),
+        };
+
+        var (repaired, changed) = TerminalSettings.TryRepair(broken);
+
+        changed.Should().BeTrue();
+        repaired.McpClients.Should().BeEquivalentTo(TerminalSettings.Defaults().McpClients);
+        repaired.McpServerEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TryRepair_LeavesEmptyMcpClients_WhenServerDisabled()
+    {
+        // Legitimate state: user explicitly turned off Concord MCP. Empty
+        // clients is fine because the apply path won't wire either way.
+        var legitimate = TerminalSettings.Defaults() with
+        {
+            McpServerEnabled = false,
+            McpClients = Array.Empty<string>(),
+            // Also turn off skills so the SkillClients repair branch doesn't
+            // fire and confuse the test's "no change" assertion.
+            SkillsEnabled = false,
+            SkillClients = Array.Empty<string>(),
+        };
+
+        var (repaired, changed) = TerminalSettings.TryRepair(legitimate);
+
+        changed.Should().BeFalse();
+        repaired.McpClients.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TryRepair_RestoresSkillClients_WhenSkillsEnabledButClientsEmpty()
+    {
+        // Symmetric repair for the skills wiring — same class of inconsistency.
+        var broken = TerminalSettings.Defaults() with
+        {
+            SkillsEnabled = true,
+            SkillClients = Array.Empty<string>(),
+        };
+
+        var (repaired, changed) = TerminalSettings.TryRepair(broken);
+
+        changed.Should().BeTrue();
+        repaired.SkillClients.Should().BeEquivalentTo(TerminalSettings.Defaults().SkillClients);
+    }
+
+    [Fact]
+    public void TryRepair_HandlesNullArraysGracefully()
+    {
+        // Some legacy DTO paths can leave the arrays as null. Defensive
+        // null-check on both McpClients and SkillClients arrays.
+        var broken = TerminalSettings.Defaults() with
+        {
+            McpServerEnabled = true,
+            McpClients = null!,
+            SkillsEnabled = true,
+            SkillClients = null!,
+        };
+
+        var (repaired, changed) = TerminalSettings.TryRepair(broken);
+
+        changed.Should().BeTrue();
+        repaired.McpClients.Should().BeEquivalentTo(TerminalSettings.Defaults().McpClients);
+        repaired.SkillClients.Should().BeEquivalentTo(TerminalSettings.Defaults().SkillClients);
+    }
+}

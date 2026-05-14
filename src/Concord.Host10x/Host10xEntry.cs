@@ -3,6 +3,7 @@ namespace Concord.Host10x;
 using System.ComponentModel.Composition;
 using Terminal;
 using Terminal.Interop;
+using Terminal.Mcp;
 
 /// <summary>
 /// Single point of MEF activation for the 10.x host. Wires HostContext +
@@ -19,16 +20,35 @@ public class Host10xEntry
 {
     private static int _initialized;
 
+    public static ToolCatalog? Catalog { get; private set; }
+
     [ImportingConstructor]
     public Host10xEntry()
     {
         if (System.Threading.Interlocked.Exchange(ref _initialized, 1) != 0) return;
 
         HostContext.Initialize(TargetMode.Studio10x);
+        // App + RunConfigurations are registered as placeholders here because
+        // they need IModel (CurrentApp) and the MEF-imported
+        // ILocalRunConfigurationsService respectively — neither is available
+        // at MEF activation time. The pane swaps in fully-wired instances via
+        // HostServices.SetApp / SetRunConfigurations in TryAutoStartActionServer
+        // before the action server begins dispatching tools.
         HostServices.Register(
-            app: new Interop.StudioProAppHost10x(),
-            runConfigs: new Interop.RunConfigurationsHost10x(),
+            app: new Interop.StudioProAppHost10x(() => null),
+            runConfigs: new Interop.RunConfigurationsHost10x(() => null, service: null),
             runState: new Interop.RunStateHost10x(),
             moduleImport: new Interop.ModuleImportHost10x());
+
+        var catalog = new ToolCatalog(TargetMode.Studio10x);
+        Spmcp.SpmcpToolBootstrap10x.Register(catalog);
+        Terminal.Mcp.UiActionsBootstrap.Register(catalog);
+        // Maia panel is an 11.10+ feature; Host10x runs only on Studio Pro
+        // 10.x where there is no Maia panel to inject into. Skip the
+        // maia__* tool registration entirely so tools/list never advertises
+        // tools that can't function on this host.
+        // Terminal.Mcp.MaiaToolsBootstrap.Register(catalog);  // intentionally omitted on Host10x
+        Catalog = catalog;
+        ToolCatalogRegistry.Active = catalog;
     }
 }

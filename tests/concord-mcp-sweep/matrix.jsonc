@@ -1,0 +1,776 @@
+// tests/concord-mcp-sweep/matrix.jsonc
+// One entry per Concord MCP tool. See arg-shapes.md for the source-of-truth
+// for each tool's argument shape, and the design spec at
+// docs/superpowers/specs/2026-05-13-concord-mcp-tool-sweep-design.md for
+// the classification rules.
+//
+// Entry schema:
+//   name:     server-side tool name (must match tools/list)
+//   family:   for findings.md grouping (DomainModel, Microflows, etc.)
+//   phase:    "setup" | "read" | "mutate" | "lifecycle"  — controls execution order
+//   args:     exact JSON object sent as params.arguments
+//   expected: "ok" | "error" | "either"
+//   verify:   (optional) follow-up read on risky mutators; result lands
+//             in side_effect_check sub-record of findings.json
+//   notes:    free-text intent (especially for known-bug entries)
+[
+  // ---- Setup phase: bootstrap fixtures for read-phase targets ----
+  {
+    "name": "create_entity", "family": "DomainModel", "phase": "setup",
+    "args": { "module_name": "MyFirstModule", "entity_name": "Customer" },
+    "expected": "ok",
+    "notes": "Fixture for query_associations, read_attribute_details, copy_model_element. expected:either for idempotency across reruns. [tightened to expected:ok 2026-05-14 after fresh-state validation; see phase4-fresh-state-validation.md]"
+  }
+  ,{
+    "name": "add_attribute", "family": "DomainModel", "phase": "setup",
+    "args": { "module_name": "MyFirstModule", "entity_name": "Customer", "attribute_name": "Name", "attribute_type": "String" },
+    "expected": "either",
+    "notes": "Fixture for read_attribute_details(Customer.Name)."
+  }
+  ,{
+    "name": "create_entity", "family": "DomainModel", "phase": "setup",
+    "args": { "module_name": "MyFirstModule", "entity_name": "Order" },
+    "expected": "either",
+    "notes": "Fixture for generate_overview_pages, create_association."
+  }
+  ,{
+    "name": "add_attribute", "family": "DomainModel", "phase": "setup",
+    "args": { "module_name": "MyFirstModule", "entity_name": "Order", "attribute_name": "Number", "attribute_type": "String" },
+    "expected": "either",
+    "notes": "Fixture for generate_overview_pages — Mendix page-gen requires entities to have ≥1 attribute."
+  }
+  ,{
+    "name": "create_microflow", "family": "Microflows", "phase": "setup",
+    "args": { "name": "ACT_Example", "module_name": "MyFirstModule" },
+    "expected": "either",
+    "notes": "Fixture for read_microflow_details, check_variable_name, rename_document."
+  }
+  ,{
+    "name": "create_microflow", "family": "Microflows", "phase": "setup",
+    "args": { "name": "CAL_Customer_FullName", "module_name": "MyFirstModule" },
+    "expected": "either",
+    "notes": "Fixture for set_calculated_attribute."
+  }
+  // ---- Diagnostics ----
+  ,{
+    "name": "list_available_tools",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Returns hardcoded string array of tool names; no parameters read."
+  }
+  ,{
+    "name": "list_available_tools_domain",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "MendixDomainModelTools variant; returns slightly older hardcoded tool list."
+  }
+  ,{
+    "name": "analyze_project_patterns",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": { "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Scope analysis to MyFirstModule; save_skill defaults to true."
+  }
+  ,{
+    "name": "check_model",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "No required args; null-safe access on parameters object."
+  }
+  ,{
+    "name": "check_project_errors",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "either",
+    "notes": "Always returns escalation: manual — consistency-check API not exposed. [stub: typed Interop project-error check not exposed]"
+  }
+  ,{
+    "name": "check_variable_name",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": { "microflow_name": "MyFirstModule.ACT_Example", "variable_name": "NewCustomer" },
+    "expected": "ok",
+    "notes": "Checks for variable name conflicts in a microflow."
+  }
+  ,{
+    "name": "diagnose_associations",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Diagnoses association issues; null-safe module_name access."
+  }
+  ,{
+    "name": "get_last_error",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "either",
+    "notes": "Returns static _lastError field; may be empty/null if no error has been recorded."
+  }
+  ,{
+    "name": "get_last_error_domain",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "either",
+    "notes": "MendixDomainModelTools.GetLastError — always returns a stub 'not implemented' response."
+  }
+  ,{
+    "name": "get_studio_pro_logs",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": { "level": "ERROR", "last_minutes": 10 },
+    "expected": "either",
+    "notes": "KNOWN STALE pre-sweep: hardcoded 11.5.0 path (MendixAdditionalTools.cs:658)."
+  }
+  ,{
+    "name": "list_java_actions",
+    "family": "Diagnostics",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Lists Java actions across all modules; null-safe module_name filter."
+  }
+
+  // ---- DomainModel reads ----
+  ,{
+    "name": "list_modules",
+    "family": "DomainModel",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "No args required; returns all 10 modules."
+  }
+  ,{
+    "name": "read_domain_model",
+    "family": "DomainModel",
+    "phase": "read",
+    "args": { "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Returns domain model for MyFirstModule; null-safe module_name access."
+  }
+  ,{
+    "name": "read_project_info",
+    "family": "DomainModel",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "KNOWN CRASH pre-sweep: ModuleProxy KeyNotFound (MendixDomainModelTools.cs:769-775)."
+  }
+  ,{
+    "name": "query_model_elements",
+    "family": "DomainModel",
+    "phase": "read",
+    "args": { "type_name": "DomainModels$Entity", "module_name": "MyFirstModule", "max_results": 10 },
+    "expected": "ok",
+    "notes": "BUG-014 fix: routes entity type through IDomainModelHost."
+  }
+  ,{
+    "name": "query_associations",
+    "family": "DomainModel",
+    "phase": "read",
+    "args": { "entity_name": "Customer", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "All parameters optional; delegates to IDomainModelHost.QueryAssociations."
+  }
+  ,{
+    "name": "read_attribute_details",
+    "family": "DomainModel",
+    "phase": "read",
+    "args": { "entity_name": "Customer", "attribute_name": "Name" },
+    "expected": "ok",
+    "notes": "Returns attribute metadata; maxLength/enumeration/defaultValue may be null (Interop gap)."
+  }
+  ,{
+    "name": "validate_name",
+    "family": "DomainModel",
+    "phase": "read",
+    "args": { "name": "MyEntity" },
+    "expected": "ok",
+    "notes": "Returns isValid, errorMessage, fixedName from INameValidationResult."
+  }
+
+  // ---- Microflows reads ----
+  ,{
+    "name": "list_microflows",
+    "family": "Microflows",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Lists microflows across all modules; null-safe module_name filter."
+  }
+  ,{
+    "name": "read_microflow_details",
+    "family": "Microflows",
+    "phase": "read",
+    "args": { "microflow_name": "ACT_Example", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Reads microflow details; unqualified name + module_name used to build qualified name."
+  }
+  ,{
+    "name": "list_nanoflows",
+    "family": "Microflows",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Lists nanoflows across all modules; null-safe module_name filter."
+  }
+  ,{
+    "name": "read_nanoflow_details",
+    "family": "Microflows",
+    "phase": "read",
+    "args": { "nanoflow_name": "MyNanoflow", "module_name": "MyFirstModule" },
+    "expected": "either",
+    "notes": "Activity details not available via typed API; returns activities: []. [no create_nanoflow tool exists; expected:either by design]"
+  }
+  ,{
+    "name": "list_scheduled_events",
+    "family": "Microflows",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Requires IUntypedModel (Studio Pro 11+); null-safe module_name filter."
+  }
+
+  // ---- Pages reads ----
+  ,{
+    "name": "list_pages",
+    "family": "Pages",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Requires IUntypedModel; include_excluded defaults to false."
+  }
+  ,{
+    "name": "read_page_details",
+    "family": "Pages",
+    "phase": "read",
+    "args": { "page_name": "Customer_Overview", "module_name": "MyFirstModule" },
+    "expected": "either",
+    "notes": "Returns flat properties plus propertiesJson; widget tree not available via IUntypedModelHost. [depends on generate_overview_pages (mutate phase) to create the target page; expected:either by design]"
+  }
+
+  // ---- Workflows reads ----
+  ,{
+    "name": "list_workflows",
+    "family": "Workflows",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Requires IUntypedModel; null-safe module_name filter."
+  }
+  ,{
+    "name": "read_workflow_details",
+    "family": "Workflows",
+    "phase": "read",
+    "args": { "workflow_name": "MyWorkflow", "module_name": "MyFirstModule" },
+    "expected": "either",
+    "notes": "Returns flat properties plus propertiesJson; deep sub-element traversal not available. [no create_workflow tool exists; expected:either by design]"
+  }
+
+  // ---- ConstantsEnums reads ----
+  ,{
+    "name": "list_constants",
+    "family": "ConstantsEnums",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Requires IUntypedModel (Studio Pro 11+); returns escalation: manual stub on 10.x."
+  }
+  ,{
+    "name": "list_enumerations",
+    "family": "ConstantsEnums",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Per-module resilience: skips modules that throw; enum values not returned (IDomainModelHost gap)."
+  }
+
+  // ---- Security reads ----
+  ,{
+    "name": "list_rules",
+    "family": "Security",
+    "phase": "read",
+    "args": {},
+    "expected": "either",
+    "notes": "Always returns escalation: manual — IRule documents not exposed on typed Interop surface. [stub: escalation:manual until typed Interop expanded]"
+  }
+  ,{
+    "name": "read_security_info",
+    "family": "Security",
+    "phase": "read",
+    "args": {},
+    "expected": "either",
+    "notes": "Always returns escalation: manual — requires IModelRoot sub-element traversal. [stub: escalation:manual until typed Interop expanded]"
+  }
+  ,{
+    "name": "read_entity_access_rules",
+    "family": "Security",
+    "phase": "read",
+    "args": {},
+    "expected": "either",
+    "notes": "Always returns escalation: manual — DomainModels$AccessRule requires IModelUnit sub-element traversal. [stub: escalation:manual until typed Interop expanded]"
+  }
+  ,{
+    "name": "read_microflow_security",
+    "family": "Security",
+    "phase": "read",
+    "args": {},
+    "expected": "either",
+    "notes": "Always returns escalation: manual — allowedModuleRoles requires IModelUnit traversal. [stub: escalation:manual until typed Interop expanded]"
+  }
+  ,{
+    "name": "audit_security",
+    "family": "Security",
+    "phase": "read",
+    "args": {},
+    "expected": "either",
+    "notes": "Always returns escalation: manual — full audit requires cross-type traversal not available on IUntypedModelHost. [stub: escalation:manual until typed Interop expanded]"
+  }
+
+  // ---- ProjectSettings reads ----
+  ,{
+    "name": "read_runtime_settings",
+    "family": "ProjectSettings",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Delegates directly to HostServices.Model.ReadRuntimeSettings(); no parameters read."
+  }
+  ,{
+    "name": "read_configurations",
+    "family": "ProjectSettings",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "IsActive/DatabaseType/DatabaseConnectionString returned as false/null (typed API gap)."
+  }
+  ,{
+    "name": "list_rest_services",
+    "family": "ProjectSettings",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Requires IUntypedModel; resource sub-elements not available; raw propertiesJson included."
+  }
+  ,{
+    "name": "read_version_control",
+    "family": "ProjectSettings",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Returns available: false if IVersionControlHost.IsAvailable is false; no parameters read."
+  }
+
+  // ---- UiActions reads ----
+  ,{
+    "name": "get_app_status",
+    "family": "UiActions",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Returns composite status (run state, active configuration, etc.); no parameters read. [was pending Task 15; implemented in 4ef888c via StudioProAppHost{10,11}x against IModel.Root + RunStateProbe; tightened to expected:ok 2026-05-14 after post-bug_001 fresh-state validation]"
+  }
+  ,{
+    "name": "get_active_run_configuration",
+    "family": "UiActions",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "Returns name of currently active run configuration; no parameters read. [was pending Task 15; implemented in 4ef888c via RunConfigurationsHost{10,11}x against ILocalRunConfigurationsService; tightened to expected:ok 2026-05-14 after post-bug_001 fresh-state validation]"
+  }
+
+  // ---- Block 1: DomainModel mutations (targets first) ----
+
+  ,{
+    "name": "create_module",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "module_name": "ConcordSweep_create_module" },
+    "expected": "ok",
+    "notes": "Creates sweep-owned module; used as rename_module target in Block 7. [idempotency: matrix re-runs against pre-existing project state] [tightened to expected:ok 2026-05-14 after fresh-state validation; see phase4-fresh-state-validation.md]"
+  }
+  ,{
+    "name": "create_entity",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "module_name": "MyFirstModule", "entity_name": "SweepEntity_create_entity" },
+    "expected": "ok",
+    "verify": { "name": "query_model_elements", "args": { "type_name": "DomainModels$Entity", "module_name": "MyFirstModule", "max_results": 50 } },
+    "notes": "Creates primary sweep entity; many subsequent entries depend on this entity existing."
+  }
+  ,{
+    "name": "create_multiple_entities",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "module_name": "MyFirstModule", "entities": [{ "entity_name": "SweepEntityA_create_multiple_entities" }, { "entity_name": "SweepEntityB_create_multiple_entities" }] },
+    "expected": "ok",
+    "notes": "Creates two additional sweep entities; auto-arranges domain model after creation."
+  }
+  ,{
+    "name": "create_domain_model_from_schema",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "module_name": "MyFirstModule", "schema": { "entities": [{ "name": "SweepEntity_create_domain_model_from_schema", "attributes": [{ "name": "Title", "type": "String" }] }] } },
+    "expected": "ok",
+    "notes": "Creates entity from JSON schema; auto-arranges after creation."
+  }
+  ,{
+    "name": "add_attribute",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "entity_name": "SweepEntity_create_entity", "attribute_name": "SweepAttr_add_attribute", "attribute_type": "String", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Adds SweepAttr_add_attribute to SweepEntity_create_entity; depends on create_entity."
+  }
+  ,{
+    "name": "update_attribute",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "entity_name": "SweepEntity_create_entity", "attribute_name": "SweepAttr_add_attribute", "type": "String", "max_length": 200, "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Updates SweepAttr_add_attribute max_length; depends on add_attribute."
+  }
+  ,{
+    "name": "rename_attribute",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "entity_name": "SweepEntity_create_entity", "attribute_name": "SweepAttr_add_attribute", "new_name": "SweepAttr_rename_attribute", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Renames SweepAttr_add_attribute → SweepAttr_rename_attribute; depends on add_attribute. [idempotency: on re-runs, SweepAttr_rename_attribute already exists — 'Name is not valid or is not unique' — because entity may survive from a prior partial run. expected:either.] [tightened to expected:ok 2026-05-14 after fresh-state validation; see phase4-fresh-state-validation.md]"
+  }
+  ,{
+    "name": "set_calculated_attribute",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "entity_name": "Customer", "attribute_name": "FullName", "microflow": "MyFirstModule.CAL_Customer_FullName" },
+    "expected": "either",
+    "notes": "Sets calculated microflow on Customer.FullName; expected: either (microflow may not exist in test project)."
+  }
+  ,{
+    "name": "configure_system_attributes",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "entity_name": "SweepEntity_create_entity", "module_name": "MyFirstModule", "has_created_date": true, "has_changed_date": true },
+    "expected": "ok",
+    "notes": "Enables createdDate/changedDate system attributes on SweepEntity_create_entity; entity must have no generalization."
+  }
+  ,{
+    "name": "add_event_handler",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "entity_name": "Customer", "event": "commit", "moment": "before", "microflow": "MyFirstModule.BCO_Customer_BeforeCommit" },
+    "expected": "either",
+    "notes": "Adds before-commit event handler; expected: either (BCO microflow may not exist in test project)."
+  }
+  ,{
+    "name": "set_documentation",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "element_type": "entity", "element_name": "SweepEntity_create_entity", "documentation": "Sweep test entity created by concord-mcp-sweep.", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Sets documentation on SweepEntity_create_entity; depends on create_entity."
+  }
+  ,{
+    "name": "rename_entity",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "entity_name": "SweepEntity_create_entity", "new_name": "SweepEntityRenamed_rename_entity", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "verify": { "name": "query_model_elements", "args": { "type_name": "DomainModels$Entity", "module_name": "MyFirstModule", "max_results": 50 } },
+    "notes": "Renames SweepEntity_create_entity → SweepEntityRenamed_rename_entity; closes create→rename→delete cycle."
+  }
+  ,{
+    "name": "set_entity_generalization",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "entity_name": "Order", "parent_entity": "Administration.FileDocument", "module_name": "MyFirstModule" },
+    "expected": "either",
+    "notes": "Sets generalization on Order entity; expected: either (Administration module may not exist or Order may already have generalization)."
+  }
+  ,{
+    "name": "remove_entity_generalization",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "entity_name": "Order", "module_name": "MyFirstModule" },
+    "expected": "either",
+    "notes": "Removes generalization from Order; expected: either (depends on set_entity_generalization succeeding)."
+  }
+  ,{
+    "name": "copy_model_element",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "element_type": "entity", "source_name": "Customer", "new_name": "SweepEntity_copy", "source_module": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Copies Customer entity to SweepEntity_copy within MyFirstModule; BUG-013 fix: target_module defaults to source_module."
+  }
+  ,{
+    "name": "create_association",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "name": "Customer_Orders", "parent": "Customer", "child": "Order", "module_name": "MyFirstModule" },
+    "expected": "either",
+    "notes": "Creates Customer_Orders association; expected: either (association may already exist in test project)."
+  }
+  ,{
+    "name": "create_multiple_associations",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "associations": [{ "name": "SweepEntityA_create_multiple_entities_SweepEntityB_create_multiple_entities", "parent": "SweepEntityA_create_multiple_entities", "child": "SweepEntityB_create_multiple_entities" }], "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Creates association between sweep-created entities; depends on create_multiple_entities. [idempotency: matrix re-runs against pre-existing project state] [tightened to expected:ok 2026-05-14 after fresh-state validation; see phase4-fresh-state-validation.md]"
+  }
+  ,{
+    "name": "update_association",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "association_name": "Customer_Orders", "owner": "both", "module_name": "MyFirstModule" },
+    "expected": "either",
+    "notes": "Updates Customer_Orders owner to both; expected: either (depends on create_association succeeding or pre-existing)."
+  }
+  ,{
+    "name": "rename_association",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "association_name": "Customer_Orders", "new_name": "Customer_OrderItems", "module_name": "MyFirstModule" },
+    "expected": "either",
+    "notes": "Renames Customer_Orders → Customer_OrderItems; expected: either (depends on create_association succeeding)."
+  }
+  ,{
+    "name": "arrange_domain_model",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Arranges domain model layout for MyFirstModule; non-fatal if layout engine unavailable."
+  }
+  ,{
+    "name": "manage_folders",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "action": "list", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Lists folders in MyFirstModule; action=list is read-safe and always available."
+  }
+  ,{
+    "name": "rename_document",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "document_name": "ACT_Example", "new_name": "ACT_ExampleRenamed", "module_name": "MyFirstModule", "document_type": "microflow" },
+    "expected": "either",
+    "notes": "Renames ACT_Example microflow; expected: either (ACT_Example may not exist in test project)."
+  }
+
+  // ---- Block 2: ConstantsEnums mutations ----
+
+  ,{
+    "name": "create_enumeration",
+    "family": "ConstantsEnums",
+    "phase": "mutate",
+    "args": { "name": "SweepEnum_create_enumeration", "module_name": "MyFirstModule", "values": ["Draft", "Submitted", "Approved"] },
+    "expected": "ok",
+    "notes": "Creates SweepEnum_create_enumeration with 3 values; used by update_enumeration and rename_enumeration_value. [idempotency: matrix re-runs against pre-existing project state] [tightened to expected:ok 2026-05-14 after fresh-state validation; see phase4-fresh-state-validation.md]"
+  }
+  ,{
+    "name": "update_enumeration",
+    "family": "ConstantsEnums",
+    "phase": "mutate",
+    "args": { "enumeration_name": "SweepEnum_create_enumeration", "add_values": ["Cancelled"], "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Adds Cancelled value to SweepEnum_create_enumeration; depends on create_enumeration."
+  }
+  ,{
+    "name": "rename_enumeration_value",
+    "family": "ConstantsEnums",
+    "phase": "mutate",
+    "args": { "enumeration_name": "SweepEnum_create_enumeration", "value_name": "Draft", "new_name": "NewDraft", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Renames Draft → NewDraft in SweepEnum_create_enumeration; depends on create_enumeration. (New is a Mendix reserved word.) [idempotency: matrix re-runs against pre-existing project state] [tightened to expected:ok 2026-05-14 after fresh-state validation; see phase4-fresh-state-validation.md]"
+  }
+  ,{
+    "name": "create_constant",
+    "family": "ConstantsEnums",
+    "phase": "mutate",
+    "args": {},
+    "expected": "either",
+    "notes": "Always returns escalation: manual — typed IConstant write not exposed on Core Interop surface. [stub: escalation:manual until typed Interop expanded]"
+  }
+  ,{
+    "name": "update_constant",
+    "family": "ConstantsEnums",
+    "phase": "mutate",
+    "args": {},
+    "expected": "either",
+    "notes": "Always returns escalation: manual — typed IConstant write not exposed. [stub: escalation:manual until typed Interop expanded]"
+  }
+  ,{
+    "name": "configure_constant_values",
+    "family": "ConstantsEnums",
+    "phase": "mutate",
+    "args": {},
+    "expected": "either",
+    "notes": "Always returns escalation: manual — IConfigurationSettings → IConstantValue mutation not exposed. [stub: escalation:manual until typed Interop expanded]"
+  }
+
+  // ---- Block 3: Microflows mutations ----
+
+  ,{
+    "name": "create_microflow",
+    "family": "Microflows",
+    "phase": "mutate",
+    "args": { "name": "SweepMf_create_microflow", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "verify": { "name": "list_microflows", "args": { "module_name": "MyFirstModule" } },
+    "notes": "Creates MyFirstModule.SweepMf_create_microflow; subsequent microflow mutation entries target this microflow."
+  }
+  ,{
+    "name": "update_microflow",
+    "family": "Microflows",
+    "phase": "mutate",
+    "args": { "microflow_name": "SweepMf_create_microflow", "module_name": "MyFirstModule", "url": "/api/sweep-test" },
+    "expected": "ok",
+    "notes": "Sets REST URL on SweepMf_create_microflow; only url is actually applied (return_type not persisted)."
+  }
+  ,{
+    "name": "create_microflow_activity",
+    "family": "Microflows",
+    "phase": "mutate",
+    "args": { "microflow_name": "SweepMf_create_microflow", "module_name": "MyFirstModule", "activity_type": "create_object", "activity_config": { "entity": "MyFirstModule.Customer", "output_variable": "newCustomer" } },
+    "expected": "ok",
+    "notes": "Adds a create_object activity to SweepMf_create_microflow; depends on create_microflow + Customer entity fixture. Phase 2/3 sweep: switched from 'log' to 'create_object' after host CreateActivity switch trimmed allowlist to types actually authored by MicroflowAuthoringHost (8 families). Log support TODO."
+  }
+  ,{
+    "name": "create_microflow_activities_sequence",
+    "family": "Microflows",
+    "phase": "mutate",
+    "args": { "microflow_name": "SweepMf_create_microflow", "module_name": "MyFirstModule", "activities": [{ "activity_type": "log", "activity_config": { "message": "'Step 1'" } }] },
+    "expected": "ok",
+    "notes": "Inserts activity sequence into SweepMf_create_microflow; BUG-005 fix: flat params used when activity_config absent."
+  }
+  ,{
+    "name": "modify_microflow_activity",
+    "family": "Microflows",
+    "phase": "mutate",
+    "args": { "microflow_name": "SweepMf_create_microflow", "module_name": "MyFirstModule", "position": 1, "caption": "Updated Caption" },
+    "expected": "either",
+    "notes": "Modifies caption of activity at position 1 in SweepMf_create_microflow; depends on create_microflow_activity. [cascades from create_microflow_activity; expected:either by design]"
+  }
+  ,{
+    "name": "insert_before_activity",
+    "family": "Microflows",
+    "phase": "mutate",
+    "args": { "microflow_name": "SweepMf_create_microflow", "module_name": "MyFirstModule", "before_position": 1, "activity": { "type": "create_object", "entity": "MyFirstModule.Customer", "output_variable": "insertedCustomer" } },
+    "expected": "either",
+    "notes": "Inserts create_object activity before position 1 in SweepMf_create_microflow; activity.type (not activity_type) is required. [cascades from create_microflow_activity; expected:either by design]"
+  }
+  ,{
+    "name": "set_microflow_url",
+    "family": "Microflows",
+    "phase": "mutate",
+    "args": { "microflow_name": "SweepMf_create_microflow", "module_name": "MyFirstModule", "url": "/sweep/test" },
+    "expected": "ok",
+    "notes": "Sets URL on SweepMf_create_microflow; ContainsKey check distinguishes set from info-only call."
+  }
+
+  // ---- Block 4: Pages mutations ----
+
+  ,{
+    "name": "generate_overview_pages",
+    "family": "Pages",
+    "phase": "mutate",
+    "args": { "module_name": "MyFirstModule", "entity_names": ["Customer", "Order"] },
+    "expected": "either",
+    "notes": "Generates overview pages for Customer and Order. [cascade: set_entity_generalization assigns Administration.FileDocument to Order which removes user-defined attributes; after remove_entity_generalization the Number fixture attribute is gone; page-gen requires >=1 attribute per entity. expected:either — page-gen succeeds on first-ever run but fails on reruns where Order's attribute state is degraded by the generalization cycle.]"
+  }
+
+  // ---- Block 5: ProjectSettings mutations ----
+
+  ,{
+    "name": "set_runtime_settings",
+    "family": "ProjectSettings",
+    "phase": "mutate",
+    "args": { "key": "AfterStartupMicroflow", "value": "" },
+    "expected": "ok",
+    "notes": "Clears AfterStartupMicroflow runtime setting; uses a host-supported key per ModelHost1{0,1}x.WriteRuntimeSetting switch (AfterStartupMicroflow / BeforeShutdownMicroflow / HealthCheckMicroflow). Empty string clears the microflow QName binding. Phase 2/3 sweep: switched from com.mendix.core.SessionTimeout (not a supported key) to AfterStartupMicroflow."
+  }
+  ,{
+    "name": "set_configuration",
+    "family": "ProjectSettings",
+    "phase": "mutate",
+    "args": { "configuration_name": "Default" },
+    "expected": "either",
+    "notes": "Activates Default configuration; may return escalation: manual if SetActiveConfiguration not exposed. [stub: escalation:manual until typed Interop expanded]"
+  }
+  ,{
+    "name": "sync_filesystem",
+    "family": "ProjectSettings",
+    "phase": "mutate",
+    "args": {},
+    "expected": "either",
+    "notes": "Always returns escalation: manual — IAppService.SynchronizeWithFileSystem not exposed on typed Interop. [stub: escalation:manual until typed Interop expanded]"
+  }
+
+  // ---- Block 6: Navigation ----
+
+  ,{
+    "name": "manage_navigation",
+    "family": "Navigation",
+    "phase": "mutate",
+    "args": { "action": "add", "pages": [{ "caption": "Customers", "page_name": "Customer_Overview", "module_name": "MyFirstModule" }] },
+    "expected": "either",
+    "notes": "Adds navigation item for Customer_Overview; expected: either (page may not exist if not pre-created)."
+  }
+
+  // ---- Block 7: Deletes LAST in mutate phase ----
+
+  ,{
+    "name": "rename_module",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "module_name": "ConcordSweep_create_module", "new_name": "ConcordSweep_rename_module" },
+    "expected": "ok",
+    "notes": "Renames sweep-owned module ConcordSweep_create_module → ConcordSweep_rename_module; only operates on sweep-created module. [idempotency: matrix re-runs against pre-existing project state] [tightened to expected:ok 2026-05-14 after fresh-state validation; see phase4-fresh-state-validation.md]"
+  }
+  ,{
+    "name": "delete_document",
+    "family": "Pages",
+    "phase": "mutate",
+    "args": { "document_name": "SweepMf_create_microflow", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "notes": "Deletes sweep-created microflow SweepMf_create_microflow; document_type is informational only."
+  }
+  ,{
+    "name": "exclude_document",
+    "family": "Pages",
+    "phase": "mutate",
+    "args": { "document_name": "Customer_Overview", "module_name": "MyFirstModule", "excluded": true },
+    "expected": "either",
+    "notes": "Excludes Customer_Overview page; expected: either (page may not exist if generate_overview_pages failed)."
+  }
+  ,{
+    "name": "delete_model_element",
+    "family": "DomainModel",
+    "phase": "mutate",
+    "args": { "element_type": "entity", "entity_name": "SweepEntityRenamed_rename_entity", "module_name": "MyFirstModule" },
+    "expected": "ok",
+    "verify": { "name": "query_model_elements", "args": { "type_name": "DomainModels$Entity", "module_name": "MyFirstModule", "max_results": 50 } },
+    "notes": "Deletes SweepEntityRenamed_rename_entity; closes create→rename→delete cycle. Depends on rename_entity."
+  }
+
+  ,
+
+  // ---- Lifecycle (strict order: save -> run -> poll -> stop -> refresh-last) ----
+  { "name": "save_all",          "family": "UiActions", "phase": "lifecycle", "args": {}, "expected": "ok", "notes": "Idempotent .mpr write. Run first to capture sweep mutations." },
+  { "name": "run_app",           "family": "UiActions", "phase": "lifecycle", "args": {}, "expected": "either", "notes": "Starts active configuration. Driver polls get_app_status until running (30s cap) before stop_app. [pending Task 15 — see Concord.Host10x/Interop/*Host10x.cs]" },
+  { "name": "stop_app",          "family": "UiActions", "phase": "lifecycle", "args": {}, "expected": "either", "notes": "Stops the running app. Driver-managed wait happens between run_app and this entry. [pending Task 15 — see Concord.Host10x/Interop/*Host10x.cs]" },
+  { "name": "refresh_project",   "family": "UiActions", "phase": "lifecycle", "args": {}, "expected": "ok", "notes": "Invalidates cached model - DEAD LAST in the entire sweep." }
+]

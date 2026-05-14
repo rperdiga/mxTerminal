@@ -36,6 +36,11 @@ public sealed record SettingsPayload(
     bool StudioProActionsEnabled,
     bool MaiaIntegrationEnabled,
     bool MaiaDiagnosticLogging,
+    // True iff the running Studio Pro version exposes the Maia AI panel
+    // (requires 11.10+). When false, the JS hides the Maia + Maia-diagnostic
+    // rows and the apply path skips Maia plumbing entirely. Older Studio
+    // Pros have no Maia panel to inject into, so the toggles would be dead.
+    bool MaiaAvailable,
     string Platform,
     string RefreshFromDiskHotkey,
     bool RestoreTabsOnReopen,
@@ -53,9 +58,18 @@ public sealed record SettingsPayload(
 /// <summary>
 /// Snapshot of Studio Pro's own MCP-server preference. JS uses this to warn
 /// when the port we wire into Claude's .mcp.json doesn't match what Studio
-/// Pro actually serves on. Null when the SQLite probe couldn't read it.
+/// Pro actually serves on. <see cref="Enabled"/> and <see cref="Port"/> are
+/// null when the SQLite probe couldn't read it.
+/// <para>
+/// <see cref="Available"/> reports whether the running Studio Pro version
+/// supports the <c>mendix-studio-pro</c> MCP server at all (Studio Pro 11.10+
+/// introduced it). When <c>false</c>, the JS hides the "Studio Pro MCP"
+/// section entirely and the apply helper skips wiring + cleans up any stale
+/// entry from a prior 11.10+ open of the same project. Distinct from
+/// <c>Enabled = false</c>, which means "11.10+ but user turned it off".
+/// </para>
 /// </summary>
-public sealed record StudioProMcpInfoPayload(bool? Enabled, int? Port);
+public sealed record StudioProMcpInfoPayload(bool? Enabled, int? Port, bool Available);
 
 /// <summary>Read-only metadata shown in the settings modal's About section.</summary>
 public sealed record AboutInfoPayload(

@@ -847,16 +847,12 @@
           <!-- Studio Pro MCP -->
           <section class="settings-section" data-section="mcp" role="tabpanel">
             <h4>Studio Pro MCP</h4>
-            <p class="section-desc">Studio Pro 11.10+ exposes its model-tier API as an MCP server. Enable to wire it into the CLIs you use inside this terminal — the URL we write into <code>.mcp.json</code> always tracks Studio Pro's own port (no manual port to keep in sync).</p>
+            <p class="section-desc">Studio Pro 11.10+ exposes its model-tier API as an MCP server. Enable to wire it into the CLIs you use inside this terminal — the URL we write into <code>.mcp.json</code> always tracks Studio Pro's own port (no manual port to keep in sync). The per-CLI selection lives under <em>Concord MCP → CLIs to wire</em> below — it covers both this integration and the Concord MCP server.</p>
             <div class="checkbox-row">
               <input id="set-mcp-enabled" type="checkbox">
               <label for="set-mcp-enabled" style="margin:0">Enable Studio Pro MCP server integration</label>
             </div>
             <div id="mcp-port-readout" class="mcp-port-readout"></div>
-            <h5>CLIs to wire</h5>
-            <div class="checkbox-row"><input id="set-mcp-claude" type="checkbox"><label for="set-mcp-claude" style="margin:0">Claude Code (writes <code>.mcp.json</code>)</label></div>
-            <div class="checkbox-row"><input id="set-mcp-copilot" type="checkbox"><label for="set-mcp-copilot" style="margin:0">GitHub Copilot CLI (shares <code>.mcp.json</code>)</label></div>
-            <div class="checkbox-row"><input id="set-mcp-codex" type="checkbox"><label for="set-mcp-codex" style="margin:0">Codex (writes <code>~/.codex/config.toml</code>)</label></div>
           </section>
 
           <!-- Concord MCP -->
@@ -868,6 +864,11 @@
               <label for="set-actions-enabled" style="margin:0">Enable Concord MCP server</label>
             </div>
             <div id="actions-port-readout" class="mcp-port-readout"></div>
+
+            <h5>CLIs to wire</h5>
+            <div class="checkbox-row"><input id="set-mcp-claude" type="checkbox"><label for="set-mcp-claude" style="margin:0">Claude Code (writes <code>.mcp.json</code>)</label></div>
+            <div class="checkbox-row"><input id="set-mcp-copilot" type="checkbox"><label for="set-mcp-copilot" style="margin:0">GitHub Copilot CLI (shares <code>.mcp.json</code>)</label></div>
+            <div class="checkbox-row"><input id="set-mcp-codex" type="checkbox"><label for="set-mcp-codex" style="margin:0">Codex (writes <code>~/.codex/config.toml</code>)</label></div>
 
             <h5>Tool families</h5>
             <div class="checkbox-row">

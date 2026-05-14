@@ -4,10 +4,40 @@ using System.Text;
 using System.Text.Json;
 using FluentAssertions;
 using Terminal;
+using Terminal.Interop;
 using Xunit;
 
 namespace Terminal.Tests;
 
+/// <summary>
+/// Minimal ITool implementation for use in tests. Delegates Invoke to a
+/// caller-supplied lambda so individual tests control the return value.
+/// </summary>
+file sealed class FakeTool : Terminal.Mcp.ITool
+{
+    private readonly Func<System.Text.Json.Nodes.JsonObject, Task<object>> _invoke;
+    public FakeTool(string name, Terminal.Mcp.ToolFamily family, Func<System.Text.Json.Nodes.JsonObject, Task<object>> invoke)
+    {
+        Name = name; Family = family; _invoke = invoke;
+    }
+    public string Name { get; }
+    public Terminal.Mcp.ToolFamily Family { get; }
+    public Func<System.Text.Json.Nodes.JsonObject, Task<object>> Invoke => _invoke;
+}
+
+/// <summary>
+/// Ensures StudioProActionServerTests and MaiaJsonRpcTests run sequentially —
+/// both classes mutate ToolCatalogRegistry.Active and HostServices (static
+/// singletons) and would race if xUnit ran them in parallel.
+/// </summary>
+[CollectionDefinition("ActionServer")]
+public class ActionServerCollection { }
+
+/// <summary>
+/// Shares the "ActionServer" collection with MaiaJsonRpcTests so both run
+/// sequentially and don't race on ToolCatalogRegistry.Active + HostServices.
+/// </summary>
+[Collection("ActionServer")]
 public class StudioProActionServerTests : IAsyncLifetime
 {
     private sealed class FakeProbe : IRunStateProbe
@@ -34,12 +64,17 @@ public class StudioProActionServerTests : IAsyncLifetime
 
     public Task InitializeAsync()
     {
-        var probe = new FakeProbe { Next = () => RunState.Running };
-        var actions = new StudioProActions(probe, new FakeUi(),
-            runTimeout: TimeSpan.FromMilliseconds(200),
-            stopTimeout: TimeSpan.FromMilliseconds(200),
-            pollInterval: TimeSpan.FromMilliseconds(50));
-        server = new StudioProActionServer(actions, port: 0);  // ephemeral
+        HostServices.Reset();
+        HostServices.SetRunStateProbe(new FakeProbe { Next = () => RunState.Running });
+        HostServices.SetUiAutomation(new FakeUi());
+
+        // Register UI-action tools in the catalog so the server's catalog-only
+        // dispatch path can find them. Studio10x mode skips the 11.x allowlist.
+        var catalog = new Terminal.Mcp.ToolCatalog(TargetMode.Studio10x);
+        Terminal.Mcp.UiActionsBootstrap.Register(catalog);
+        Terminal.Mcp.ToolCatalogRegistry.Active = catalog;
+
+        server = new StudioProActionServer(port: 0);  // ephemeral
         server.Start();
         http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{server.Port}") };
         return Task.CompletedTask;
@@ -49,6 +84,8 @@ public class StudioProActionServerTests : IAsyncLifetime
     {
         server?.Dispose();
         http.Dispose();
+        Terminal.Mcp.ToolCatalogRegistry.Active = null;
+        HostServices.Reset();
         return Task.CompletedTask;
     }
 
@@ -102,6 +139,24 @@ public class StudioProActionServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ToolsCall_FailingTool_ReturnsIsErrorTrue()
+    {
+        // Register a fake tool that returns ActionResult.Fail so we can assert
+        // the catalog dispatch path surfaces isError=true (regression for Task 21).
+        var fakeTool = new FakeTool(
+            name: "fake_failing_tool",
+            family: Terminal.Mcp.ToolFamily.UiActions,
+            invoke: _ => Task.FromResult<object>(ActionResult.Fail("test failure")));
+        Terminal.Mcp.ToolCatalogRegistry.Active!.Register(fakeTool);
+
+        var doc = await Post("""{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"fake_failing_tool","arguments":{}}}""");
+        var result = doc.RootElement.GetProperty("result");
+        result.GetProperty("isError").GetBoolean().Should().BeTrue();
+        var text = result.GetProperty("content")[0].GetProperty("text").GetString()!;
+        text.Should().Contain("test failure");
+    }
+
+    [Fact]
     public async Task ToolsCall_UnknownTool_ReturnsMcpError()
     {
         var doc = await Post("""{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"nope","arguments":{}}}""");
@@ -140,9 +195,10 @@ public class StudioProActionServerTests : IAsyncLifetime
     [Fact]
     public async Task DisposeStopsListener()
     {
-        var probe = new FakeProbe();
-        var actions = new StudioProActions(probe, new FakeUi());
-        var s = new StudioProActionServer(actions, port: 0);
+        HostServices.Reset();
+        HostServices.SetRunStateProbe(new FakeProbe());
+        HostServices.SetUiAutomation(new FakeUi());
+        var s = new StudioProActionServer(port: 0);
         s.Start();
         var port = s.Port;
         s.Dispose();

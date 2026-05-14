@@ -131,6 +131,80 @@ public static class StudioProThemeProbe
     /// <summary>Convert a probed theme to a URL-friendly lowercase string.</summary>
     public static string ToUrlValue(Theme t) => t == Theme.Dark ? "dark" : "light";
 
+    /// <summary>
+    /// Whether the running Studio Pro version exposes the built-in
+    /// <c>mendix-studio-pro</c> MCP server. Introduced in Studio Pro 11.10
+    /// — versions below that (any 10.x, plus 11.0 through 11.9.x) don't
+    /// have the feature, so Concord must NOT wire <c>mendix-studio-pro</c>
+    /// into <c>.mcp.json</c> / <c>~/.codex/config.toml</c> and must hide
+    /// the Studio Pro MCP section in Settings.
+    /// <para>
+    /// Conservative on parse failure: returns <c>false</c> if the version
+    /// string is null, empty, or unparseable. This matches the user-chosen
+    /// "hide by default when probe fails" semantics — a Studio Pro 11.10+
+    /// install with a non-standard exe path will lose the section until the
+    /// version can be detected, but a 10.x install will never accidentally
+    /// surface the feature.
+    /// </para>
+    /// </summary>
+    /// <param name="studioProVersion">e.g. "11.10.0", "10.24.13".</param>
+    public static bool IsMcpServerSupported(string? studioProVersion)
+    {
+        if (string.IsNullOrWhiteSpace(studioProVersion)) return false;
+        if (!Version.TryParse(studioProVersion, out var v)) return false;
+        return v >= new Version(11, 10);
+    }
+
+    /// <summary>
+    /// Whether the running Studio Pro version exposes the Maia AI panel that
+    /// Concord's Maia bridge depends on. The Maia panel ships with Studio
+    /// Pro 11.10+; older versions (10.x, 11.0–11.9.x) don't have a Maia
+    /// surface to inject into, so Concord must NOT register the
+    /// <c>maia__*</c> tools, must NOT build the CDP plumbing, and must NOT
+    /// surface Maia controls in the Settings UI.
+    /// <para>
+    /// Same hide-by-default semantics as <see cref="IsMcpServerSupported"/>
+    /// on probe failure. Currently the two thresholds happen to match
+    /// (11.10) but they're kept as separate methods so a future Mendix
+    /// change to either feature can shift one without affecting the other.
+    /// </para>
+    /// </summary>
+    public static bool IsMaiaSupported(string? studioProVersion)
+    {
+        if (string.IsNullOrWhiteSpace(studioProVersion)) return false;
+        if (!Version.TryParse(studioProVersion, out var v)) return false;
+        return v >= new Version(11, 10);
+    }
+
+    /// <summary>
+    /// Extracts a "<c>major.minor.patch</c>" version from Studio Pro's
+    /// process exe path. Works for both Windows
+    /// (<c>...\Mendix\11.10.0\modeler\studiopro.exe</c>) and the Mac
+    /// bundle layout (e.g. <c>/Applications/Mendix Studio Pro 11.10.0.app/...</c>).
+    /// Returns null if the path doesn't contain a version triple.
+    /// <para>
+    /// Lives in Core so <see cref="Concord.Host10x.Host10xEntry"/> /
+    /// <see cref="Concord.Host11x.Host11xEntry"/> can use it at MEF
+    /// activation time to gate version-specific tool registration. Both
+    /// hosts' <c>TerminalPaneExtension</c> classes also call this for
+    /// settings-payload + Probe* helpers.
+    /// </para>
+    /// </summary>
+    public static string? StudioProVersionFromExePath()
+    {
+        try
+        {
+            var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+            if (string.IsNullOrEmpty(exePath)) return null;
+            var match = System.Text.RegularExpressions.Regex.Match(exePath, @"\d+\.\d+\.\d+");
+            return match.Success ? match.Value : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>Studio Pro's MCP-server preference snapshot.</summary>
     public readonly record struct McpServerInfo(bool? Enabled, int? Port, string Diagnostic);
 

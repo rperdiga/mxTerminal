@@ -279,7 +279,8 @@ The `BuildUi` target runs `npm install` (first build only) + `node esbuild.mjs` 
 ```
 src/Concord.Core/             Shared library, no Studio Pro reference
   Terminal/                   PTY, settings, web server message DTOs, skill installer
-  Mcp/                        Concord MCP host (StudioProActions + ActionServer)
+  Mcp/                        Concord MCP host (StudioProActions + ActionServer + ToolCatalog)
+  Spmcp/                      Source-merged MCPExtension tool catalog (87 tools), routes through HostServices
   Maia/                       CDP-based Maia bridge + injected JS agent
   Interop/                    Host service interfaces (registry pattern)
 src/Concord.Host11x/          Studio Pro 11.x host
@@ -287,10 +288,14 @@ src/Concord.Host11x/          Studio Pro 11.x host
   Pane/                       Dockable pane + view model
   Ui/                         TerminalWebServer (Studio Pro IWebServer adapter)
   Interop/                    11.x service implementations
+  Spmcp/                      SpmcpToolBootstrap11x — registers catalog tools at MEF activation
   Host11xEntry.cs             MEF activation entry — initializes HostContext + HostServices
-src/Concord.Host10x/          Studio Pro 10.x host (preview)
-  MenuExtensions/             Minimal MenuExtension showing preview message
-  Interop/                    10.x service stubs (W2 wiring)
+src/Concord.Host10x/          Studio Pro 10.x host
+  MenuExtensions/             TerminalMenuExtension — opens the dockable pane
+  Pane/                       Dockable pane + view model (ported against 10.21.1 ExtensionsAPI)
+  Ui/                         TerminalWebServer
+  Interop/                    10.x service implementations
+  Spmcp/                      SpmcpToolBootstrap10x — registers catalog tools at MEF activation
   Host10xEntry.cs             MEF activation entry
 ui/src/                       TypeScript UI (xterm.js, settings modal, bridge, icons, logo)
 ui/src/bridge.ts              WebView2 (Windows) and WKWebView (Mac) transport

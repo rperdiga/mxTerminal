@@ -171,6 +171,45 @@ public sealed record TerminalSettings(
         }
     }
 
+    /// <summary>
+    /// Repair inconsistent settings that can only result from a UI bug or
+    /// botched migration. Returns the corrected settings + a flag indicating
+    /// whether any change was made; when <c>changed</c> is true the caller
+    /// should <see cref="Save"/> the result and re-run the apply chain to
+    /// rematerialize wiring (e.g. <c>.mcp.json</c> entries that the broken
+    /// state caused to be removed).
+    /// <para>
+    /// Known case: a v5.0.0-alpha.x Bug-1 regression cleared
+    /// <see cref="McpClients"/> to empty while leaving
+    /// <see cref="McpServerEnabled"/> true. That combination is invalid —
+    /// "Concord MCP on, but no CLIs to wire it to" can never be a legitimate
+    /// user intent. The repair restores <see cref="McpClients"/> to the
+    /// defaults so the next apply re-writes the <c>concord-mcp</c> entry.
+    /// Symmetric repair for <see cref="SkillClients"/> +
+    /// <see cref="SkillsEnabled"/>.
+    /// </para>
+    /// </summary>
+    public static (TerminalSettings settings, bool changed) TryRepair(TerminalSettings loaded)
+    {
+        var changed = false;
+        var def = Defaults();
+        var result = loaded;
+
+        if (loaded.McpServerEnabled && (loaded.McpClients == null || loaded.McpClients.Length == 0))
+        {
+            result = result with { McpClients = def.McpClients };
+            changed = true;
+        }
+
+        if (loaded.SkillsEnabled && (loaded.SkillClients == null || loaded.SkillClients.Length == 0))
+        {
+            result = result with { SkillClients = def.SkillClients };
+            changed = true;
+        }
+
+        return (result, changed);
+    }
+
     public void Save(string projectDir)
     {
         var dir = System.IO.Path.Combine(projectDir, SubDir);

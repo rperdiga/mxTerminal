@@ -1,8 +1,12 @@
+using Terminal.Interop;
+
 namespace Terminal;
 
 /// <summary>
 /// State machine for run_app / stop_app / refresh_project. Pure logic — no
 /// HTTP, no DllImports. Acquires a single semaphore so only one action runs at a time.
+/// Reads RunStateProbe, UiAutomation, RunConfigurations, and App from HostServices
+/// so it can be constructed with zero pane-scoped arguments.
 /// </summary>
 public sealed class StudioProActions
 {
@@ -10,33 +14,19 @@ public sealed class StudioProActions
     private static readonly TimeSpan DefaultStopTimeout   = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan DefaultPollInterval  = TimeSpan.FromMilliseconds(500);
 
-    private readonly IRunStateProbe probe;
-    private readonly IStudioProUiAutomation ui;
     private readonly TimeSpan runTimeout;
     private readonly TimeSpan stopTimeout;
     private readonly TimeSpan pollInterval;
     private readonly SemaphoreSlim gate = new(1, 1);
-    // Optional callbacks supplied by the pane extension. Decoupled from the
-    // Mendix Extensibility API surface so this class stays unit-testable.
-    private readonly Func<RunConfigurationSnapshot?>? getActiveRunConfig;
-    private readonly Func<(string? path, string? name)>? getProjectInfo;
 
     public StudioProActions(
-        IRunStateProbe probe,
-        IStudioProUiAutomation ui,
         TimeSpan? runTimeout = null,
         TimeSpan? stopTimeout = null,
-        TimeSpan? pollInterval = null,
-        Func<RunConfigurationSnapshot?>? getActiveRunConfig = null,
-        Func<(string? path, string? name)>? getProjectInfo = null)
+        TimeSpan? pollInterval = null)
     {
-        this.probe = probe;
-        this.ui = ui;
         this.runTimeout = runTimeout ?? DefaultRunTimeout;
         this.stopTimeout = stopTimeout ?? DefaultStopTimeout;
         this.pollInterval = pollInterval ?? DefaultPollInterval;
-        this.getActiveRunConfig = getActiveRunConfig;
-        this.getProjectInfo = getProjectInfo;
     }
 
     public async Task<ActionResult> RunAppAsync(CancellationToken ct = default)
@@ -44,6 +34,8 @@ public sealed class StudioProActions
         await gate.WaitAsync(ct);
         try
         {
+            var probe = HostServices.RunStateProbe;
+            var ui = HostServices.UiAutomation;
             var before = await probe.IsRunningAsync(ct);
             if (before == RunState.Running)
                 return ActionResult.Ok("already_running", probe.GetActiveUrl());
@@ -66,6 +58,8 @@ public sealed class StudioProActions
         await gate.WaitAsync(ct);
         try
         {
+            var probe = HostServices.RunStateProbe;
+            var ui = HostServices.UiAutomation;
             var before = await probe.IsRunningAsync(ct);
             if (before == RunState.Stopped)
                 return ActionResult.Ok("wasnt_running");
@@ -88,6 +82,7 @@ public sealed class StudioProActions
         await gate.WaitAsync(ct);
         try
         {
+            var ui = HostServices.UiAutomation;
             if (!ui.TriggerRefreshFromDisk())
                 return ActionResult.Fail(ui.LastFailureReason ?? "Studio Pro main window unavailable; try again after the IDE finishes loading");
             return ActionResult.Ok("reloaded");
@@ -101,6 +96,7 @@ public sealed class StudioProActions
         await gate.WaitAsync(ct);
         try
         {
+            var ui = HostServices.UiAutomation;
             if (!ui.TriggerSaveAll())
                 return ActionResult.Fail(ui.LastFailureReason ?? "Studio Pro main window unavailable; try again after the IDE finishes loading");
             return ActionResult.Ok("save_command_sent");
@@ -111,18 +107,18 @@ public sealed class StudioProActions
     /// <summary>Read-only: returns the currently selected local run configuration.</summary>
     public Task<ActionResult> GetActiveRunConfigurationAsync(CancellationToken ct = default)
     {
-        if (getActiveRunConfig is null)
-            return Task.FromResult(ActionResult.Fail("Active-run-configuration callback not wired"));
-        var cfg = getActiveRunConfig();
-        if (cfg is null)
+        var info = HostServices.RunConfigurations.GetActive();
+        if (info is null)
             return Task.FromResult(ActionResult.OkWith("no_active_configuration", new { }));
-        return Task.FromResult(ActionResult.OkWith("ok", cfg));
+        return Task.FromResult(ActionResult.OkWith("ok", info));
     }
 
     /// <summary>Composite snapshot for orienting Claude Code: project, run state, active config.</summary>
     public async Task<ActionResult> GetAppStatusAsync(CancellationToken ct = default)
     {
-        var (projPath, projName) = getProjectInfo?.Invoke() ?? (null, null);
+        var probe = HostServices.RunStateProbe;
+        string? projPath = HostServices.App.ProjectPath;
+        string? projName = HostServices.App.ProjectName;
         var state = await probe.IsRunningAsync(ct);
         var stateStr = state switch
         {
@@ -131,18 +127,19 @@ public sealed class StudioProActions
             _                => "unknown",
         };
         var url = state == RunState.Running ? probe.GetActiveUrl() : null;
-        var cfg = getActiveRunConfig?.Invoke();
+        var activeConfig = HostServices.RunConfigurations.GetActive();
         var info = new AppStatusInfo(
             ProjectPath: projPath,
             ProjectName: projName,
             Running: stateStr,
             RunningUrl: url,
-            ActiveRunConfiguration: cfg);
+            ActiveRunConfiguration: activeConfig);
         return ActionResult.OkWith("ok", info);
     }
 
     private async Task<RunState> WaitForAsync(RunState target, TimeSpan timeout, CancellationToken ct)
     {
+        var probe = HostServices.RunStateProbe;
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {

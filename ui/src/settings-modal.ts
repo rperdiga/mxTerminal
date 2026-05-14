@@ -32,6 +32,11 @@ interface SettingsPayload {
   studioProActionsEnabled: boolean;
   maiaIntegrationEnabled: boolean;
   maiaDiagnosticLogging: boolean;
+  // True iff the running Studio Pro version exposes the Maia AI panel that
+  // Concord's bridge depends on (11.10+). When false, hide the Maia +
+  // diagnostic checkboxes — they have no panel to act against on older
+  // Studio Pros.
+  maiaAvailable: boolean;
   platform: string;
   refreshFromDiskHotkey: string;
   restoreTabsOnReopen: boolean;
@@ -53,6 +58,11 @@ interface BundledSkill {
 interface StudioProMcpInfo {
   enabled: boolean | null;
   port: number | null;
+  // True iff the running Studio Pro version exposes the built-in
+  // mendix-studio-pro MCP server (11.10+). When false, hide the entire
+  // "Studio Pro MCP" section — the feature literally doesn't exist on
+  // this Studio Pro version.
+  available: boolean;
 }
 
 interface AboutInfo {
@@ -144,6 +154,16 @@ export class SettingsModal {
   ) as HTMLSpanElement;
 
   private knownShells: ShellOption[] = [];
+  // Snapshot of whether the running Studio Pro version exposes the
+  // mendix-studio-pro MCP server. Captured on every populate() so the save
+  // path can defensively clamp McpEnabled + McpClients to off when the
+  // section is hidden — even though populate already cleared the
+  // checkboxes, this guards against stale form state.
+  private studioProMcpAvailable: boolean = false;
+  // Symmetric snapshot for the Maia AI panel. Same defensive purpose: when
+  // false, save() must send maiaIntegrationEnabled + maiaDiagnosticLogging
+  // as false even if the hidden checkboxes somehow have stale state.
+  private maiaAvailable: boolean = false;
 
   constructor(
     private bridge: Bridge,
@@ -240,29 +260,30 @@ export class SettingsModal {
       });
   }
 
-  /** When the master MCP toggle flips, sync the per-CLI checkboxes:
-   *  - turning OFF unchecks the per-CLI client list (and disables them)
-   *  - turning ON re-enables them (leaves their last values alone)
-   *  Action bridge is INDEPENDENT — it writes its own .mcp.json entry and
-   *  doesn't need the primary MCP integration to be on. (Earlier code
-   *  force-unchecked it; that was wrong and produced "checkbox checked but
-   *  pill OFF" reports.) */
+  /** Per-CLI Claude/Copilot/Codex checkboxes drive wiring for BOTH the
+   *  Studio Pro MCP (mendix-studio-pro) and Concord MCP (concord-mcp)
+   *  entries — the same mcpClients list is consumed by both apply paths
+   *  in C#. The UI homes them inside the Concord MCP section because that
+   *  section is always visible (the Studio Pro MCP section is hidden on
+   *  versions < 11.10). Enable-state logic:
+   *    • Both MCP toggles off  → per-CLI disabled (no wiring would happen).
+   *    • Either MCP toggle on  → per-CLI enabled (at least one server uses them).
+   *  Toggling the Studio Pro MCP master no longer clears the per-CLI
+   *  selection — that would unwire Concord MCP, which is the regression
+   *  the v5.0.0-alpha.3 restructure addresses. */
   private onMcpEnabledChange() {
-    const enabled = this.chkMcp.checked;
-    if (!enabled) {
-      this.chkMcpClaude.checked = false;
-      this.chkMcpCopilot.checked = false;
-      this.chkMcpCodex.checked = false;
-    }
-    this.chkMcpClaude.disabled = !enabled;
-    this.chkMcpCopilot.disabled = !enabled;
-    this.chkMcpCodex.disabled = !enabled;
-    // chkActions.disabled removed — action bridge is independent.
-    this.onActionsEnabledChange();
+    this.updateCliCheckboxesEnabled();
   }
 
   private onActionsEnabledChange() {
-    // No port input to disable anymore — bridge auto-binds when enabled.
+    this.updateCliCheckboxesEnabled();
+  }
+
+  private updateCliCheckboxesEnabled() {
+    const anyMcpEnabled = this.chkMcp.checked || this.chkActions.checked;
+    this.chkMcpClaude.disabled = !anyMcpEnabled;
+    this.chkMcpCopilot.disabled = !anyMcpEnabled;
+    this.chkMcpCodex.disabled = !anyMcpEnabled;
   }
 
   /** When the master Skills toggle flips, sync the per-CLI checkboxes:
@@ -306,7 +327,16 @@ export class SettingsModal {
     this.onScrollbackChanged(d.xtermScrollbackLines);
 
     // MCP fields
-    this.chkMcp.checked = !!d.mcpEnabled;
+    // Studio Pro MCP (mendix-studio-pro) was introduced in Studio Pro 11.10.
+    // On 10.x or 11.6–11.9 the C# probe returns available=false, in which
+    // case we hide the entire section AND clamp `mcpEnabled` to off. We do
+    // NOT clear the per-CLI checkboxes here — the SAME mcpClients list also
+    // drives Concord MCP (concord-mcp) wiring in ApplyActionsMcpConfig, so
+    // zeroing it would unwire concord-mcp from the user's CLIs on save.
+    const spMcpAvailable = d.studioProMcp?.available === true;
+    this.studioProMcpAvailable = spMcpAvailable;
+    this.applyStudioProMcpAvailabilityGate(spMcpAvailable);
+    this.chkMcp.checked = spMcpAvailable && !!d.mcpEnabled;
     this.renderMcpPortReadout(d.studioProMcp);
     const clients = new Set((d.mcpClients ?? []).map((c) => c.toLowerCase()));
     this.chkMcpClaude.checked = clients.has("claude");
@@ -318,10 +348,15 @@ export class SettingsModal {
     // Concord MCP fields
     this.chkActions.checked = d.mcpServerEnabled;
     this.chkSpActions.checked = d.studioProActionsEnabled;
-    this.chkMaia.checked = d.maiaIntegrationEnabled;
-    this.chkMaiaDiagnostic.checked = d.maiaDiagnosticLogging;
+    // Maia controls are only meaningful on Studio Pro 11.10+ (the version
+    // that ships the Maia panel). On older versions the rows are hidden
+    // and the checkboxes forced off — the C# probe gates this via
+    // maiaAvailable on the payload.
+    this.maiaAvailable = d.maiaAvailable === true;
+    this.chkMaia.checked = this.maiaAvailable && d.maiaIntegrationEnabled;
+    this.chkMaiaDiagnostic.checked = this.maiaAvailable && d.maiaDiagnosticLogging;
     this.renderActionsPortReadout(d.mcpServerEnabled, d.liveActionServerPort);
-    this.applyMaiaPlatformGate(d.platform);
+    this.applyMaiaAvailabilityGate(this.maiaAvailable, d.platform);
     this.inpRefreshHotkey.value = d.refreshFromDiskHotkey;
     this.onMcpEnabledChange(); // also flips actions enabled state
 
@@ -363,6 +398,49 @@ export class SettingsModal {
     }
     this.actionsPortReadout.classList.remove("warn");
     this.actionsPortReadout.innerHTML = `Connected on <code>localhost:${livePort}</code>.`;
+  }
+
+  /** Show or hide the entire "Studio Pro MCP" section based on whether the
+   *  running Studio Pro version exposes the mendix-studio-pro MCP server
+   *  (11.10+). When unavailable, the nav-item disappears from the rail AND
+   *  the section panel is removed from the DOM flow — the user has no way
+   *  to navigate to or activate it. The "Concord MCP" / "Skills" / "About"
+   *  sections are unaffected. */
+  private applyStudioProMcpAvailabilityGate(available: boolean): void {
+    const navItem = document.querySelector<HTMLElement>(
+      '.nav-item[data-section="mcp"]',
+    );
+    const section = document.querySelector<HTMLElement>(
+      '.settings-section[data-section="mcp"]',
+    );
+    const show = available;
+    if (navItem) navItem.style.display = show ? "" : "none";
+    if (section) section.style.display = show ? "" : "none";
+    // If the user happens to be focused on the now-hidden section (e.g.
+    // they had it open before a project reload onto an older Studio Pro),
+    // switch them to General so the modal doesn't look blank.
+    if (!show && section?.classList.contains("active")) {
+      this.activateSection("general");
+    }
+  }
+
+  /** Hide or show the Maia checkbox + diagnostic + platform-note rows based
+   *  on whether the running Studio Pro version exposes the Maia AI panel
+   *  (11.10+). When unavailable, the entire row group disappears so older
+   *  Studio Pro users don't see dead toggles. When available, falls through
+   *  to the Windows-only platform gate. */
+  private applyMaiaAvailabilityGate(available: boolean, platform: string): void {
+    const rows = [
+      this.chkMaia.closest(".checkbox-row") as HTMLElement | null,
+      this.chkMaiaDiagnostic.closest(".checkbox-row") as HTMLElement | null,
+      this.maiaPlatformNote as HTMLElement | null,
+    ];
+    for (const row of rows) {
+      if (row) row.style.display = available ? "" : "none";
+    }
+    if (available) {
+      this.applyMaiaPlatformGate(platform);
+    }
   }
 
   private applyMaiaPlatformGate(platform: string): void {
@@ -470,6 +548,13 @@ export class SettingsModal {
         ? this.inpShell.value.trim() || "powershell.exe"
         : this.selShell.value;
 
+    // Defensive clamp on mcpEnabled (Studio Pro MCP toggle): when Studio Pro
+    // doesn't expose mendix-studio-pro, send Off regardless of form state.
+    // Per-CLI mcpClients is NOT clamped — the same list also drives Concord
+    // MCP (concord-mcp) wiring in ApplyActionsMcpConfig, so zeroing it would
+    // unwire concord-mcp from the user's CLIs. The C# apply helper already
+    // skips the mendix-studio-pro upsert when McpEnabled is false.
+    const mcpEnabledFinal = this.studioProMcpAvailable && this.chkMcp.checked;
     const mcpClients: string[] = [];
     if (this.chkMcpClaude.checked) mcpClients.push("claude");
     if (this.chkMcpCopilot.checked) mcpClients.push("copilot");
@@ -486,12 +571,15 @@ export class SettingsModal {
       ringBufferKB: parseInt(this.inpRing.value, 10) || 4096,
       xtermScrollbackLines: parseInt(this.inpScroll.value, 10) || 10000,
       theme,
-      mcpEnabled: this.chkMcp.checked,
+      mcpEnabled: mcpEnabledFinal,
       mcpClients,
       mcpServerEnabled: this.chkActions.checked,
       studioProActionsEnabled: this.chkSpActions.checked,
-      maiaIntegrationEnabled: this.chkMaia.checked,
-      maiaDiagnosticLogging: this.chkMaiaDiagnostic.checked,
+      // Defensive clamp: when Studio Pro has no Maia panel (10.x, 11.6–11.9),
+      // send both Maia flags off regardless of form state. Mirrors the
+      // McpEnabled clamp for the Studio Pro MCP feature.
+      maiaIntegrationEnabled: this.maiaAvailable && this.chkMaia.checked,
+      maiaDiagnosticLogging: this.maiaAvailable && this.chkMaiaDiagnostic.checked,
       refreshFromDiskHotkey: this.inpRefreshHotkey.value,
       restoreTabsOnReopen: this.chkRestoreTabs.checked,
       skillsEnabled: this.chkSkillsEnabled.checked,

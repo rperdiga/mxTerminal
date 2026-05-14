@@ -35,10 +35,6 @@ public sealed class StudioProActionServer : IDisposable
     /// </summary>
     public const int DefaultPort = 7783;
 
-    private readonly StudioProActions actions;
-    private readonly Maia.MaiaActions? maia;
-    private readonly bool studioProActionsEnabled;
-    private readonly bool maiaIntegrationEnabled;
     private readonly Logger? log;
     private TcpListener? listener;
     private int boundPort;
@@ -46,18 +42,8 @@ public sealed class StudioProActionServer : IDisposable
     private Task? loop;
     private readonly int requestedPort;
 
-    public StudioProActionServer(
-        StudioProActions actions,
-        int port,
-        Logger? log = null,
-        Maia.MaiaActions? maia = null,
-        bool studioProActionsEnabled = true,
-        bool maiaIntegrationEnabled = false)
+    public StudioProActionServer(int port, Logger? log = null)
     {
-        this.actions = actions;
-        this.maia = maia;
-        this.studioProActionsEnabled = studioProActionsEnabled;
-        this.maiaIntegrationEnabled = maiaIntegrationEnabled;
         this.log = log;
         this.requestedPort = port;
     }
@@ -342,154 +328,100 @@ public sealed class StudioProActionServer : IDisposable
 
     private JsonNode HandleToolsList()
     {
-        var arr = new JsonArray();
-        if (studioProActionsEnabled)
-        {
-            arr.Add(ToolDef("run_app",
-                "Start the local Mendix runtime for the currently open Studio Pro app. If already running, returns 'already_running' without disturbing it."));
-            arr.Add(ToolDef("stop_app",
-                "Stop the local Mendix runtime. No-op if it isn't running."));
-            arr.Add(ToolDef("refresh_project",
-                "Reload the project model from disk. Use after editing model files (e.g. microflow XML) outside Studio Pro to make the IDE pick up the changes."));
-            arr.Add(ToolDef("save_all",
-                "Best-effort save: posts Ctrl+S to Studio Pro's main window. Works when the active document tab has focus; if the user's focus is elsewhere (e.g. inside this terminal), Studio Pro routes the keystroke to the focused child instead and the save may not fire. For guaranteed save, ask the user to click the document tab once first."));
-            arr.Add(ToolDef("get_active_run_configuration",
-                "Read-only: returns the currently selected local run configuration (id, name, applicationRootUrl). Useful for confirming which environment a run/stop will affect."));
-            arr.Add(ToolDef("get_app_status",
-                "Composite read-only snapshot for orienting: project path/name, run state (running|stopped|unknown), running URL if any, active run configuration. Call this first when starting work in a fresh Claude Code session."));
-        }
-        if (maiaIntegrationEnabled && maia is not null)
-        {
-            arr.Add(ToolDef("maia__send",
-                "Submit a prompt to Maia (Studio Pro's AI assistant). Non-blocking — returns a handle you can poll with maia__status or block on with maia__wait. Optional 'sentinel' for caller-controlled correlation; otherwise auto-generated.",
-                new JsonObject { ["prompt"] = SchemaString(), ["sentinel"] = SchemaString() },
-                required: new[] { "prompt" }));
-            arr.Add(ToolDef("maia__status",
-                "Non-blocking peek at an in-flight Maia prompt by handle. Returns done/response/streaming/elapsed_sec.",
-                new JsonObject { ["handle"] = SchemaString() },
-                required: new[] { "handle" }));
-            arr.Add(ToolDef("maia__wait",
-                "Block until Maia is done with the given handle, or until timeout_sec elapses. Default timeout 60s.",
-                new JsonObject { ["handle"] = SchemaString(), ["timeout_sec"] = SchemaNumber() },
-                required: new[] { "handle" }));
-            arr.Add(ToolDef("maia__ask",
-                "Send a prompt and block for Maia's response. Convenience for one-shot queries; equivalent to maia__send + maia__wait.",
-                new JsonObject { ["prompt"] = SchemaString(), ["timeout_sec"] = SchemaNumber() },
-                required: new[] { "prompt" }));
-            arr.Add(ToolDef("maia__reset",
-                "Clear the in-WebView injected agent and bridge-side ticket state. Use after Maia panel reloads or chat clears."));
-            arr.Add(ToolDef("maia__busy",
-                "Read-only DOM probe: 'is Maia generating?'. Returns {busy, reason: 'spinner-visible'|'recent-dom-mutation'|'idle', idle_for_ms}. No traffic to Maia. Call before maia__new_chat to avoid interrupting mid-stream."));
-            arr.Add(ToolDef("maia__ping",
-                "Cheap liveness probe — sends 'ping' to Maia, waits up to timeout_sec for any response, returns {alive, latency_ms, response, timed_out}. Default timeout 5s. Use before expensive maia__ask calls when bridge health is uncertain.",
-                new JsonObject { ["timeout_sec"] = SchemaNumber() }));
-            arr.Add(ToolDef("maia__health",
-                "Bridge-state introspection without Maia traffic. Returns transport availability, last probe time, in-flight handle bindings, plus an embedded maia__busy snapshot. One-call diagnostic before recovery decisions."));
-            arr.Add(ToolDef("maia__new_chat",
-                "Click Maia's 'New chat' button — wipes Maia's chat context. Use AFTER maia__busy reports idle for >5s; interrupting mid-generation can corrupt Maia's state. Step 3.5 in the §2 recovery ladder, between maia__reset and user-handoff."));
-            arr.Add(ToolDef("maia__force_tier",
-                "Manual override: force a specific transport (e.g. 'cdp_chat'). For testing tier-N behavior. Mutates active state until next reprobe.",
-                new JsonObject { ["name"] = SchemaString() },
-                required: new[] { "name" }));
-        }
-        return new JsonObject { ["tools"] = arr };
-    }
+        // Build a dedup dictionary keyed case-insensitively.
+        // Catalog entries are added first so they shadow any hardcoded entry
+        // with the same name (no collisions expected today, but safety).
+        var byName = new Dictionary<string, JsonObject>(StringComparer.OrdinalIgnoreCase);
 
-    private static JsonObject SchemaString() => new() { ["type"] = "string" };
-    private static JsonObject SchemaNumber() => new() { ["type"] = "number" };
-
-    private static JsonObject ToolDef(string name, string description, JsonObject? properties = null, string[]? required = null)
-    {
-        var props = properties ?? new JsonObject();
-        var req = new JsonArray();
-        foreach (var r in required ?? Array.Empty<string>()) req.Add(r);
-        return new JsonObject
+        var activeCatalog = Terminal.Mcp.ToolCatalogRegistry.Active;
+        if (activeCatalog != null)
         {
-            ["name"] = name,
-            ["description"] = description,
-            ["inputSchema"] = new JsonObject
+            foreach (var tool in activeCatalog.ListVisibleTools())
             {
-                ["type"] = "object",
-                ["properties"] = props,
-                ["required"] = req,
+                byName[tool.Name] = new JsonObject
+                {
+                    ["name"] = tool.Name,
+                    ["description"] = $"Concord SPMCP tool ({tool.Family}). Schema TBD.",
+                    ["inputSchema"] = new JsonObject
+                    {
+                        ["type"] = "object",
+                        ["additionalProperties"] = true,
+                    },
+                };
             }
-        };
+        }
+
+        var arr = new JsonArray();
+        foreach (var entry in byName.Values.OrderBy(t => t["name"]?.GetValue<string>(), StringComparer.OrdinalIgnoreCase))
+            arr.Add(entry);
+        return new JsonObject { ["tools"] = arr };
     }
 
     private async Task<JsonNode> HandleToolsCallAsync(JsonObject? pars)
     {
         var name = pars?["name"]?.GetValue<string>();
         var args = pars?["arguments"] as JsonObject ?? new JsonObject();
-        ActionResult? result = null;
 
-        if (studioProActionsEnabled)
+        // Capture request shape for diagnostics. The args JSON is the verbatim
+        // payload Claude Code / Codex / Copilot sent — invaluable when a tool
+        // fails on a malformed or unexpected argument shape. Truncated to 2000
+        // chars to keep the log readable on large requests like
+        // create_multiple_entities.
+        log?.Info($"[concord-mcp] tools/call name={name ?? "<null>"} args={Truncate(args.ToJsonString(), 2000)}");
+
+        // --- Catalog dispatch (single path for all tools) ---
+        // All tools (SPMCP, UI-actions, Maia) are registered in the ToolCatalog
+        // at MEF activation time. Family toggles via SetFamilyEnabled gate
+        // visibility. If a tool isn't in the catalog (or the catalog is null),
+        // return the standard JSON-RPC "method not found" error.
+        var catalog = Terminal.Mcp.ToolCatalogRegistry.Active;
+        if (catalog != null && name != null)
         {
-            result = name switch
+            var visible = catalog.ListVisibleNames();
+            if (visible.Contains(name, StringComparer.OrdinalIgnoreCase))
             {
-                "run_app"                       => await actions.RunAppAsync(),
-                "stop_app"                      => await actions.StopAppAsync(),
-                "refresh_project"               => await actions.RefreshProjectAsync(),
-                "save_all"                      => await actions.SaveAllAsync(),
-                "get_active_run_configuration"  => await actions.GetActiveRunConfigurationAsync(),
-                "get_app_status"                => await actions.GetAppStatusAsync(),
-                _ => null,
-            };
+                try
+                {
+                    var resultObj = await catalog.InvokeAsync(name, args);
+                    var actionResult = resultObj as ActionResult;
+                    if (actionResult?.Error != null)
+                        log?.Warn($"[concord-mcp] tool '{name}' failed: {actionResult.Error}");
+                    var payloadJson = resultObj as string ?? System.Text.Json.JsonSerializer.Serialize(
+                        resultObj,
+                        new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)
+                        {
+                            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+                        });
+                    log?.Info($"[concord-mcp] tools/call name={name} result={Truncate(payloadJson, 2000)}");
+                    return new JsonObject
+                    {
+                        ["content"] = new JsonArray
+                        {
+                            new JsonObject { ["type"] = "text", ["text"] = payloadJson }
+                        },
+                        ["isError"] = actionResult?.Error != null,
+                    };
+                }
+                catch (Exception ex)
+                {
+                    log?.Warn($"[concord-mcp] catalog tool '{name}' threw: {ex.GetType().Name}: {ex.Message}");
+                    return new JsonObject
+                    {
+                        ["content"] = new JsonArray
+                        {
+                            new JsonObject { ["type"] = "text", ["text"] = $"{{\"error\":\"{System.Text.Json.JsonEncodedText.Encode(ex.Message)}\"}}" }
+                        },
+                        ["isError"] = true,
+                    };
+                }
+            }
         }
-        if (result is null && maiaIntegrationEnabled && maia is not null)
-        {
-            result = name switch
-            {
-                "maia__send"          => await maia.SendAsync(
-                                            args["prompt"]?.GetValue<string>() ?? "",
-                                            args["sentinel"]?.GetValue<string>(),
-                                            CancellationToken.None),
-                "maia__status"        => await maia.StatusAsync(
-                                            args["handle"]?.GetValue<string>() ?? "",
-                                            CancellationToken.None),
-                "maia__wait"          => await maia.WaitAsync(
-                                            args["handle"]?.GetValue<string>() ?? "",
-                                            args["timeout_sec"]?.GetValue<double>() ?? 60.0,
-                                            CancellationToken.None),
-                "maia__ask"           => await maia.AskAsync(
-                                            args["prompt"]?.GetValue<string>() ?? "",
-                                            args["timeout_sec"]?.GetValue<double>() ?? 60.0,
-                                            CancellationToken.None),
-                "maia__reset"         => await maia.ResetAsync(CancellationToken.None),
-                "maia__busy"          => await maia.BusyAsync(CancellationToken.None),
-                "maia__ping"          => await maia.PingAsync(
-                                            args["timeout_sec"]?.GetValue<double>() ?? 5.0,
-                                            CancellationToken.None),
-                "maia__health"        => await maia.HealthAsync(CancellationToken.None),
-                "maia__new_chat"      => await maia.NewChatAsync(CancellationToken.None),
-                "maia__force_tier"    => await maia.ForceTierAsync(
-                                            args["name"]?.GetValue<string>() ?? "",
-                                            CancellationToken.None),
-                _ => null,
-            };
-        }
-        if (result is null)
-            return BuildErrorBody(code: -32601, message: $"Unknown tool '{name}'");
 
-        // Log failed tool calls. ActionResult.Fail responses don't throw, so
-        // they bypass the JSON-RPC catch above — without this line, Maia/CDP
-        // failures return clean errors to the client but leave nothing in the
-        // Concord log to diagnose against.
-        if (result.Error != null)
-            log?.Warn($"[concord-mcp] tool '{name}' failed: {result.Error}");
-
-        var payload = JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web)
-        {
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        });
-        return new JsonObject
-        {
-            ["content"] = new JsonArray
-            {
-                new JsonObject { ["type"] = "text", ["text"] = payload }
-            },
-            ["isError"] = result.Error != null,
-        };
+        return BuildErrorBody(code: -32601, message: $"Unknown tool '{name}'");
     }
+
+    private static string Truncate(string s, int max)
+        => s.Length <= max ? s : s.Substring(0, max) + $"…(+{s.Length - max} chars)";
 
     private static JsonObject BuildError(JsonNode? id, int code, string message) =>
         new() { ["jsonrpc"] = "2.0", ["id"] = id?.DeepClone(), ["error"] = new JsonObject { ["code"] = code, ["message"] = message } };

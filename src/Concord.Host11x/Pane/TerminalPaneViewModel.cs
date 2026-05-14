@@ -25,13 +25,6 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     private readonly string bundledSkillsRoot;
     private readonly string bundledRulesRoot;
     private readonly Func<string[]> consumePendingFirstRunNotices;
-    // v4.2.1: passed through from TerminalPaneExtension so the StudioProActions
-    // built during HandleSaveSettings is wired the same way as the one built
-    // during TryAutoStartActionServer. Without these the get_active_run_configuration
-    // tool returned "Active-run-configuration callback not wired" any time the
-    // user saved Settings and the action server was rebuilt.
-    private readonly Func<RunConfigurationSnapshot?>? getActiveRunConfig;
-    private readonly Func<(string? path, string? name)>? getProjectInfo;
 
     private IWebView? webView;
     /// <summary>
@@ -52,9 +45,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         Func<string?> getApplicationRootUrl,
         string bundledSkillsRoot,
         string bundledRulesRoot,
-        Func<string[]> consumePendingFirstRunNotices,
-        Func<RunConfigurationSnapshot?>? getActiveRunConfig = null,
-        Func<(string? path, string? name)>? getProjectInfo = null)
+        Func<string[]> consumePendingFirstRunNotices)
     {
         Title = title;
         this.manager = manager;
@@ -65,8 +56,6 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         this.bundledSkillsRoot = bundledSkillsRoot;
         this.bundledRulesRoot = bundledRulesRoot;
         this.consumePendingFirstRunNotices = consumePendingFirstRunNotices;
-        this.getActiveRunConfig = getActiveRunConfig;
-        this.getProjectInfo = getProjectInfo;
     }
 
     public override void InitWebView(IWebView webView)
@@ -277,20 +266,22 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     stopHotkey: "Shift+F5",
                     refreshHotkey: newRefreshHotkey,
                     log: log);
+                HostServices.SetUiAutomation(ui);
                 var probe = new RunStateProbe(getApplicationRootUrl);
-                // v4.2.1: pass the same callbacks the TryAutoStartActionServer
-                // path uses so get_active_run_configuration / get_app_status
-                // continue to work after a Settings save rebuilds the server.
-                var actions = new StudioProActions(probe, ui,
-                    getActiveRunConfig: getActiveRunConfig,
-                    getProjectInfo: getProjectInfo);
+                HostServices.SetRunStateProbe(probe);
 
-                // Build Maia plumbing only on Windows when the toggle is on. The router
-                // probe runs in the background; the router is functional even before it
-                // returns (early calls just see all-tiers-down and fail with a clear message).
-                Terminal.Maia.MaiaActions? maia = null;
+                // Build Maia plumbing only on Windows when the toggle is on AND
+                // the running Studio Pro version exposes a Maia panel (11.10+).
+                // Mirrors the gate in TerminalPaneExtension.TryAutoStartActionServer
+                // so a non-bundled MCP client posting a save payload that omits
+                // MaiaIntegrationEnabled can't fall through to the persisted
+                // 'true' on a host where the panel doesn't exist.
+                // The router probe runs in the background; the router is functional
+                // even before it returns (early calls just see all-tiers-down and
+                // fail with a clear message).
                 Terminal.Maia.CdpClient? sharedCdp = null;
-                bool maiaEnabled = OperatingSystem.IsWindows() && newMaiaIntegration;
+                bool maiaSupported = StudioProThemeProbe.IsMaiaSupported(StudioProThemeProbe.StudioProVersionFromExePath());
+                bool maiaEnabled = OperatingSystem.IsWindows() && newMaiaIntegration && maiaSupported;
                 if (maiaEnabled)
                 {
                     // v4.2.0: singleton CdpClient (see TerminalPaneExtension.cs
@@ -306,16 +297,21 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                     };
                     var router = new Terminal.Maia.MaiaRouter(transports);
                     _ = router.ProbeAllAsync(CancellationToken.None);  // fire-and-forget; safe
-                    maia = new Terminal.Maia.MaiaActions(router);
+                    var maia = new Terminal.Maia.MaiaActions(router);
+                    HostServices.SetMaiaActions(maia);
                 }
+                else
+                {
+                    HostServices.SetMaiaActions(null);
+                }
+
+                // Gate catalog families from settings before starting the server.
+                Concord.Host11x.Host11xEntry.Catalog?.SetFamilyEnabled(Terminal.Mcp.ToolFamily.UiActions, newStudioProActions);
+                Concord.Host11x.Host11xEntry.Catalog?.SetFamilyEnabled(Terminal.Mcp.ToolFamily.Maia, maiaEnabled);
 
                 manager.StartActionServer(
                     StudioProActionServer.DefaultPort,
-                    actions,
                     log,
-                    maia,
-                    studioProActionsEnabled: newStudioProActions,
-                    maiaIntegrationEnabled: maiaEnabled,
                     cdpClient: sharedCdp);
 
                 // Probe the LIVE bound port (auto-fallback may have moved off
@@ -368,7 +364,8 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 updated,
                 log,
                 currentActionServerPort: () => manager.CurrentActionServerPort,
-                probeStudioProMcpPort:   () => ProbeStudioProMcp()?.Port);
+                probeStudioProMcpPort:      () => ProbeStudioProMcp().Port,
+                probeStudioProMcpAvailable: () => ProbeStudioProMcp().Available);
 
             updated.Save(dir);
             Post("settings", BuildSettingsPayload(updated));
@@ -569,6 +566,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
             StudioProActionsEnabled: s.StudioProActionsEnabled,
             MaiaIntegrationEnabled: s.MaiaIntegrationEnabled,
             MaiaDiagnosticLogging: s.MaiaDiagnosticLogging,
+            MaiaAvailable: StudioProThemeProbe.IsMaiaSupported(StudioProThemeProbe.StudioProVersionFromExePath()),
             Platform: OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsMacOS() ? "darwin" : "linux",
             RefreshFromDiskHotkey: s.RefreshFromDiskHotkey,
             RestoreTabsOnReopen: s.RestoreTabsOnReopen,
@@ -591,24 +589,25 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     /// so the JS side can warn when our saved port differs from what Studio Pro
     /// is actually serving on. Returns null on any probe failure.
     /// </summary>
-    private StudioProMcpInfoPayload? ProbeStudioProMcp()
+    private StudioProMcpInfoPayload ProbeStudioProMcp()
     {
         try
         {
             var version = TerminalPaneExtension.StudioProVersionFromExePath();
-            if (string.IsNullOrEmpty(version))
+            var available = StudioProThemeProbe.IsMcpServerSupported(version);
+            if (!available)
             {
-                log.Info("[mcp-probe] version not detected from exe path");
-                return null;
+                log.Info($"[mcp-probe] sp-version={version ?? "<unknown>"} available=false (requires 11.10+); skipping SQLite read");
+                return new StudioProMcpInfoPayload(Enabled: null, Port: null, Available: false);
             }
-            var info = StudioProThemeProbe.ReadMcpServer(version);
-            log.Info($"[mcp-probe] sp-version={version} {info.Diagnostic}");
-            return new StudioProMcpInfoPayload(info.Enabled, info.Port);
+            var info = StudioProThemeProbe.ReadMcpServer(version!);
+            log.Info($"[mcp-probe] sp-version={version} available=true {info.Diagnostic}");
+            return new StudioProMcpInfoPayload(info.Enabled, info.Port, Available: true);
         }
         catch (Exception ex)
         {
             log.Warn($"[mcp-probe] outer exception: {ex.GetType().Name}: {ex.Message}");
-            return null;
+            return new StudioProMcpInfoPayload(Enabled: null, Port: null, Available: false);
         }
     }
 

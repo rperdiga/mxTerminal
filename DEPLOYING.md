@@ -246,6 +246,25 @@ The trade-off you should know about: the upgrade-apply re-defaults a small numbe
 
 ---
 
+## Migrating from 5.0.0-alpha.1
+
+Concord 5.0.0-alpha.2 is a drop-in upgrade. The deploy folder names (`extensions/Concord11x/`, `extensions/Concord10x/`) are unchanged. Studio Pro 11.x users get the same terminal pane experience plus the merged SPMCP tool catalog through `concord-mcp` on port 7783. Studio Pro 10.x users gain the real terminal pane (the alpha.1 placeholder menu retires).
+
+To upgrade, delete the alpha.1 `Concord11x/` or `Concord10x/` folder, then deploy the alpha.2 build (developer path) or unzip the alpha.2 release (consumer path). Settings persist in `<project>/resources/terminal-settings.json` and migrate forward automatically.
+
+---
+
+## Migrating from MCPExtension / SPMCP standalone
+
+If you previously installed MCPExtension's standalone SPMCP server, Concord 5.0.0-alpha.2 supersedes it:
+
+1. Remove the standalone MCPExtension folder from `<project>/extensions/` — its tools are now served by Concord's `concord-mcp` server on port 7783.
+2. If your MCP clients (Claude Code, Codex, Copilot CLI) referenced the standalone SPMCP server, remove those entries from their config files; Concord auto-registers `concord-mcp` instead.
+
+On Studio Pro 11.x, Concord exposes the curated allowlist (`Studio11xAllowlist.cs` — the SPMCP tools that fill gaps in Studio Pro's built-in MCP). On Studio Pro 10.24.13, Concord exposes the full SPMCP surface (no built-in MCP exists there).
+
+---
+
 ## Migrating from "Terminal" (the old name)
 
 If you used the predecessor extension (named `Terminal` / `mxTerminal`), Studio Pro will load BOTH the old `Terminal.dll` and the new `Concord.dll` if both folders exist in `<project>\extensions\`. They have different MEF identities so they won't conflict, but you'll get redundant menus and the old Terminal pane will still register itself.

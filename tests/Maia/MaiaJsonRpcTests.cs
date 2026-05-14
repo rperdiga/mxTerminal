@@ -3,11 +3,18 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using Terminal;
+using Terminal.Interop;
 using Terminal.Maia;
+using Terminal.Mcp;
 using Xunit;
 
 namespace Terminal.Tests.Maia;
 
+/// <summary>
+/// Shares the "ActionServer" collection with StudioProActionServerTests so both
+/// run sequentially and don't race on ToolCatalogRegistry.Active + HostServices.
+/// </summary>
+[Collection("ActionServer")]
 public class MaiaJsonRpcTests : IAsyncLifetime
 {
     private sealed class FakeProbe : IRunStateProbe
@@ -47,14 +54,33 @@ public class MaiaJsonRpcTests : IAsyncLifetime
     private static async Task<(StudioProActionServer server, HttpClient http)> BuildServerAsync(
         bool studioProActionsEnabled, bool maiaIntegrationEnabled)
     {
-        var router = new MaiaRouter(new IMaiaTransport[] { new StubTransport() });
-        await router.ProbeAllAsync(CancellationToken.None);
-        var maia = new MaiaActions(router);
-        var actions = new StudioProActions(new FakeProbe(), new FakeUi());
-        var s = new StudioProActionServer(
-            actions, port: 0, log: null, maia: maia,
-            studioProActionsEnabled: studioProActionsEnabled,
-            maiaIntegrationEnabled: maiaIntegrationEnabled);
+        HostServices.Reset();
+        HostServices.SetRunStateProbe(new FakeProbe());
+        HostServices.SetUiAutomation(new FakeUi());
+
+        // Wire the real Maia instance into HostServices when maiaIntegrationEnabled.
+        if (maiaIntegrationEnabled)
+        {
+            var router = new MaiaRouter(new IMaiaTransport[] { new StubTransport() });
+            await router.ProbeAllAsync(CancellationToken.None);
+            var maia = new MaiaActions(router);
+            HostServices.SetMaiaActions(maia);
+        }
+        else
+        {
+            HostServices.SetMaiaActions(null);
+        }
+
+        // Build the catalog with both UI-action and Maia tool families, then
+        // gate visibility via SetFamilyEnabled to match the requested flags.
+        var catalog = new ToolCatalog(TargetMode.Studio10x);
+        UiActionsBootstrap.Register(catalog);
+        MaiaToolsBootstrap.Register(catalog);
+        catalog.SetFamilyEnabled(ToolFamily.UiActions, studioProActionsEnabled);
+        catalog.SetFamilyEnabled(ToolFamily.Maia, maiaIntegrationEnabled);
+        ToolCatalogRegistry.Active = catalog;
+
+        var s = new StudioProActionServer(port: 0);
         s.Start();
         var c = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{s.Port}") };
         return (s, c);
@@ -66,7 +92,14 @@ public class MaiaJsonRpcTests : IAsyncLifetime
             studioProActionsEnabled: true, maiaIntegrationEnabled: true);
     }
 
-    public Task DisposeAsync() { server?.Dispose(); http.Dispose(); return Task.CompletedTask; }
+    public Task DisposeAsync()
+    {
+        server?.Dispose();
+        http.Dispose();
+        HostServices.Reset();
+        ToolCatalogRegistry.Active = null;
+        return Task.CompletedTask;
+    }
 
     private async Task<JsonDocument> Post(string body)
     {
@@ -99,62 +132,82 @@ public class MaiaJsonRpcTests : IAsyncLifetime
     [Fact]
     public async Task ToolsList_StudioProActionsDisabled_ReturnsOnlyMaiaTools()
     {
+        var savedCatalog = ToolCatalogRegistry.Active;
+        var savedMaia = HostServices.MaiaActions;
         var (s, c) = await BuildServerAsync(
             studioProActionsEnabled: false, maiaIntegrationEnabled: true);
-        using var _s = s;
-        using var _c = c;
+        try
+        {
+            using var resp = await c.PostAsync("/mcp",
+                new StringContent("""{"jsonrpc":"2.0","id":1,"method":"tools/list"}""",
+                    Encoding.UTF8, "application/json"));
+            resp.EnsureSuccessStatusCode();
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
 
-        using var resp = await c.PostAsync("/mcp",
-            new StringContent("""{"jsonrpc":"2.0","id":1,"method":"tools/list"}""",
-                Encoding.UTF8, "application/json"));
-        resp.EnsureSuccessStatusCode();
-        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            var names = doc.RootElement.GetProperty("result").GetProperty("tools")
+                .EnumerateArray().Select(t => t.GetProperty("name").GetString()).ToList();
 
-        var names = doc.RootElement.GetProperty("result").GetProperty("tools")
-            .EnumerateArray().Select(t => t.GetProperty("name").GetString()).ToList();
-
-        names.Should().BeEquivalentTo(new[] {
-            "maia__send", "maia__status", "maia__wait",
-            "maia__ask",  "maia__reset",  "maia__force_tier",
-            // v4.2.1 introspection tools.
-            "maia__busy", "maia__ping", "maia__health", "maia__new_chat",
-        });
-        // Belt-and-braces: confirm none of the studio-pro tools leaked in.
-        names.Should().NotContain("run_app");
-        names.Should().NotContain("stop_app");
-        names.Should().NotContain("refresh_project");
-        names.Should().NotContain("save_all");
-        names.Should().NotContain("get_active_run_configuration");
-        names.Should().NotContain("get_app_status");
+            names.Should().BeEquivalentTo(new[] {
+                "maia__send", "maia__status", "maia__wait",
+                "maia__ask",  "maia__reset",  "maia__force_tier",
+                // v4.2.1 introspection tools.
+                "maia__busy", "maia__ping", "maia__health", "maia__new_chat",
+            });
+            // Belt-and-braces: confirm none of the studio-pro tools leaked in.
+            names.Should().NotContain("run_app");
+            names.Should().NotContain("stop_app");
+            names.Should().NotContain("refresh_project");
+            names.Should().NotContain("save_all");
+            names.Should().NotContain("get_active_run_configuration");
+            names.Should().NotContain("get_app_status");
+        }
+        finally
+        {
+            s.Dispose();
+            c.Dispose();
+            // Restore fixture-level state so subsequent tests use the right catalog.
+            ToolCatalogRegistry.Active = savedCatalog;
+            HostServices.SetMaiaActions(savedMaia);
+        }
     }
 
     [Fact]
     public async Task ToolsList_MaiaIntegrationDisabled_ReturnsOnlyStudioProTools()
     {
+        var savedCatalog = ToolCatalogRegistry.Active;
+        var savedMaia = HostServices.MaiaActions;
         var (s, c) = await BuildServerAsync(
             studioProActionsEnabled: true, maiaIntegrationEnabled: false);
-        using var _s = s;
-        using var _c = c;
+        try
+        {
+            using var resp = await c.PostAsync("/mcp",
+                new StringContent("""{"jsonrpc":"2.0","id":1,"method":"tools/list"}""",
+                    Encoding.UTF8, "application/json"));
+            resp.EnsureSuccessStatusCode();
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
 
-        using var resp = await c.PostAsync("/mcp",
-            new StringContent("""{"jsonrpc":"2.0","id":1,"method":"tools/list"}""",
-                Encoding.UTF8, "application/json"));
-        resp.EnsureSuccessStatusCode();
-        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            var names = doc.RootElement.GetProperty("result").GetProperty("tools")
+                .EnumerateArray().Select(t => t.GetProperty("name").GetString()).ToList();
 
-        var names = doc.RootElement.GetProperty("result").GetProperty("tools")
-            .EnumerateArray().Select(t => t.GetProperty("name").GetString()).ToList();
-
-        names.Should().BeEquivalentTo(new[] {
-            "run_app", "stop_app", "refresh_project",
-            "save_all", "get_active_run_configuration", "get_app_status",
-        });
-        // Belt-and-braces: confirm no maia__* tools leaked in.
-        names.Should().NotContain("maia__send");
-        names.Should().NotContain("maia__status");
-        names.Should().NotContain("maia__wait");
-        names.Should().NotContain("maia__ask");
-        names.Should().NotContain("maia__reset");
-        names.Should().NotContain("maia__force_tier");
+            names.Should().BeEquivalentTo(new[] {
+                "run_app", "stop_app", "refresh_project",
+                "save_all", "get_active_run_configuration", "get_app_status",
+            });
+            // Belt-and-braces: confirm no maia__* tools leaked in.
+            names.Should().NotContain("maia__send");
+            names.Should().NotContain("maia__status");
+            names.Should().NotContain("maia__wait");
+            names.Should().NotContain("maia__ask");
+            names.Should().NotContain("maia__reset");
+            names.Should().NotContain("maia__force_tier");
+        }
+        finally
+        {
+            s.Dispose();
+            c.Dispose();
+            // Restore fixture-level state so subsequent tests use the right catalog.
+            ToolCatalogRegistry.Active = savedCatalog;
+            HostServices.SetMaiaActions(savedMaia);
+        }
     }
 }

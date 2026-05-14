@@ -1,0 +1,12 @@
+# Sweep output artifacts. Re-generated each run; commit deliberately, not
+# automatically (see plan Task 10 for the convention).
+#
+# findings.json
+# findings.md
+# findings.json.tmp
+
+# Transient artifacts from sweep cycles (debugging backups, run logs).
+# Created by hand for diff/baseline workflows; not part of branch history.
+findings.before-*.json
+findings.before-*.md
+*.log

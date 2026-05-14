@@ -9,7 +9,7 @@
     <LangVersion>preview</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
-    <Version>5.0.0-alpha.1</Version>
+    <Version>5.0.0-alpha.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,6 +23,9 @@
     <PackageReference Include="Eto.Forms" Version="2.9.*" />
     <PackageReference Include="System.Text.Json" Version="8.0.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.*" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.*" />
   </ItemGroup>
 
   <ItemGroup>

@@ -26,6 +26,14 @@ public static class SettingsApplyHelper
     /// <c>mendix-studio-pro</c> entry written into <c>.mcp.json</c> uses
     /// this port (with fallback to <c>next.McpPort</c>).
     /// </param>
+    /// <param name="probeStudioProMcpAvailable">
+    /// Returns whether the running Studio Pro version exposes the built-in
+    /// <c>mendix-studio-pro</c> MCP server at all (requires 11.10+). When
+    /// false, <see cref="ApplyMcpConfig"/> skips the upsert path AND removes
+    /// any stale <c>mendix-studio-pro</c> entry from <c>.mcp.json</c> /
+    /// <c>~/.codex/config.toml</c> — covers the cross-version migration case
+    /// where a project last opened on 11.10+ is now opened on 10.x or 11.6–11.9.
+    /// </param>
     public static string[] ApplyAll(
         string projectDir,
         string bundledSkillsRoot,
@@ -34,10 +42,11 @@ public static class SettingsApplyHelper
         TerminalSettings next,
         Logger log,
         Func<int?> currentActionServerPort,
-        Func<int?> probeStudioProMcpPort)
+        Func<int?> probeStudioProMcpPort,
+        Func<bool> probeStudioProMcpAvailable)
     {
         var touched = new List<string>();
-        touched.AddRange(ApplyMcpConfig(projectDir, prev, next, log, probeStudioProMcpPort));
+        touched.AddRange(ApplyMcpConfig(projectDir, prev, next, log, probeStudioProMcpPort, probeStudioProMcpAvailable));
         touched.AddRange(ApplyActionsMcpConfig(projectDir, prev, next, log, currentActionServerPort));
         touched.AddRange(ApplySkillsConfig(projectDir, bundledSkillsRoot, prev, next, log));
         touched.AddRange(ApplyRulesConfig(projectDir, bundledRulesRoot, prev, next, log));
@@ -48,16 +57,28 @@ public static class SettingsApplyHelper
     /// Diff between previous and new MCP settings, written to <c>.mcp.json</c>
     /// (Claude Code + Copilot CLI) and <c>~/.codex/config.toml</c> (Codex).
     /// Mirrors the behavior previously inline on TerminalPaneViewModel.
+    /// <para>
+    /// When <paramref name="probeStudioProMcpAvailable"/> returns false (Studio
+    /// Pro version &lt; 11.10), the upsert path is skipped AND the remove path
+    /// is forced — even if neither prev nor next claims the entry was wired.
+    /// This cleans up stale <c>mendix-studio-pro</c> entries left behind when
+    /// a project last opened on 11.10+ is now opened on 10.x or 11.6–11.9.
+    /// </para>
     /// </summary>
     private static string[] ApplyMcpConfig(
         string projectDir,
         TerminalSettings prev,
         TerminalSettings next,
         Logger log,
-        Func<int?> probeStudioProMcpPort)
+        Func<int?> probeStudioProMcpPort,
+        Func<bool> probeStudioProMcpAvailable)
     {
+        var available = probeStudioProMcpAvailable();
+
         var prevClients = new HashSet<string>(prev.McpClients, StringComparer.OrdinalIgnoreCase);
-        var nextClients = next.McpEnabled
+        // When the feature isn't available, treat `next` as MCP-off regardless
+        // of saved settings — Concord must not advertise a non-existent server.
+        var nextClients = (available && next.McpEnabled)
             ? new HashSet<string>(next.McpClients, StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -72,12 +93,20 @@ public static class SettingsApplyHelper
         var toml = new McpTomlConfigurator();
         var touched = new List<string>();
 
-        log.Info($"[mcp-config] primary diff jsonNeeded={jsonNeeded} jsonHadIt={jsonHadIt} tomlNeeded={tomlNeeded} tomlHadIt={tomlHadIt} url={url}");
+        log.Info($"[mcp-config] primary diff available={available} jsonNeeded={jsonNeeded} jsonHadIt={jsonHadIt} tomlNeeded={tomlNeeded} tomlHadIt={tomlHadIt} url={url}");
 
         try
         {
             if (jsonNeeded) { json.Upsert(url); log.Info($"[mcp-config-json] upserted {McpJsonConfigurator.ServerName} -> {url}"); touched.Add(LabelForJson(nextClients)); }
             else if (jsonHadIt) { json.Remove(); log.Info($"[mcp-config-json] removed {McpJsonConfigurator.ServerName}"); touched.Add(LabelForJson(prevClients) + " (removed)"); }
+            else if (!available)
+            {
+                // Forced cleanup: project may have a stale mendix-studio-pro
+                // entry from a prior 11.10+ open. Remove is idempotent — a
+                // no-op when the entry isn't present.
+                json.Remove();
+                log.Info($"[mcp-config-json] forced-cleanup {McpJsonConfigurator.ServerName} (Studio Pro version doesn't expose this MCP)");
+            }
         }
         catch (Exception ex) { log.Error("[mcp-config-json] primary write failed", ex); }
 
@@ -85,6 +114,11 @@ public static class SettingsApplyHelper
         {
             if (tomlNeeded) { toml.Upsert(url); log.Info($"[mcp-config-toml] upserted {McpTomlConfigurator.ServerName} -> {url} at {toml.FilePath}"); touched.Add("Codex"); }
             else if (tomlHadIt) { toml.Remove(); log.Info($"[mcp-config-toml] removed {McpTomlConfigurator.ServerName}"); touched.Add("Codex (removed)"); }
+            else if (!available)
+            {
+                toml.Remove();
+                log.Info($"[mcp-config-toml] forced-cleanup {McpTomlConfigurator.ServerName} (Studio Pro version doesn't expose this MCP)");
+            }
         }
         catch (Exception ex) { log.Error("[mcp-config-toml] primary write failed", ex); }
 

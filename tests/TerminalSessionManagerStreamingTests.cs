@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FluentAssertions;
 using Terminal;
 using Xunit;
@@ -6,6 +7,20 @@ namespace Terminal.Tests;
 
 public class TerminalSessionManagerStreamingTests
 {
+    // Polling helper — replaces fixed Task.Delay() in tests that wait on the
+    // PTY read loop. Fixed delays flake under parallel xUnit load when the
+    // threadpool is contended; polling reaches the steady state as soon as
+    // it's reached and only times out when the read loop is genuinely stuck.
+    private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 2000, int pollMs = 10)
+    {
+        var sw = Stopwatch.StartNew();
+        while (sw.ElapsedMilliseconds < timeoutMs)
+        {
+            if (condition()) return;
+            await Task.Delay(pollMs);
+        }
+    }
+
     [Fact]
     public async Task PtyOutput_FiresOutputEvent_AfterCoalesceWindow()
     {
@@ -18,8 +33,8 @@ public class TerminalSessionManagerStreamingTests
         fake.LastSession.PushOutput(new byte[] { 0x41, 0x42 });
         fake.LastSession.PushOutput(new byte[] { 0x43 });
 
-        // Output is coalesced on a ~16ms timer; allow >50ms for it to flush.
-        await Task.Delay(100);
+        // Output is coalesced on a ~16ms timer; poll until the flush fires.
+        await WaitUntilAsync(() => received.Count >= 1 && received[0].Length >= 3);
 
         received.Should().HaveCount(1, "two pushes within the coalesce window become one event");
         received[0].Should().Equal(0x41, 0x42, 0x43);
@@ -34,7 +49,7 @@ public class TerminalSessionManagerStreamingTests
         fake.LastSession.PushOutput(new byte[] { 1, 2, 3 });
         fake.LastSession.PushOutput(new byte[] { 4, 5 });
 
-        await Task.Delay(100); // let read loop catch up
+        await WaitUntilAsync(() => mgr.SnapshotBuffer(id).Length >= 5);
 
         mgr.SnapshotBuffer(id).Should().Equal(1, 2, 3, 4, 5);
     }
@@ -47,7 +62,13 @@ public class TerminalSessionManagerStreamingTests
         var (id, _) = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\", 80, 24);
         fake.LastSession.PushOutput(new byte[] { 1, 2, 3, 4, 5, 6 });
 
-        await Task.Delay(100);
+        // Buffer caps at 4; once it hits 4 bytes AND the tail byte is 6, all
+        // 6 pushed bytes have been processed through the ring.
+        await WaitUntilAsync(() =>
+        {
+            var buf = mgr.SnapshotBuffer(id);
+            return buf.Length == 4 && buf[3] == 6;
+        });
 
         mgr.SnapshotBuffer(id).Should().Equal(3, 4, 5, 6);
     }
@@ -64,7 +85,7 @@ public class TerminalSessionManagerStreamingTests
         var (id, _) = await mgr.CreateSessionAsync("cmd.exe", Array.Empty<string>(), "C:\\", 80, 24);
         fake.LastSession.RaiseExited(7);
 
-        await Task.Delay(50);
+        await WaitUntilAsync(() => capturedId != null);
 
         capturedId.Should().Be(id);
         capturedCode.Should().Be(7);
