@@ -14,4 +14,20 @@
 //             in side_effect_check sub-record of findings.json
 //   notes:    free-text intent (especially for known-bug entries)
 [
+  {
+    "name": "list_modules",
+    "family": "DomainModel",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "No args required; returns all 10 modules. Used as classification smoke test."
+  }
+  ,{
+    "name": "read_project_info",
+    "family": "DomainModel",
+    "phase": "read",
+    "args": {},
+    "expected": "ok",
+    "notes": "KNOWN FAIL pre-sweep: ModuleProxy KeyNotFound (MendixDomainModelTools.cs:769-775)."
+  }
 ]
