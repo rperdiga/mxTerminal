@@ -137,6 +137,31 @@ public static class HostServices
     }
 
     /// <summary>
+    /// Pane-scoped setter for the App host. The Mendix <c>IModel</c> that
+    /// <see cref="IStudioProAppHost.ProjectPath"/> needs is only available
+    /// after the pane opens, so the activation-time <see cref="Register"/>
+    /// path registers a placeholder that returns empty strings. The pane
+    /// calls this with a real implementation in <c>TryAutoStartActionServer</c>
+    /// before the action server begins dispatching tools.
+    /// </summary>
+    public static void SetApp(IStudioProAppHost? app)
+    {
+        lock (_gate) { _app = app; }
+    }
+
+    /// <summary>
+    /// Pane-scoped setter for the RunConfigurations host. Like
+    /// <see cref="SetApp"/>, the real implementation needs the pane's
+    /// <c>CurrentApp</c> closure and the MEF-imported
+    /// <c>ILocalRunConfigurationsService</c>, neither of which is available
+    /// at activation time.
+    /// </summary>
+    public static void SetRunConfigurations(IRunConfigurationsHost? runConfigs)
+    {
+        lock (_gate) { _runConfigs = runConfigs; }
+    }
+
+    /// <summary>
     /// Legacy 4-argument overload retained for backward compatibility.
     /// New accessors (Model … MicroflowAuthoring) will throw until the
     /// 11-argument overload is called.

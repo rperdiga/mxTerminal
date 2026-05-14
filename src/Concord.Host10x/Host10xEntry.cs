@@ -28,9 +28,15 @@ public class Host10xEntry
         if (System.Threading.Interlocked.Exchange(ref _initialized, 1) != 0) return;
 
         HostContext.Initialize(TargetMode.Studio10x);
+        // App + RunConfigurations are registered as placeholders here because
+        // they need IModel (CurrentApp) and the MEF-imported
+        // ILocalRunConfigurationsService respectively — neither is available
+        // at MEF activation time. The pane swaps in fully-wired instances via
+        // HostServices.SetApp / SetRunConfigurations in TryAutoStartActionServer
+        // before the action server begins dispatching tools.
         HostServices.Register(
-            app: new Interop.StudioProAppHost10x(),
-            runConfigs: new Interop.RunConfigurationsHost10x(),
+            app: new Interop.StudioProAppHost10x(() => null),
+            runConfigs: new Interop.RunConfigurationsHost10x(() => null, service: null),
             runState: new Interop.RunStateHost10x(),
             moduleImport: new Interop.ModuleImportHost10x());
 

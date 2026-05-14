@@ -306,6 +306,15 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
             });
             HostServices.SetRunStateProbe(probe);
 
+            // Wire the App + RunConfigurations hosts with the pane's live
+            // CurrentApp closure and the MEF-imported run-configs service.
+            // The Host10xEntry registers placeholders at activation time
+            // (because IModel and ILocalRunConfigurationsService are not
+            // available until the pane opens); we swap in real instances
+            // here before the action server begins dispatching tools.
+            HostServices.SetApp(new StudioProAppHost10x(() => CurrentApp));
+            HostServices.SetRunConfigurations(new RunConfigurationsHost10x(() => CurrentApp, localRunConfigs));
+
             // Wire the 7 model-tier Interop hosts. IModel is per-project, so
             // this happens here (pane Open) rather than in Host10xEntry. Skip
             // when CurrentApp is unavailable — SPMCP tools will surface
@@ -695,7 +704,12 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         try
         {
             var version = StudioProVersionFromExePath();
-            if (!string.IsNullOrEmpty(version))
+            // Studio Pro 10.x never ships the built-in MCP server (the feature
+            // landed in 11.10), so the version check below evaluates false for
+            // every Studio Pro that loads this host. Kept for symmetry with
+            // the Host11x advisory and to remain correct if Host10x ever loads
+            // on a version where the threshold would matter.
+            if (!string.IsNullOrEmpty(version) && StudioProThemeProbe.IsMcpServerSupported(version))
             {
                 var info = StudioProThemeProbe.ReadMcpServer(version);
                 if (info.Enabled != true)

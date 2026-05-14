@@ -270,11 +270,18 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                 var probe = new RunStateProbe(getApplicationRootUrl);
                 HostServices.SetRunStateProbe(probe);
 
-                // Build Maia plumbing only on Windows when the toggle is on. The router
-                // probe runs in the background; the router is functional even before it
-                // returns (early calls just see all-tiers-down and fail with a clear message).
+                // Build Maia plumbing only on Windows when the toggle is on AND
+                // the running Studio Pro version exposes a Maia panel (11.10+).
+                // Mirrors the gate in TerminalPaneExtension.TryAutoStartActionServer
+                // so a non-bundled MCP client posting a save payload that omits
+                // MaiaIntegrationEnabled can't fall through to the persisted
+                // 'true' on a host where the panel doesn't exist.
+                // The router probe runs in the background; the router is functional
+                // even before it returns (early calls just see all-tiers-down and
+                // fail with a clear message).
                 Terminal.Maia.CdpClient? sharedCdp = null;
-                bool maiaEnabled = OperatingSystem.IsWindows() && newMaiaIntegration;
+                bool maiaSupported = StudioProThemeProbe.IsMaiaSupported(StudioProThemeProbe.StudioProVersionFromExePath());
+                bool maiaEnabled = OperatingSystem.IsWindows() && newMaiaIntegration && maiaSupported;
                 if (maiaEnabled)
                 {
                     // v4.2.0: singleton CdpClient (see TerminalPaneExtension.cs

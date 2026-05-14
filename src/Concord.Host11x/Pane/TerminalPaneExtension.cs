@@ -302,6 +302,17 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
             });
             HostServices.SetRunStateProbe(probe);
 
+            // Wire the App + RunConfigurations hosts with the pane's live
+            // CurrentApp closure and the MEF-imported run-configs service.
+            // The Host11xEntry registers placeholders at activation time
+            // (because IModel and ILocalRunConfigurationsService are not
+            // available until the pane opens); we swap in real instances
+            // here before the action server begins dispatching tools, so
+            // get_app_status / get_active_run_configuration are functional
+            // from the first MCP request.
+            HostServices.SetApp(new StudioProAppHost11x(() => CurrentApp));
+            HostServices.SetRunConfigurations(new RunConfigurationsHost11x(() => CurrentApp, localRunConfigs));
+
             // Wire the 7 model-tier Interop hosts. IModel is per-project, so
             // this happens here (pane Open) rather than in Host11xEntry. Skip
             // when CurrentApp is unavailable — SPMCP tools will surface
@@ -718,7 +729,13 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         try
         {
             var version = StudioProVersionFromExePath();
-            if (!string.IsNullOrEmpty(version))
+            // Only probe / advise when the running Studio Pro version actually
+            // ships the built-in MCP server (11.10+). On older 11.x or any 10.x
+            // the EnableMcpServer key is absent from Settings.sqlite so the
+            // probe would return Enabled=null and the advisory would point
+            // users at a Maia preferences pane that doesn't exist on their
+            // version.
+            if (!string.IsNullOrEmpty(version) && StudioProThemeProbe.IsMcpServerSupported(version))
             {
                 var info = StudioProThemeProbe.ReadMcpServer(version);
                 if (info.Enabled != true)

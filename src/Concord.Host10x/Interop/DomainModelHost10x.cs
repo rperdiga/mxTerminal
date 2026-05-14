@@ -329,8 +329,25 @@ public sealed class DomainModelHost10x : IDomainModelHost
 
         using var tx = _model.StartTransaction($"Update attribute '{attribute.Name}' on '{mxEntity.Name}'");
 
-        // Update type
-        mxAttr.Type = CreateAttributeTypeFromSpec(newSpec, module);
+        // Only rebuild the underlying IAttributeType when the caller actually
+        // asked to change the type. The tool layer always carries Kind forward
+        // from the existing attribute when no `type` arg is supplied, so we
+        // detect a real type-change request by comparing against the current
+        // kind and looking for explicit enumeration-retarget data. Without
+        // this guard, a documentation-only or default-value-only update
+        // (a) silently resets String Length / DateTime LocalizeDate to the
+        // platform default, and (b) throws on Enumeration attributes because
+        // CreateAttributeTypeFromSpec demands a qualified-name or values list
+        // that the caller had no reason to supply. The interface contract
+        // ("The host applies only the non-null fields of newSpec") covers the
+        // type rebuild too.
+        var currentKind = MapAttributeKind(mxAttr.Type);
+        bool typeChangeRequested =
+            newSpec.Kind != currentKind
+            || !string.IsNullOrEmpty(newSpec.EnumerationQualifiedName)
+            || (newSpec.EnumerationValues != null && newSpec.EnumerationValues.Count > 0);
+        if (typeChangeRequested)
+            mxAttr.Type = CreateAttributeTypeFromSpec(newSpec, module);
 
         // Update max length if string
         if (newSpec.MaxLength.HasValue && mxAttr.Type is IStringAttributeType strType)
