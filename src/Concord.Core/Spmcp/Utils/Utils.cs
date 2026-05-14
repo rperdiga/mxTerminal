@@ -99,7 +99,7 @@ public class Utils
             return call();
         }
         catch (Exception ex) when (ex is KeyNotFoundException
-                                || ex.Message.Contains("ModuleProxy"))
+                                && ex.Message.Contains("ModuleProxy"))
         {
             logger.LogWarning(ex, "{Operation} failed for module {Module}", operation, moduleId.Name);
             skipped.Add(new
