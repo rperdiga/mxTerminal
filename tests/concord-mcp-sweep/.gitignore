@@ -4,3 +4,9 @@
 # findings.json
 # findings.md
 # findings.json.tmp
+
+# Transient artifacts from sweep cycles (debugging backups, run logs).
+# Created by hand for diff/baseline workflows; not part of branch history.
+findings.before-*.json
+findings.before-*.md
+*.log

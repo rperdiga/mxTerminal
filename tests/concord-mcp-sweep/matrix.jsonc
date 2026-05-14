@@ -18,8 +18,8 @@
   {
     "name": "create_entity", "family": "DomainModel", "phase": "setup",
     "args": { "module_name": "MyFirstModule", "entity_name": "Customer" },
-    "expected": "either",
-    "notes": "Fixture for query_associations, read_attribute_details, copy_model_element. expected:either for idempotency across reruns."
+    "expected": "ok",
+    "notes": "Fixture for query_associations, read_attribute_details, copy_model_element. expected:either for idempotency across reruns. [tightened to expected:ok 2026-05-14 after fresh-state validation; see phase4-fresh-state-validation.md]"
   }
   ,{
     "name": "add_attribute", "family": "DomainModel", "phase": "setup",
@@ -396,8 +396,8 @@
     "family": "DomainModel",
     "phase": "mutate",
     "args": { "module_name": "ConcordSweep_create_module" },
-    "expected": "either",
-    "notes": "Creates sweep-owned module; used as rename_module target in Block 7. [idempotency: matrix re-runs against pre-existing project state]"
+    "expected": "ok",
+    "notes": "Creates sweep-owned module; used as rename_module target in Block 7. [idempotency: matrix re-runs against pre-existing project state] [tightened to expected:ok 2026-05-14 after fresh-state validation; see phase4-fresh-state-validation.md]"
   }
   ,{
     "name": "create_entity",
@@ -445,8 +445,8 @@
     "family": "DomainModel",
     "phase": "mutate",
     "args": { "entity_name": "SweepEntity_create_entity", "attribute_name": "SweepAttr_add_attribute", "new_name": "SweepAttr_rename_attribute", "module_name": "MyFirstModule" },
-    "expected": "either",
-    "notes": "Renames SweepAttr_add_attribute → SweepAttr_rename_attribute; depends on add_attribute. [idempotency: on re-runs, SweepAttr_rename_attribute already exists — 'Name is not valid or is not unique' — because entity may survive from a prior partial run. expected:either.]"
+    "expected": "ok",
+    "notes": "Renames SweepAttr_add_attribute → SweepAttr_rename_attribute; depends on add_attribute. [idempotency: on re-runs, SweepAttr_rename_attribute already exists — 'Name is not valid or is not unique' — because entity may survive from a prior partial run. expected:either.] [tightened to expected:ok 2026-05-14 after fresh-state validation; see phase4-fresh-state-validation.md]"
   }
   ,{
     "name": "set_calculated_attribute",
@@ -526,8 +526,8 @@
     "family": "DomainModel",
     "phase": "mutate",
     "args": { "associations": [{ "name": "SweepEntityA_create_multiple_entities_SweepEntityB_create_multiple_entities", "parent": "SweepEntityA_create_multiple_entities", "child": "SweepEntityB_create_multiple_entities" }], "module_name": "MyFirstModule" },
-    "expected": "either",
-    "notes": "Creates association between sweep-created entities; depends on create_multiple_entities. [idempotency: matrix re-runs against pre-existing project state]"
+    "expected": "ok",
+    "notes": "Creates association between sweep-created entities; depends on create_multiple_entities. [idempotency: matrix re-runs against pre-existing project state] [tightened to expected:ok 2026-05-14 after fresh-state validation; see phase4-fresh-state-validation.md]"
   }
   ,{
     "name": "update_association",
@@ -577,8 +577,8 @@
     "family": "ConstantsEnums",
     "phase": "mutate",
     "args": { "name": "SweepEnum_create_enumeration", "module_name": "MyFirstModule", "values": ["Draft", "Submitted", "Approved"] },
-    "expected": "either",
-    "notes": "Creates SweepEnum_create_enumeration with 3 values; used by update_enumeration and rename_enumeration_value. [idempotency: matrix re-runs against pre-existing project state]"
+    "expected": "ok",
+    "notes": "Creates SweepEnum_create_enumeration with 3 values; used by update_enumeration and rename_enumeration_value. [idempotency: matrix re-runs against pre-existing project state] [tightened to expected:ok 2026-05-14 after fresh-state validation; see phase4-fresh-state-validation.md]"
   }
   ,{
     "name": "update_enumeration",
@@ -593,8 +593,8 @@
     "family": "ConstantsEnums",
     "phase": "mutate",
     "args": { "enumeration_name": "SweepEnum_create_enumeration", "value_name": "Draft", "new_name": "NewDraft", "module_name": "MyFirstModule" },
-    "expected": "either",
-    "notes": "Renames Draft → NewDraft in SweepEnum_create_enumeration; depends on create_enumeration. (New is a Mendix reserved word.) [idempotency: matrix re-runs against pre-existing project state]"
+    "expected": "ok",
+    "notes": "Renames Draft → NewDraft in SweepEnum_create_enumeration; depends on create_enumeration. (New is a Mendix reserved word.) [idempotency: matrix re-runs against pre-existing project state] [tightened to expected:ok 2026-05-14 after fresh-state validation; see phase4-fresh-state-validation.md]"
   }
   ,{
     "name": "create_constant",
@@ -737,8 +737,8 @@
     "family": "DomainModel",
     "phase": "mutate",
     "args": { "module_name": "ConcordSweep_create_module", "new_name": "ConcordSweep_rename_module" },
-    "expected": "either",
-    "notes": "Renames sweep-owned module ConcordSweep_create_module → ConcordSweep_rename_module; only operates on sweep-created module. [idempotency: matrix re-runs against pre-existing project state]"
+    "expected": "ok",
+    "notes": "Renames sweep-owned module ConcordSweep_create_module → ConcordSweep_rename_module; only operates on sweep-created module. [idempotency: matrix re-runs against pre-existing project state] [tightened to expected:ok 2026-05-14 after fresh-state validation; see phase4-fresh-state-validation.md]"
   }
   ,{
     "name": "delete_document",
