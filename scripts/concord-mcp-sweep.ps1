@@ -171,19 +171,47 @@ function Test-SweepEntry {
         }
     }
 
+    # Optional side-effect verifier -- runs a follow-up tool and stores
+    # its raw response as a sub-field. The mutation entry's top-level
+    # status remains the mutation's own outcome unless the verifier
+    # itself reveals the model didn't change (SIDE-EFFECT promotion
+    # is a manual triage decision based on inspecting the sub-record).
+    $sideEffectCheck = $null
+    if ($status -eq "PASS" -and $Entry.verify) {
+        $vArgs = if ($null -eq $Entry.verify.args) { @{} } else { $Entry.verify.args }
+        try {
+            $vEnvelope = Invoke-McpToolCall -Name $Entry.verify.name -Arguments $vArgs
+            $sideEffectCheck = [PSCustomObject]@{
+                tool         = $Entry.verify.name
+                args         = $vArgs
+                raw_response = $vEnvelope
+                status       = if ($vEnvelope.result.isError) { "verifier_errored" } else { "ran" }
+            }
+        } catch {
+            $sideEffectCheck = [PSCustomObject]@{
+                tool         = $Entry.verify.name
+                args         = $vArgs
+                raw_response = $null
+                status       = "verifier_threw"
+                error        = $_.Exception.Message
+            }
+        }
+    }
+
     $elapsedMs = [int]((Get-Date) - $started).TotalMilliseconds
     return [PSCustomObject]@{
-        name          = $Entry.name
-        family        = $Entry.family
-        phase         = $Entry.phase
-        status        = $status
-        expected      = $Entry.expected
-        args          = $Entry.args
-        raw_response  = $rawEnvelope
-        error_summary = $errorSummary
-        severity      = $severity
-        elapsed_ms    = $elapsedMs
-        timestamp     = (Get-Date).ToUniversalTime().ToString("o")
+        name              = $Entry.name
+        family            = $Entry.family
+        phase             = $Entry.phase
+        status            = $status
+        expected          = $Entry.expected
+        args              = $Entry.args
+        raw_response      = $rawEnvelope
+        error_summary     = $errorSummary
+        severity          = $severity
+        side_effect_check = $sideEffectCheck
+        elapsed_ms        = $elapsedMs
+        timestamp         = (Get-Date).ToUniversalTime().ToString("o")
     }
 }
 
@@ -289,6 +317,23 @@ Write-Host "  tools/list returned $($serverTools.Count) tools"
 $entries = Read-SweepMatrix -Path $Matrix
 Write-Host "  matrix has $($entries.Count) entries"
 
+# Apply -Only filter (tool-name subset).
+if ($Only.Count -gt 0) {
+    $entries = @($entries | Where-Object { $Only -contains $_.name })
+    Write-Host "  -Only filter: $($entries.Count) entries match"
+}
+
+# Apply -Phase filter.
+if ($Phase.Count -gt 0) {
+    $entries = @($entries | Where-Object { $Phase -contains $_.phase })
+    Write-Host "  -Phase filter: $($entries.Count) entries match"
+}
+
+# Stable phase ordering: read -> mutate -> lifecycle. Preserves
+# in-phase original order from matrix.jsonc.
+$phaseOrder = @{ "read" = 0; "mutate" = 1; "lifecycle" = 2 }
+$entries = $entries | Sort-Object @{ Expression = { $phaseOrder[$_.phase] }; Ascending = $true }
+
 if ($DryRun) {
     Write-Host "[concord-mcp-sweep] -DryRun: planned execution" -ForegroundColor Yellow
     $entries | ForEach-Object { Write-Host ("    [{0}] {1}.{2}" -f $_.phase, $_.family, $_.name) }
@@ -302,15 +347,22 @@ if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out
 Write-Host "[concord-mcp-sweep] executing" -ForegroundColor Cyan
 Write-Host "  ledger: $jsonPath + $mdPath"
 $results = @()
-foreach ($entry in $entries) {
-    Write-Host -NoNewline ("  -> {0} ... " -f $entry.name)
-    $r = Test-SweepEntry -Entry $entry
-    $color = if ($r.status -eq "PASS") { "Green" } else { "Red" }
-    Write-Host ("{0} ({1} ms){2}" -f $r.status, $r.elapsed_ms, $(if ($r.severity) { " [$($r.severity)]" } else { "" })) -ForegroundColor $color
-    $results += $r
-    # Atomic-write after every entry so partial findings survive a crash.
-    Write-FindingsJson -Results $results -Path $jsonPath
-    Write-FindingsMarkdown -Results $results -Path $mdPath
+try {
+    foreach ($entry in $entries) {
+        Write-Host -NoNewline ("  -> {0} ... " -f $entry.name)
+        $r = Test-SweepEntry -Entry $entry
+        $color = if ($r.status -eq "PASS") { "Green" } else { "Red" }
+        Write-Host ("{0} ({1} ms){2}" -f $r.status, $r.elapsed_ms, $(if ($r.severity) { " [$($r.severity)]" } else { "" })) -ForegroundColor $color
+        $results += $r
+        Write-FindingsJson -Results $results -Path $jsonPath
+        Write-FindingsMarkdown -Results $results -Path $mdPath
+    }
 }
-Write-Host "[concord-mcp-sweep] complete: $($results.Where{$_.status -eq 'PASS'}.Count) PASS / $($results.Where{$_.status -eq 'FAIL'}.Count) FAIL / $($results.Where{$_.status -eq 'SKIP'}.Count) SKIP" -ForegroundColor Cyan
-Write-Host "  artifacts: $jsonPath, $mdPath" -ForegroundColor Cyan
+finally {
+    if ($results.Count -gt 0) {
+        Write-FindingsJson -Results $results -Path $jsonPath
+        Write-FindingsMarkdown -Results $results -Path $mdPath
+    }
+    Write-Host "[concord-mcp-sweep] complete: $(@($results | Where-Object {$_.status -eq 'PASS'}).Count) PASS / $(@($results | Where-Object {$_.status -eq 'FAIL'}).Count) FAIL / $(@($results | Where-Object {$_.status -eq 'SKIP'}).Count) SKIP" -ForegroundColor Cyan
+    Write-Host "  artifacts: $jsonPath, $mdPath" -ForegroundColor Cyan
+}
