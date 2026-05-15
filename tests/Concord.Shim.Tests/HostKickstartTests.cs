@@ -61,6 +61,26 @@ public class HostKickstartTests : IDisposable
     }
 
     [Fact]
+    public void EnsureLoaded_AfterPriorFailure_DoesNotRetry_RethrowsWrappedException()
+    {
+        HostKickstart.OverrideForTesting(
+            hostFolder: Path.Combine(_tempDir, "missing-on-purpose"),
+            hostAssemblyName: "FakeHost",
+            entryTypeName: "FakeHost.FakeHostEntry");
+
+        // First call: original DirectoryNotFoundException.
+        var firstAttempt = () => HostKickstart.EnsureLoaded();
+        firstAttempt.Should().Throw<DirectoryNotFoundException>();
+
+        // Second call: wrapped InvalidOperationException; inner is the
+        // original exception. Does NOT re-execute the load logic.
+        var secondAttempt = () => HostKickstart.EnsureLoaded();
+        secondAttempt.Should().Throw<InvalidOperationException>()
+            .WithMessage("*previously failed*")
+            .WithInnerException<DirectoryNotFoundException>();
+    }
+
+    [Fact]
     public void ResolveHostType_ReturnsTypeFromCustomLoadContext_NotDefaultContext()
     {
         var dllPath = FakeHostBuilder.EmitFakeHostWithEntry(_tempDir, _sideChannel);

@@ -44,11 +44,7 @@ public sealed class TerminalWebServerShim : WebServerExtension
     }
 
     private static string ResolveInnerTypeName()
-    {
-        var asmName = HostKickstart.ResolveHostType("Concord.Host10x.Host10xEntry") is not null
-            ? "Concord.Host10x" : "Concord.Host11x";
-        return $"{asmName}.Ui.TerminalWebServer";
-    }
+        => $"{HostKickstart.LoadedHostAssemblyName}.Ui.TerminalWebServer";
 
     public override void InitializeWebServer(IWebServer webServer) => EnsureInner().InitializeWebServer(webServer);
 }

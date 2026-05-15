@@ -23,6 +23,7 @@ internal static class HostKickstart
     private static volatile bool _loaded;
     private static ConcordHostLoadContext? _context;
     private static Assembly? _hostAssembly;
+    private static Exception? _failedException;
 
     // Testing seams. NEVER used in production — production resolves these
     // values from RuntimeHostLocator + the convention below.
@@ -33,42 +34,55 @@ internal static class HostKickstart
     public static void EnsureLoaded()
     {
         if (_loaded) return;
+        if (_failedException is not null) throw new InvalidOperationException(
+            "HostKickstart previously failed; not retrying. See inner exception.",
+            _failedException);
         lock (_gate)
         {
             if (_loaded) return;
-
-            var (hostFolder, version) = ShimLog.Timed("HostKickstart.ResolveHostFolder",
-                () => ResolveHostFolder());
-            if (!Directory.Exists(hostFolder))
-                throw new DirectoryNotFoundException(
-                    $"Concord host folder not found: {hostFolder}. " +
-                    $"Studio Pro reports version '{version}'. " +
-                    $"The .mxmodule may be corrupted or partially installed.");
-
-            ShimLog.Info($"HostKickstart: SP version='{version}', hostFolder={hostFolder}");
-
-            var hostAssemblyName = ResolveHostAssemblyName(hostFolder);
-            var hostDll = Path.Combine(hostFolder, hostAssemblyName + ".dll");
-
-            _context = ShimLog.Timed("HostKickstart.BuildLoadContext",
-                () => new ConcordHostLoadContext(hostFolder));
-
-            _hostAssembly = ShimLog.Timed("HostKickstart.LoadHostAssembly",
-                () => _context.LoadFromAssemblyPath(hostDll));
-
-            // Resolve and instantiate Host{N}xEntry. Parameterless ctor —
-            // the entry type's ImportingConstructor takes no MEF imports
-            // (verified by reading both Host10xEntry.cs and Host11xEntry.cs).
-            var entryTypeName = ResolveEntryTypeName(hostAssemblyName);
-            var entryType = _hostAssembly.GetType(entryTypeName, throwOnError: true)!;
-
-            ShimLog.Timed("HostKickstart.InstantiateEntry", () =>
+            if (_failedException is not null) throw new InvalidOperationException(
+                "HostKickstart previously failed; not retrying. See inner exception.",
+                _failedException);
+            try
             {
-                Activator.CreateInstance(entryType);
-                return 0;
-            });
+                var (hostFolder, version) = ShimLog.Timed("HostKickstart.ResolveHostFolder",
+                    () => ResolveHostFolder());
+                if (!Directory.Exists(hostFolder))
+                    throw new DirectoryNotFoundException(
+                        $"Concord host folder not found: {hostFolder}. " +
+                        $"Studio Pro reports version '{version}'. " +
+                        $"The .mxmodule may be corrupted or partially installed.");
 
-            _loaded = true;
+                ShimLog.Info($"HostKickstart: SP version='{version}', hostFolder={hostFolder}");
+
+                var hostAssemblyName = ResolveHostAssemblyName(hostFolder);
+                var hostDll = Path.Combine(hostFolder, hostAssemblyName + ".dll");
+
+                _context = ShimLog.Timed("HostKickstart.BuildLoadContext",
+                    () => new ConcordHostLoadContext(hostFolder));
+
+                _hostAssembly = ShimLog.Timed("HostKickstart.LoadHostAssembly",
+                    () => _context.LoadFromAssemblyPath(hostDll));
+
+                // Resolve and instantiate Host{N}xEntry. Parameterless ctor —
+                // the entry type's ImportingConstructor takes no MEF imports
+                // (verified by reading both Host10xEntry.cs and Host11xEntry.cs).
+                var entryTypeName = ResolveEntryTypeName(hostAssemblyName);
+                var entryType = _hostAssembly.GetType(entryTypeName, throwOnError: true)!;
+
+                ShimLog.Timed("HostKickstart.InstantiateEntry", () =>
+                {
+                    Activator.CreateInstance(entryType);
+                    return 0;
+                });
+
+                _loaded = true;
+            }
+            catch (Exception ex)
+            {
+                _failedException = ex;
+                throw;
+            }
         }
     }
 
@@ -76,6 +90,32 @@ internal static class HostKickstart
     {
         EnsureLoaded();
         return _hostAssembly!.GetType(fullyQualifiedTypeName);
+    }
+
+    /// <summary>
+    /// Returns the loaded host's assembly name ("Concord.Host10x" or
+    /// "Concord.Host11x"). Triggers EnsureLoaded if not already loaded;
+    /// throws if the assembly name doesn't match either expected host.
+    ///
+    /// Centralises the probe each shim's ResolveInnerTypeName() previously
+    /// duplicated. If a future host variant is introduced, only this one
+    /// place needs updating.
+    /// </summary>
+    public static string LoadedHostAssemblyName
+    {
+        get
+        {
+            EnsureLoaded();
+            var name = _hostAssembly?.GetName().Name
+                ?? throw new InvalidOperationException("EnsureLoaded did not populate _hostAssembly.");
+            return name switch
+            {
+                "Concord.Host10x" => "Concord.Host10x",
+                "Concord.Host11x" => "Concord.Host11x",
+                _ => throw new InvalidOperationException(
+                    $"Loaded host assembly '{name}' is neither Concord.Host10x nor Concord.Host11x.")
+            };
+        }
     }
 
     /// <summary>
@@ -143,6 +183,7 @@ internal static class HostKickstart
     internal static void ResetForTesting()
     {
         _loaded = false;
+        _failedException = null;
         _context?.Dispose();
         _context = null;
         _hostAssembly = null;

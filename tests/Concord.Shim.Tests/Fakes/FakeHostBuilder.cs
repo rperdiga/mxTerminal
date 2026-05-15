@@ -4,6 +4,17 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace Concord.Shim.Tests.Fakes;
 
+/// <summary>
+/// Roslyn-emit utility for in-test fake-host DLLs.
+///
+/// SAFETY NOTE: All Emit* methods produce DLLs with assembly name
+/// "FakeHost" by default. Tests share that name across instances but
+/// stay isolated by emitting to per-test Guid-named temp directories
+/// — ConcordHostLoadContext loads via LoadFromAssemblyPath (path-keyed,
+/// not name-keyed), so each test sees its own copy. Callers that
+/// switch to LoadFromAssemblyName MUST pass a unique assemblyName per
+/// test to avoid resolving a previous test's already-loaded copy.
+/// </summary>
 internal static class FakeHostBuilder
 {
     /// <summary>

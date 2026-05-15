@@ -44,11 +44,7 @@ public sealed class ConcordMenuExtensionShim : MenuExtension
     }
 
     private static string ResolveInnerTypeName()
-    {
-        var asmName = HostKickstart.ResolveHostType("Concord.Host10x.Host10xEntry") is not null
-            ? "Concord.Host10x" : "Concord.Host11x";
-        return $"{asmName}.MenuExtensions.TerminalMenuExtension";
-    }
+        => $"{HostKickstart.LoadedHostAssemblyName}.MenuExtensions.TerminalMenuExtension";
 
     public override IEnumerable<MenuViewModel> GetMenus() => EnsureInner().GetMenus();
 }

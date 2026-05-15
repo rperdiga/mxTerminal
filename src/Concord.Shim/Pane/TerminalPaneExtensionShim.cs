@@ -90,16 +90,7 @@ public sealed class TerminalPaneExtensionShim : DockablePaneExtension
     internal void TestOverrideInnerTypeName(string name) => _innerTypeNameOverride = name;
 
     private static string ResolveInnerTypeName()
-    {
-        // Match the convention from HostKickstart.ResolveEntryTypeName:
-        // production hosts deploy as Concord.Host{10,11}x with pane class
-        // namespaced under Concord.Host{N}x.Pane.TerminalPaneExtension.
-        // Detect which from the loaded host assembly's name.
-        var entryAssemblyName = HostKickstart.ResolveHostType("Concord.Host10x.Host10xEntry") is not null
-            ? "Concord.Host10x"
-            : "Concord.Host11x";
-        return $"{entryAssemblyName}.Pane.TerminalPaneExtension";
-    }
+        => $"{HostKickstart.LoadedHostAssemblyName}.Pane.TerminalPaneExtension";
 
     public override DockablePaneViewModelBase Open() => EnsureInnerInstance().Open();
 }
