@@ -8,6 +8,13 @@ using Concord.Host10x;
 
 namespace Concord.Host10x.Ui;
 
+// [shim-vestigial] Studio Pro's MEF sees only Concord.Shim.dll under the
+// runtime-shim architecture (Phase 0 spike — 2026-05-15). The attributes
+// below remain so the host can still be built and tested in isolation, but
+// at production runtime Concord.Shim's *Shim forwarders drive instantiation
+// via reflection — these attributes are dead metadata. See
+// docs/superpowers/plans/2026-05-15-concord-runtime-shim-implementation.md
+// §OQ4.
 [Export(typeof(WebServerExtension))]
 public sealed class TerminalWebServer : WebServerExtension
 {
@@ -18,6 +25,13 @@ public sealed class TerminalWebServer : WebServerExtension
 
     private readonly IExtensionFileService extensionFileService;
 
+    // [shim-vestigial] Studio Pro's MEF sees only Concord.Shim.dll under the
+    // runtime-shim architecture (Phase 0 spike — 2026-05-15). The attributes
+    // below remain so the host can still be built and tested in isolation, but
+    // at production runtime Concord.Shim's *Shim forwarders drive instantiation
+    // via reflection — these attributes are dead metadata. See
+    // docs/superpowers/plans/2026-05-15-concord-runtime-shim-implementation.md
+    // §OQ4.
     [ImportingConstructor]
     public TerminalWebServer(IExtensionFileService extensionFileService)
     {

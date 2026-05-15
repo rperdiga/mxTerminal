@@ -16,6 +16,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.10.0" />
+    <PackageReference Include="NSubstitute" Version="5.1.0" />
     <PackageReference Include="Mendix.StudioPro.ExtensionsAPI" Version="$(ExtensionsApiShimBaselineVersion)" />
   </ItemGroup>
 
