@@ -14,7 +14,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Concord.Core\Concord.Core.csproj" />
     <PackageReference Include="Mendix.StudioPro.ExtensionsAPI" Version="$(ExtensionsApi10xVersion)" />
-    <PackageReference Include="Eto.Forms" Version="2.9.*" />
+    <!-- Match Concord.Core's Eto.Forms pin (see comment there). -->
+    <PackageReference Include="Eto.Forms" Version="2.8.*" />
   </ItemGroup>
 
   <ItemGroup>

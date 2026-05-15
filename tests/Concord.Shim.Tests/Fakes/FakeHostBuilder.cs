@@ -170,6 +170,74 @@ internal static class FakeHostBuilder
 
     /// <summary>
     /// Emits FakeHost.dll containing FakeHostEntry (parameterless) AND
+    /// FakePaneWithSeam : DockablePaneExtension. The pane exposes the same
+    /// <c>__ConcordShim_SetUIContext(Func&lt;IModel?&gt;, Func&lt;Uri&gt;)</c>
+    /// seam the production hosts ship, plus a marker property
+    /// <c>UIContextWasSet</c> the test inspects to verify the shim invoked
+    /// the seam before calling <c>Open()</c>. <c>Open()</c> itself returns
+    /// null (matches existing fakes) and does NOT invoke the captured
+    /// getters — so the test stays decoupled from UIExtensionBase being
+    /// unset in a no-SP-around test process.
+    /// </summary>
+    public static string EmitFakeHostWithPaneSeamAndEntry(string outputDir, string assemblyName = "FakeHost")
+    {
+        // 9-arg ctor matches the production pane's [ImportingConstructor] shape
+        // — the shim's TerminalPaneExtensionShim captures 9 services and passes
+        // them positionally to Activator.CreateInstance. We don't store them
+        // (the fake only tests the UI-context seam).
+        const string source = """
+            #nullable enable
+            using System;
+            using Mendix.StudioPro.ExtensionsAPI.Model;
+            using Mendix.StudioPro.ExtensionsAPI.UI.DockablePane;
+
+            namespace FakeHost
+            {
+                public class FakePaneWithSeam : DockablePaneExtension
+                {
+                    private Func<IModel?>? _getCurrentApp;
+                    private Func<Uri>? _getWebServerBaseUrl;
+
+                    public FakePaneWithSeam(
+                        object? localRunConfigs,
+                        object? extensionFileService,
+                        object? pageGenerationService,
+                        object? navigationManagerService,
+                        object? microflowService,
+                        object? nameValidationService,
+                        object? untypedModelAccessService,
+                        object? microflowExpressionService,
+                        object? versionControlService)
+                    { }
+
+                    public override string Id => "FakeHost";
+                    public override DockablePaneViewModelBase Open() => null!;
+
+                    public bool UIContextWasSet => _getCurrentApp != null && _getWebServerBaseUrl != null;
+
+                    public void __ConcordShim_SetUIContext(Func<IModel?> getCurrentApp, Func<Uri> getWebServerBaseUrl)
+                    {
+                        _getCurrentApp = getCurrentApp;
+                        _getWebServerBaseUrl = getWebServerBaseUrl;
+                    }
+                }
+
+                public class FakeHostEntry
+                {
+                    public FakeHostEntry() { }
+                }
+            }
+            """;
+
+        // typeof(Uri).Assembly.Location resolves to System.Private.Uri.dll on .NET 8,
+        // which is where the Uri type is forwarded from System.Runtime's contract.
+        var refs = BaselineRefs();
+        refs.Add(MetadataReference.CreateFromFile(typeof(Uri).Assembly.Location));
+        return Compile(outputDir, assemblyName, source, refs);
+    }
+
+    /// <summary>
+    /// Emits FakeHost.dll containing FakeHostEntry (parameterless) AND
     /// FakeMenu : MenuExtension whose ctor takes <see cref="IDockingWindowService"/>
     /// and whose <c>GetMenus()</c> yields a single
     /// <c>MenuViewModel("fake-caption", () => { })</c>.

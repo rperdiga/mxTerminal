@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.Loader;
 using Concord.Shim.Tests.Fakes;
 using FluentAssertions;
 using Mendix.StudioPro.ExtensionsAPI.UI.DockablePane;
@@ -81,4 +82,70 @@ public class ConcordHostLoadContextTests : IDisposable
             "Resolving event must redirect ExtensionsAPI requests from the custom " +
             "context to the default context — never load a second copy.");
     }
+
+    // Regression for the 2026-05-15 phase-5-smoke bug: an over-broad
+    // "Microsoft.*" share rule deferred Microsoft.Extensions.Logging.Abstractions
+    // to default ALC. SP 11.x doesn't have that assembly loaded — the host
+    // ships its own copy — so deferral failed with FileNotFoundException
+    // mid-way through Host11xEntry's ctor (SpmcpToolBootstrap11x.Register).
+    // The fix: dynamic IsAlreadyLoadedInDefault check; anything SP didn't
+    // load resolves locally from the host folder if a copy is present.
+    [Fact]
+    public void OnResolving_AssemblyNotInDefault_AndPresentLocally_LoadsLocally()
+    {
+        // Pick a name NOT in this test process's default ALC so the resolver
+        // has to make the local-first choice.
+        const string asmName = "Microsoft.Concord.Tests.HostOnlyDep";
+        FakeHostBuilder.EmitFakeHost(_tempDir, assemblyName: asmName);
+
+        using var ctx = new ConcordHostLoadContext(_tempDir);
+        var asm = ctx.LoadFromAssemblyName(new AssemblyName(asmName));
+
+        asm.Should().NotBeNull();
+        asm.GetName().Name.Should().Be(asmName);
+        // Loaded into our context, not default.
+        AssemblyLoadContext.GetLoadContext(asm).Should().BeSameAs(ctx);
+    }
+
+    // Regression for the 2026-05-15 phase-5-smoke "Eto.Application.Instance
+    // is null" bug. When the inner host loaded its own Eto.dll from bin-11x,
+    // its Eto's Application.Instance static was null (a fresh static field
+    // in a separate-context copy), and every PostMessage to the WebView
+    // failed with NullReferenceException at Application.Instance.Invoke(...).
+    // The fix: defer to default for any assembly SP already has loaded
+    // (Eto is SP's UI toolkit; SP initializes Application.Instance early
+    // in its startup). Even when the same-name file exists in the host
+    // folder, the load context returns null so the CLR uses default's copy.
+    [Fact]
+    public void OnResolving_AssemblyLoadedInDefault_DefersToDefault_EvenWhenLocalCopyPresent()
+    {
+        // FluentAssertions is referenced by this test project, so it's
+        // already loaded in default ALC. Plant a same-named file in the
+        // host folder; the resolver MUST still defer to default.
+        var fakeFluentAssertionsPath = Path.Combine(_tempDir, "FluentAssertions.dll");
+        FakeHostBuilder.EmitFakeHost(_tempDir, assemblyName: "FluentAssertions");
+
+        using var ctx = new ConcordHostLoadContext(_tempDir);
+        var asm = ctx.LoadFromAssemblyName(new AssemblyName("FluentAssertions"));
+
+        asm.Should().NotBeNull();
+        // The CRITICAL assertion: the assembly we got is the one from default
+        // ALC (real FluentAssertions used by xUnit/the test framework),
+        // NOT the fake from our host folder.
+        AssemblyLoadContext.GetLoadContext(asm).Should().BeSameAs(AssemblyLoadContext.Default,
+            "an assembly SP/default-context already has loaded MUST be deferred — " +
+            "otherwise statics like Eto.Application.Instance end up as fresh nulls in " +
+            "a separate-context copy, breaking any code that depends on the shared singleton.");
+    }
+
+    // The Concord.* exemption (load locally even when default has a copy)
+    // is verified empirically in production via shim.log lines like
+    // "Resolved Concord.Core from <hostFolder>/Concord.Core.dll into <ctx>"
+    // — they fire because the host DLL is loaded via LoadFromAssemblyPath
+    // and its dependencies are resolved through THIS context's OnResolving
+    // first. A unit test using LoadFromAssemblyName by name short-circuits
+    // to default ALC before OnResolving fires (since default already has
+    // Concord.Core loaded), so it can't model the production path. The
+    // exemption is preserved in OnResolving's source for clarity and
+    // future-proofing against changes in default-load order.
 }

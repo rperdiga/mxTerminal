@@ -20,7 +20,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Eto.Forms" Version="2.9.*" />
+    <!-- Eto.Forms pinned to v2.8.x to match the Eto version Studio Pro 11.10
+         ships in its install dir. Concord doesn't initialize Eto.Application
+         itself — there is no `new Application(...)` anywhere in this codebase
+         — so it relies on SP's already-loaded singleton. If our compile-time
+         reference is to a different version than SP's loaded copy, the inner
+         host's call to Application.Instance.Invoke throws FileNotFoundException
+         because CLR's strict version match fails the default-ALC fallback.
+         Keep aligned with whatever Eto version SP currently ships. -->
+    <PackageReference Include="Eto.Forms" Version="2.8.*" />
     <PackageReference Include="System.Text.Json" Version="8.0.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.*" />

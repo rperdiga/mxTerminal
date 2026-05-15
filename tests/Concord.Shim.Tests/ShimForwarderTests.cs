@@ -56,6 +56,71 @@ public class TerminalPaneExtensionShimTests : IDisposable
         var markerProp = inner.GetType().GetProperty("LocalRunConfigsMarker")!;
         markerProp.GetValue(inner).Should().Be(fakeRunConfigs.GetType().Name);
     }
+
+    // Regression for the 2026-05-15 phase-5-smoke "ResolvePath KeyNotFound"
+    // bug. SP's ExtensionFileService.ResolvePath uses GetCallingAssembly()
+    // to look up the extension folder; only Concord.Shim is in SP's
+    // dictionary. The shim must wrap the imported IExtensionFileService in
+    // a ShimExtensionFileService before handing it to the inner host so
+    // the inner's ResolvePath calls re-dispatch through Concord.Shim's
+    // assembly.
+    [Fact]
+    public void Ctor_WrapsExtensionFileService_InnerReceivesShimExtensionFileService()
+    {
+        var sideChannel = Path.Combine(_tempDir, "entry.log");
+        FakeHostBuilder.EmitFakeHostWithPaneAndEntry(_tempDir, sideChannel);
+        HostKickstart.OverrideForTesting(_tempDir, "FakeHost", "FakeHost.FakeHostEntry");
+
+        var shim = new TerminalPaneExtensionShim(
+            localRunConfigs: Substitute.For<ILocalRunConfigurationsService>(),
+            extensionFileService: Substitute.For<IExtensionFileService>(),
+            pageGenerationService: Substitute.For<IPageGenerationService>(),
+            navigationManagerService: Substitute.For<INavigationManagerService>(),
+            microflowService: Substitute.For<IMicroflowService>());
+        shim.TestOverrideInnerTypeName("FakeHost.FakePane");
+
+        var inner = shim.EnsureInnerInstance();
+        var fileServiceMarker = (string)inner.GetType().GetProperty("FileServiceMarker")!.GetValue(inner)!;
+
+        fileServiceMarker.Should().Be("ShimExtensionFileService",
+            "the inner host must receive the wrapper, not SP's raw IExtensionFileService — " +
+            "otherwise ResolvePath's GetCallingAssembly() returns the inner host's assembly, " +
+            "which isn't in SP's extension dictionary, and the lookup KeyNotFoundExceptions.");
+    }
+
+    // Regression for the 2026-05-15 phase-5-smoke "UIExtensionBase unset on
+    // inner" bug. The inner host's Open() reads `this.WebServerBaseUrl` and
+    // `this.CurrentApp` (UIExtensionBase members SP only populates on the
+    // shim, not on Activator.CreateInstance'd instances). The shim must call
+    // the inner's __ConcordShim_SetUIContext seam BEFORE inner.Open() so the
+    // inner's shadow accessors resolve to the shim's SP-populated values.
+    [Fact]
+    public void Open_ForwardsUIContextToInner_BeforeDelegating()
+    {
+        FakeHostBuilder.EmitFakeHostWithPaneSeamAndEntry(_tempDir);
+        HostKickstart.OverrideForTesting(_tempDir, "FakeHost", "FakeHost.FakeHostEntry");
+
+        var shim = new TerminalPaneExtensionShim(
+            localRunConfigs: Substitute.For<ILocalRunConfigurationsService>(),
+            extensionFileService: Substitute.For<IExtensionFileService>(),
+            pageGenerationService: Substitute.For<IPageGenerationService>(),
+            navigationManagerService: Substitute.For<INavigationManagerService>(),
+            microflowService: Substitute.For<IMicroflowService>());
+        shim.TestOverrideInnerTypeName("FakeHost.FakePaneWithSeam");
+
+        // FakePaneWithSeam.Open() returns null and never invokes the captured
+        // getters, so the shim's lambdas (which read its own unset
+        // UIExtensionBase) never fire. The seam's setter runs synchronously
+        // before inner.Open() returns.
+        _ = shim.Open();
+
+        var inner = shim.EnsureInnerInstance();
+        var wasSet = inner.GetType().GetProperty("UIContextWasSet")!.GetValue(inner);
+        wasSet.Should().Be(true,
+            "the shim must invoke __ConcordShim_SetUIContext before delegating Open() — " +
+            "otherwise the inner's CurrentApp / WebServerBaseUrl getters resolve to " +
+            "unpopulated UIExtensionBase fields and throw at first access.");
+    }
 }
 
 [Collection("HostKickstart")]

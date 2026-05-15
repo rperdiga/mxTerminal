@@ -1,4 +1,5 @@
 using System.ComponentModel.Composition;
+using Mendix.StudioPro.ExtensionsAPI.Model;
 using Mendix.StudioPro.ExtensionsAPI.Services;
 using Mendix.StudioPro.ExtensionsAPI.UI.DockablePane;
 using Mendix.StudioPro.ExtensionsAPI.UI.Services;
@@ -47,10 +48,17 @@ public sealed class TerminalPaneExtensionShim : DockablePaneExtension
         // Static cctor in this same class ensures HostKickstart fires before
         // any instance member is touched. (Per Phase 0 finding §"Probe bugs"
         // item A — DO NOT use [ModuleInitializer]; unreliable on .NET 10.)
+        //
+        // The IExtensionFileService is wrapped before being handed to the
+        // inner host: SP's implementation uses Assembly.GetCallingAssembly()
+        // for path resolution, and only Concord.Shim is registered in SP's
+        // assembly-keyed dictionary. Calls from the inner host's assembly
+        // would KeyNotFoundException; the wrapper re-dispatches through
+        // Concord.Shim. See ShimExtensionFileService.cs.
         _capturedServices = new object?[]
         {
             localRunConfigs,
-            extensionFileService,
+            new ShimExtensionFileService(extensionFileService),
             pageGenerationService,
             navigationManagerService,
             microflowService,
@@ -92,5 +100,42 @@ public sealed class TerminalPaneExtensionShim : DockablePaneExtension
     private static string ResolveInnerTypeName()
         => $"{HostKickstart.LoadedHostAssemblyName}.Pane.TerminalPaneExtension";
 
-    public override DockablePaneViewModelBase Open() => EnsureInnerInstance().Open();
+    public override DockablePaneViewModelBase Open()
+    {
+        var inner = EnsureInnerInstance();
+        ForwardUIContextToInner(inner);
+        return inner.Open();
+    }
+
+    /// <summary>
+    /// Calls the inner host's <c>__ConcordShim_SetUIContext</c> seam with
+    /// lambdas that read THIS shim's SP-populated UIExtensionBase state at
+    /// call time. The inner host's <c>CurrentApp</c> and
+    /// <c>WebServerBaseUrl</c> shadows then resolve to our values instead of
+    /// its own (unset) UIExtensionBase fields. Lambdas (not snapshot values)
+    /// because <c>CurrentApp</c> changes as the user switches projects.
+    ///
+    /// Reflection (not a direct call) because the inner host type lives in
+    /// the version-specific host assembly loaded inside
+    /// <see cref="ConcordHostLoadContext"/> — the shim has no compile-time
+    /// reference to it. The seam method's parameter types are <see cref="Func{T}"/>
+    /// over <see cref="IModel"/> (shared via ExtensionsAPI defer) and
+    /// <see cref="Uri"/> (BCL) — both resolve to default-ALC types, so the
+    /// boxed lambdas match the inner's parameter signature.
+    /// </summary>
+    private void ForwardUIContextToInner(DockablePaneExtension inner)
+    {
+        var setUiContext = inner.GetType().GetMethod("__ConcordShim_SetUIContext");
+        if (setUiContext is null)
+        {
+            ShimLog.Warn($"Inner host {inner.GetType().FullName} has no __ConcordShim_SetUIContext method; " +
+                "UIExtensionBase state (WebServerBaseUrl, CurrentApp) will be unset on the inner instance.");
+            return;
+        }
+        setUiContext.Invoke(inner, new object?[]
+        {
+            new Func<IModel?>(() => CurrentApp),
+            new Func<Uri>(() => WebServerBaseUrl)
+        });
+    }
 }

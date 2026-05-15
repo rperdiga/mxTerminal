@@ -93,5 +93,17 @@
            Text="BUILD FAILED — Concord.Core.dll hash mismatch: root=$(_RootCoreHash) vs bin-11x=$(_Bin11xCoreHash). This would break HostServices static state. Verify both hosts build against the same Concord.Core source." />
 
     <Message Importance="high" Text="MergeHostsForShim: Concord.Core.dll SHA256=$(_RootCoreHash) verified across all 3 locations." />
+
+    <!-- 6. ExtensionsAPI gate: the shim's bin MUST NOT carry its own copy of
+         Mendix.StudioPro.ExtensionsAPI.dll. If present at the merged root,
+         .NET Core's LoadFrom will load it as a SECOND CLR assembly
+         alongside Studio Pro's already-loaded copy, producing two
+         distinct type identities for ExtensionsAPI interfaces and breaking
+         MEF's [ImportingConstructor] matching at the SP↔shim boundary.
+         Concord.Shim.csproj's PackageReference for ExtensionsAPI uses
+         ExcludeAssets="runtime" specifically to prevent this — if you see
+         this error, something just regressed that. -->
+    <Error Condition="Exists('$(_MergedRoot)\Mendix.StudioPro.ExtensionsAPI.dll')"
+           Text="BUILD FAILED — Mendix.StudioPro.ExtensionsAPI.dll present at merged root $(_MergedRoot). The shim must not ship its own ExtensionsAPI copy (SP's default-ALC copy is the only valid one). Add ExcludeAssets=&quot;runtime&quot; to the shim's PackageReference." />
   </Target>
 </Project>

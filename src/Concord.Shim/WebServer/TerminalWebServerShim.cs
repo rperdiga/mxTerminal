@@ -19,7 +19,10 @@ public sealed class TerminalWebServerShim : WebServerExtension
 
     [ImportingConstructor]
     public TerminalWebServerShim(IExtensionFileService fileService)
-        => _fileService = fileService;
+        // Wrap so the inner host's ResolvePath calls re-dispatch through
+        // Concord.Shim's assembly (which SP has registered). See
+        // ShimExtensionFileService.cs.
+        => _fileService = new ShimExtensionFileService(fileService);
 
     static TerminalWebServerShim()
     {
