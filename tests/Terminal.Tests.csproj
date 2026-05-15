@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <Compile Remove="Concord.Core.Tests/**" />
+    <Compile Remove="Concord.Shim.Tests/**" />
   </ItemGroup>
 
   <ItemGroup>
