@@ -23,7 +23,26 @@
     <PackageReference Include="Mendix.StudioPro.ExtensionsAPI" Version="$(ExtensionsApiShimBaselineVersion)" />
   </ItemGroup>
 
+  <!-- Build-order dependency on the two host projects so their bin folders
+       are populated before MergeHostsForShim runs. ReferenceOutputAssembly=false
+       prevents the host DLLs from being pulled into the shim's own bin/ —
+       the merge target copies them explicitly into bin-10x/ and bin-11x/. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Concord.Host10x\Concord.Host10x.csproj">
+      <Private>false</Private>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\Concord.Host11x\Concord.Host11x.csproj">
+      <Private>false</Private>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="manifest.json"><CopyToOutputDirectory>Always</CopyToOutputDirectory></Content>
   </ItemGroup>
+
+  <Import Project="..\build\BuildUi.targets" />
+  <Import Project="..\build\MergeHostsForShim.targets" />
+  <Import Project="..\build\DeployMergedToMendix.targets" />
 </Project>

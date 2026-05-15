@@ -36,6 +36,11 @@
   <PropertyGroup>
     <MendixDeployTarget10x></MendixDeployTarget10x>
     <MendixDeployTarget11x></MendixDeployTarget11x>
+    <!-- Per-developer; set this to the path of your Mendix project root (e.g.
+         C:\Workspace\MendixApps\TestOSApp3) to enable the unified shim deploy.
+         Falls back to $(MendixDeployTarget) if unset. Deploys bin/x64/.../net8.0-merged/
+         to <target>/extensions/Concord/ — the v5.1.0+ runtime-shim layout. -->
+    <MendixDeployTargetMerged></MendixDeployTargetMerged>
     <!-- Mendix.StudioPro.ExtensionsAPI version compatible with Studio Pro 10.24.13.
          10.21.1 matches the version MCPExtension uses for 10.24 support. -->
     <ExtensionsApi10xVersion>10.21.1</ExtensionsApi10xVersion>
