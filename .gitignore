@@ -39,3 +39,7 @@ marketing/source/
 .playwright-mcp/
 debug/
 concord-pane.png
+
+# Spike scratch space — prototype DLLs, throwaway test extensions, raw logs.
+# Persistent spike output lives in docs/superpowers/handoffs/, not here.
+spikes/
