@@ -5,6 +5,14 @@
          (AnyCPU) lands at bin\$(Configuration)\net8.0\. _PlatformSubdir picks
          whichever exists. -->
     <_PlatformSubdir Condition="'$(Platform)' != '' and '$(Platform)' != 'AnyCPU'">$(Platform)\</_PlatformSubdir>
+    <!-- _MergedRoot is intentionally hardcoded to bin\x64\... — production
+         builds for the .mxmodule MUST use -p:Platform=x64. _Host{N}xBin
+         paths adapt to whatever Platform the build was invoked with (via
+         _PlatformSubdir), so MergeHostsForShim CAN run on AnyCPU builds —
+         but the output is only TRUSTWORTHY when Platform=x64 (otherwise
+         the host bins read from a different path than _MergedRoot's
+         expected x64 layout). The <Warning> at the top of MergeHostsForShim
+         surfaces this risk at build time. -->
     <_MergedRoot>$(MSBuildThisFileDirectory)..\..\bin\x64\$(Configuration)\net8.0-merged</_MergedRoot>
     <_Host10xBin>$(MSBuildThisFileDirectory)..\Concord.Host10x\bin\$(_PlatformSubdir)$(Configuration)\net8.0</_Host10xBin>
     <_Host11xBin>$(MSBuildThisFileDirectory)..\Concord.Host11x\bin\$(_PlatformSubdir)$(Configuration)\net8.0</_Host11xBin>
@@ -13,6 +21,8 @@
 
   <Target Name="MergeHostsForShim" AfterTargets="Build">
     <Message Importance="high" Text="MergeHostsForShim: producing $(_MergedRoot)" />
+    <Warning Condition="'$(Platform)' == '' or '$(Platform)' == 'AnyCPU'"
+             Text="MergeHostsForShim: Platform is '$(Platform)' (empty or AnyCPU); host bin sources may not match the merged output location. Run with -p:Platform=x64 for a trustworthy merge." />
 
     <!-- 1. Clean output. -->
     <RemoveDir Directories="$(_MergedRoot)" />
@@ -50,8 +60,14 @@
     <ItemGroup>
       <_HoistableDirs Include="wwwroot;skills;skills-10x;skills-mac;rules;rules-10x" />
     </ItemGroup>
-    <RemoveDir Directories="@(_HoistableDirs->'$(_MergedRoot)\bin-10x\%(Identity)')" Condition="Exists('$(_MergedRoot)\bin-10x\%(_HoistableDirs.Identity)')" />
-    <RemoveDir Directories="@(_HoistableDirs->'$(_MergedRoot)\bin-11x\%(Identity)')" Condition="Exists('$(_MergedRoot)\bin-11x\%(_HoistableDirs.Identity)')" />
+    <!-- Drop duplicate copies of shared assets from each per-host bin. The
+         top-level shim copy at $(_MergedRoot)\<dir>\ is the canonical one
+         (verified by the <Error> checks below). RemoveDir silently no-ops
+         on missing paths, so no Condition is needed — and a per-item
+         Condition does NOT work on a batched RemoveDir (the condition
+         expands to only the first batch item, suppressing the rest). -->
+    <RemoveDir Directories="@(_HoistableDirs->'$(_MergedRoot)\bin-10x\%(Identity)')" />
+    <RemoveDir Directories="@(_HoistableDirs->'$(_MergedRoot)\bin-11x\%(Identity)')" />
 
     <!-- The shim's own bin already has wwwroot/skills/rules (they're shared
          at repo root and linked into all 3 csprojs as Content). Verify

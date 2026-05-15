@@ -29,6 +29,18 @@
   </ItemGroup>
 
   <!--
+    BuildUi target externalized in v5.1.0 — it now lives in
+    src/build/BuildUi.targets and is imported by Concord.Shim.csproj
+    (which is the production build path that produces the merged
+    .mxmodule layout). Standalone Host11x builds (e.g. for component
+    iteration via $(MendixDeployTarget11x)) do NOT re-bundle the UI;
+    the wwwroot bundle at <repo>/wwwroot/terminal.bundle.js is shared
+    across all 3 projects via Concord.Core's Content links and will
+    be whatever the most recent shim build produced. Run a shim build
+    or solution build for a fresh bundle.
+  -->
+
+  <!--
     MendixDeployTarget is a semicolon-separated list of project roots. Each one
     receives its own copy of $(TargetDir) into <target>/extensions/Concord/.
     Set in Directory.Build.props (per-developer, gitignored). Cross-platform:
