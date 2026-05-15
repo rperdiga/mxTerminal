@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyName>Concord.Shim</AssemblyName>
+    <RootNamespace>Concord.Shim</RootNamespace>
+    <LangVersion>preview</LangVersion>
+    <IsPackable>false</IsPackable>
+    <Version>5.1.0-alpha.1</Version>
+    <!-- Fallback: Directory.Build.props (gitignored, per-developer) should define
+         ExtensionsApiShimBaselineVersion. The example is in Directory.Build.props.example. -->
+    <ExtensionsApiShimBaselineVersion Condition="'$(ExtensionsApiShimBaselineVersion)' == ''">10.21.1</ExtensionsApiShimBaselineVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Concord.Shim.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Concord.Core\Concord.Core.csproj" />
+    <PackageReference Include="Mendix.StudioPro.ExtensionsAPI" Version="$(ExtensionsApiShimBaselineVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="manifest.json"><CopyToOutputDirectory>Always</CopyToOutputDirectory></Content>
+  </ItemGroup>
+</Project>

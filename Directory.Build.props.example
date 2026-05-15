@@ -39,5 +39,10 @@
     <!-- Mendix.StudioPro.ExtensionsAPI version compatible with Studio Pro 10.24.13.
          10.21.1 matches the version MCPExtension uses for 10.24 support. -->
     <ExtensionsApi10xVersion>10.21.1</ExtensionsApi10xVersion>
+    <!-- Baseline ExtensionsAPI version for Concord.Shim. Must be <= 10.21.1 so
+         the shim DLL forward-compatibly loads on both SP 10.24.13 and SP 11.10.
+         Phase 0 spike confirmed 10.21.1 resolves to 10.24.13.0 on SP10 and
+         11.10.0.0 on SP11. Do not raise this without re-running the spike. -->
+    <ExtensionsApiShimBaselineVersion>10.21.1</ExtensionsApiShimBaselineVersion>
   </PropertyGroup>
 </Project>
