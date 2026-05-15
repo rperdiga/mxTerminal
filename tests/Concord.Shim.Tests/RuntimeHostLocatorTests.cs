@@ -37,4 +37,19 @@ public class RuntimeHostLocatorTests
         var got = RuntimeHostLocator.ResolveBinDirectoryFromAnchor(anchorAssemblyDir, "bin-11x");
         got.Should().Be(Path.Combine(anchorAssemblyDir, "bin-11x"));
     }
+
+    [Fact]
+    public void ResolveBinDirectory_DoesNotThrow_FromTestHost_AndReturnsValidShape()
+    {
+        // Smoke test: ResolveBinDirectory is the public entry point Phase 3
+        // composes on. From the test host, StudioProThemeProbe.StudioProVersionFromExePath
+        // returns null (testhost.exe is not Studio Pro). The chain should:
+        //   null version -> "<unknown>" string -> BinFolderName -> "bin-11x" default.
+        // Assert the returned tuple's shape, not the exact path (which depends on
+        // the test runner's bin layout).
+        var (binDir, version) = RuntimeHostLocator.ResolveBinDirectory();
+
+        binDir.Should().EndWith("bin-11x");
+        version.Should().Be("<unknown>");
+    }
 }

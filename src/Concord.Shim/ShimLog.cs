@@ -37,10 +37,12 @@ internal static class ShimLog
     public static T Timed<T>(string label, Func<T> action)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var result = action();
-        sw.Stop();
-        Info($"{label} took {sw.ElapsedMilliseconds}ms");
-        return result;
+        try { return action(); }
+        finally
+        {
+            sw.Stop();
+            Info($"{label} took {sw.ElapsedMilliseconds}ms");
+        }
     }
 
     private static void Write(string level, string message)

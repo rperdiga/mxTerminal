@@ -26,10 +26,12 @@ internal sealed class ConcordHostLoadContext : AssemblyLoadContext, IDisposable
     {
         _hostFolder = hostFolder;
         // AssemblyDependencyResolver reads the .deps.json of a primary
-        // assembly to resolve its dependency graph. We seed it with the
-        // expected host DLL path; the resolver tolerates the file being
-        // absent at construction time as long as the .deps.json appears
-        // before any LoadFromAssemblyPath call.
+        // assembly to resolve its dependency graph. We construct it ONLY
+        // when the host DLL is already on disk (the File.Exists guard
+        // below) — the resolver constructor immediately reads the adjacent
+        // .deps.json and would throw otherwise. Phase 3's HostKickstart
+        // must therefore ensure the bin folder is populated before
+        // constructing this context.
         var likelyHostDll = Path.Combine(hostFolder, "Concord.Host10x.dll");
         if (!File.Exists(likelyHostDll))
             likelyHostDll = Path.Combine(hostFolder, "Concord.Host11x.dll");
@@ -64,7 +66,10 @@ internal sealed class ConcordHostLoadContext : AssemblyLoadContext, IDisposable
         // runtime/<rid>/ subfolders for native interop etc.).
         var resolved = _resolver?.ResolveAssemblyToPath(name);
         if (resolved is not null && File.Exists(resolved))
+        {
+            ShimLog.Info($"Resolved {name.Name} from {resolved} via dependency resolver into {Name}");
             return LoadFromAssemblyPath(resolved);
+        }
 
         ShimLog.Warn($"Could not resolve {name.Name} in {Name}; deferring to default context.");
         return null;

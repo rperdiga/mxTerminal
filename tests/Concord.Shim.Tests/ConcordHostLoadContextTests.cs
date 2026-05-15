@@ -61,6 +61,11 @@ public class ConcordHostLoadContextTests : IDisposable
         castInstance!.Id.Should().Be("FakeHost"); // virtual property dispatch
     }
 
+    // This asserts an AppDomain-wide invariant, not just this test's effect —
+    // it passes because the test project holds exactly one PackageReference
+    // to ExtensionsAPI and ConcordHostLoadContext.OnResolving prevents a
+    // second copy. If a future test in this assembly triggers a second load
+    // before this Fact runs, the assertion would fail in a confusing way.
     [Fact]
     public void ExactlyOne_ExtensionsApi_LoadedInAppDomain_AfterCustomContextLoads()
     {

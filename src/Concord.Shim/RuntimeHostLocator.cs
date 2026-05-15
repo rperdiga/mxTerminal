@@ -41,6 +41,10 @@ internal static class RuntimeHostLocator
            ?? throw new System.InvalidOperationException(
               $"Could not resolve directory of {anchor.FullName} assembly.");
 
+    // Strips a "-prerelease" suffix so System.Version.TryParse succeeds.
+    // Does NOT strip "+build.metadata" suffixes; those fail TryParse and
+    // fall through to the bin-11x default in BinFolderName, which is the
+    // safer outcome for an unknown forward-version anyway.
     private static string SplitOffPrerelease(string v)
     {
         var dashIndex = v.IndexOf('-');

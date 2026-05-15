@@ -1,5 +1,4 @@
 // tests/Concord.Shim.Tests/Fakes/FakeHostBuilder.cs
-using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -30,6 +29,10 @@ internal static class FakeHostBuilder
             }
             """;
 
+        var runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location)
+            ?? throw new InvalidOperationException(
+                "Cannot locate .NET runtime directory; single-file deployment unsupported in test context.");
+
         var refs = new List<MetadataReference>
         {
             MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
@@ -37,10 +40,8 @@ internal static class FakeHostBuilder
             MetadataReference.CreateFromFile(
                 typeof(Mendix.StudioPro.ExtensionsAPI.UI.DockablePane.DockablePaneExtension).Assembly.Location),
             // Add runtime-required refs:
-            MetadataReference.CreateFromFile(
-                Path.Combine(Path.GetDirectoryName(typeof(object).Assembly.Location)!, "System.Runtime.dll")),
-            MetadataReference.CreateFromFile(
-                Path.Combine(Path.GetDirectoryName(typeof(object).Assembly.Location)!, "netstandard.dll")),
+            MetadataReference.CreateFromFile(Path.Combine(runtimeDir, "System.Runtime.dll")),
+            MetadataReference.CreateFromFile(Path.Combine(runtimeDir, "netstandard.dll")),
         };
 
         var compilation = CSharpCompilation.Create(
@@ -58,11 +59,4 @@ internal static class FakeHostBuilder
         return dllPath;
     }
 
-    // Sentinel type used purely to locate the ExtensionsAPI assembly for refs.
-    private sealed class DockablePaneExtensionRef
-        : Mendix.StudioPro.ExtensionsAPI.UI.DockablePane.DockablePaneExtension
-    {
-        public override string Id => "ref";
-        public override Mendix.StudioPro.ExtensionsAPI.UI.DockablePane.DockablePaneViewModelBase Open() => null!;
-    }
 }
