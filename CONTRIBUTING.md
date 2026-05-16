@@ -21,6 +21,8 @@ Thanks for considering a contribution. Concord is built by the **Siemens CoE Tea
 
 See [DEPLOYING.md § Developer path](./DEPLOYING.md#developer-path-build-from-source) for the full build + iterate loop.
 
+Maintainers cutting a release: see [docs/RELEASING.md](./docs/RELEASING.md) for the verified cross-version `.mxmodule` export procedure (Windows-only; merged-shim layout required).
+
 Quick start:
 
 ```sh

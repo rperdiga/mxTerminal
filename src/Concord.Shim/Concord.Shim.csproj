@@ -8,7 +8,7 @@
     <RootNamespace>Concord.Shim</RootNamespace>
     <LangVersion>preview</LangVersion>
     <IsPackable>false</IsPackable>
-    <Version>5.1.0-alpha.1</Version>
+    <Version>6.0.0</Version>
     <!-- Fallback: Directory.Build.props (gitignored, per-developer) should define
          ExtensionsApiShimBaselineVersion. The example is in Directory.Build.props.example. -->
     <ExtensionsApiShimBaselineVersion Condition="'$(ExtensionsApiShimBaselineVersion)' == ''">10.21.1</ExtensionsApiShimBaselineVersion>

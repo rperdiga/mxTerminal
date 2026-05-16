@@ -1,5 +1,33 @@
 # Changelog
 
+## 6.0.0 — Mac load-context fix + merged-shim deploy
+
+**The headline of this release is Concord running on macOS.** The merged-shim `.mxmodule` (introduced in 5.1.0-alpha.1) now loads and runs cleanly on Studio Pro on macOS — both 10.24.13 and 11.10 — from the same artifact that already works on Windows.
+
+### Fixed
+
+- **macOS load failure (`InvalidArgFailure -2147450750` / `Hostpolicy must be initialized…`).** `Concord.Shim/ConcordHostLoadContext` eagerly constructed an `AssemblyDependencyResolver` whose constructor invokes native `corehost_resolve_component_dependencies`. That export has a precondition (`hostpolicy.fxr_path` set during `corehost_main`) that Studio Pro's macOS launcher doesn't satisfy — Studio Pro on Mac uses an embedded .NET hosting path. Result: every Concord MEF activation on Mac failed with a `CompositionException` and the extension wouldn't load. Windows was unaffected because Studio Pro on Windows is `apphost`-style and goes through `corehost_main`. **Fix:** removed `AssemblyDependencyResolver` from `ConcordHostLoadContext` entirely. It was only used as a priority-4 fallback for `runtimes/<rid>/lib/<tfm>/` RID-specific managed DLLs — a layout Concord doesn't use. Added a `LoadUnmanagedDll(string)` override that probes `runtimes/<rid>/native/` with RID fallback (`osx-arm64` → `osx` → `unix` → `any`; mirror chains for Windows / Linux) for native binaries like SQLite's `libe_sqlite3.dylib`. Resolution is now deterministic regardless of how .NET was hosted.
+
+### Architecture
+
+- **Runtime shim architecture is now the production deploy path on both Windows and macOS.** Studio Pro discovers `extensions/Concord/Concord.Shim.dll` as a single MEF extension; the shim creates an `AssemblyLoadContext` and dynamically loads either `bin-10x/Concord.Host10x.dll` (10.x) or `bin-11x/Concord.Host11x.dll` (11.x) depending on which Studio Pro version is running. Same `.mxmodule` installs on all four supported targets (Windows + Mac × 10.24.13 + 11.10).
+- **Per-host deploy targets (`extensions/Concord10x/` + `extensions/Concord11x/`) are retained for component-level dev iteration only.** Production deploys via `.mxmodule` ship the merged-shim `extensions/Concord/` layout.
+
+### Tests
+
+- **31/31 pass in `Concord.Shim.Tests`** (up from 27 in 5.1.0-alpha.1; +4 new tests covering the resolver-removal regression guard and `TryResolveNativePath` probe behavior).
+- 56/56 in `Concord.Core.Tests`, 274/277 in `Terminal.Tests` (3 Maia-live skipped — Studio Pro not running). 361 passing total — identical on Windows and Mac.
+
+### Migration from prior versions
+
+- **Upgrading from any 5.x install:** delete the prior `extensions/Concord11x/`, `extensions/Concord10x/`, and `extensions/Concord/` folders from your Mendix project before installing v6.0.0. Then wipe `<project>/.mendix-cache/extensions-cache/` so Studio Pro rebuilds the snapshot from the new merged-shim layout.
+- **Upgrading from a prior `.mxmodule` install** (e.g., the 4.2.2-era marketplace listing imported as a Mendix module): **delete the prior Concord module from the project** (right-click → Delete Module in Studio Pro's project explorer) before re-importing the v6.0.0 `.mxmodule`. If you skip this, Studio Pro extracts both the stale and new `extensions/Concord/` payloads side-by-side into `.mendix-cache/`, MEF activates both, and the stale shim's pre-fix `ConcordHostLoadContext` throws — even though the new one would have worked.
+
+### Known follow-ups
+
+- Marketing docs under `marketing/` (release notes HTML, overview MD/HTML, documentation MD/HTML) still describe 4.2.2-era content. Needs a 6.0.0 rewrite before the next marketplace upload.
+- Mac CI build-only coverage exists (`2b183d0`); a Mac extension-loading smoke would require a Studio Pro install which CI doesn't have. Tracked as a follow-up.
+
 ## 5.0.0-alpha.2 — W2 SPMCP merge + Host10x UI port
 
 **Feature merge.** MCPExtension's source-merged tool catalog ships as part of Concord. A standalone SPMCP install is no longer required — `concord-mcp` on port 7783 advertises the full SPMCP surface (on 10.x) or a curated subset (on 11.x where Studio Pro's built-in MCP covers the rest).

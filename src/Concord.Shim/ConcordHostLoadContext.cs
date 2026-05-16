@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 
 namespace Concord.Shim;
@@ -36,25 +38,11 @@ namespace Concord.Shim;
 internal sealed class ConcordHostLoadContext : AssemblyLoadContext, IDisposable
 {
     private readonly string _hostFolder;
-    private readonly AssemblyDependencyResolver? _resolver;
 
     public ConcordHostLoadContext(string hostFolder)
         : base(name: $"ConcordHost@{hostFolder}", isCollectible: false)
     {
         _hostFolder = hostFolder;
-        // AssemblyDependencyResolver reads the .deps.json of a primary
-        // assembly to resolve its dependency graph. We construct it ONLY
-        // when the host DLL is already on disk (the File.Exists guard
-        // below) — the resolver constructor immediately reads the adjacent
-        // .deps.json and would throw otherwise. Phase 3's HostKickstart
-        // must therefore ensure the bin folder is populated before
-        // constructing this context.
-        var likelyHostDll = Path.Combine(hostFolder, "Concord.Host10x.dll");
-        if (!File.Exists(likelyHostDll))
-            likelyHostDll = Path.Combine(hostFolder, "Concord.Host11x.dll");
-        if (File.Exists(likelyHostDll))
-            _resolver = new AssemblyDependencyResolver(likelyHostDll);
-
         Resolving += OnResolving;
     }
 
@@ -131,18 +119,22 @@ internal sealed class ConcordHostLoadContext : AssemblyLoadContext, IDisposable
             return LoadFromAssemblyPath(candidate);
         }
 
-        // 4. AssemblyDependencyResolver — handles runtimes/<rid>/ subfolders
-        //    for native interop, satellite resources, etc.
-        var resolved = _resolver?.ResolveAssemblyToPath(name);
-        if (resolved is not null && File.Exists(resolved))
-        {
-            ShimLog.Info($"Resolved {simpleName} from {resolved} via dependency resolver into {Name}");
-            return LoadFromAssemblyPath(resolved);
-        }
-
-        // 5. Fall through to default context. BCL types like System.Runtime
+        // 4. Fall through to default context. BCL types like System.Runtime
         //    that the runtime provides without a host-folder copy resolve
         //    here through the default ALC's own probing.
+        //
+        //    NOTE: there used to be an AssemblyDependencyResolver-based
+        //    priority-4 here that read the host's .deps.json to handle
+        //    runtimes/<rid>/lib/<tfm>/ RID-specific managed DLLs. Its
+        //    constructor invokes native corehost_resolve_component_dependencies,
+        //    which has a precondition (fxr_path populated via corehost_main)
+        //    that Studio Pro's macOS launcher doesn't satisfy — throwing
+        //    InvalidArgFailure -2147450750 and breaking MEF activation on
+        //    Mac. Removed entirely. None of Concord's actual managed
+        //    dependencies use the runtimes/<rid>/lib/ layout — they're all
+        //    flat in the host folder, hit by priority-3 above. Native
+        //    binaries (libe_sqlite3.dylib etc.) are handled by the
+        //    LoadUnmanagedDll override below, not by this method.
         return null;
     }
 
@@ -158,6 +150,119 @@ internal sealed class ConcordHostLoadContext : AssemblyLoadContext, IDisposable
                 return a;
         }
         return null;
+    }
+
+    // Native unmanaged DLL resolution. Defensive against the same hostpolicy
+    // class of failure that took out AssemblyDependencyResolver on Mac:
+    // .NET's default unmanaged search uses similar hostpolicy state that
+    // Studio Pro's macOS launcher doesn't fully initialise. Explicit probe
+    // of runtimes/<rid>/native/ with RID fallback makes resolution
+    // deterministic regardless of how .NET was hosted.
+    //
+    // The deployed snapshot layout is:
+    //     extensions/Concord/
+    //       Concord.Shim.dll
+    //       bin-{10,11}x/   ← _hostFolder
+    //       runtimes/<rid>/native/<libname>.dylib (or .dll / .so)
+    //
+    // So the runtimes/ folder is one level UP from _hostFolder. Some
+    // build configurations may also drop it alongside; we probe both.
+    protected override IntPtr LoadUnmanagedDll(string unmanagedDllName)
+    {
+        ShimLog.Info($"LoadUnmanagedDll fired for {unmanagedDllName}");
+        if (TryResolveNativePath(unmanagedDllName, out var path))
+        {
+            ShimLog.Info($"Resolved native {unmanagedDllName} from {path} into {Name}");
+            return LoadUnmanagedDllFromPath(path!);
+        }
+        // IntPtr.Zero signals "I didn't find it; fall back to the default
+        // native search (OS-default paths, executable's directory, etc.)".
+        return IntPtr.Zero;
+    }
+
+    internal bool TryResolveNativePath(string unmanagedDllName, out string? path)
+    {
+        // Production layout: runtimes/ is one level up from the host folder.
+        // Normalize via GetFullPath so the returned path doesn't carry a
+        // ".." segment, which would confuse callers logging the resolution
+        // result and break string-based assertions in tests.
+        var runtimesDir = Path.GetFullPath(Path.Combine(_hostFolder, "..", "runtimes"));
+        if (!Directory.Exists(runtimesDir))
+            runtimesDir = Path.GetFullPath(Path.Combine(_hostFolder, "runtimes"));
+
+        if (Directory.Exists(runtimesDir))
+        {
+            foreach (var probe in NativeProbePaths(runtimesDir, unmanagedDllName))
+            {
+                if (File.Exists(probe))
+                {
+                    path = probe;
+                    return true;
+                }
+            }
+        }
+        // Last-ditch: flat in host folder (some packages drop natives there).
+        var flat = Path.GetFullPath(Path.Combine(_hostFolder, unmanagedDllName));
+        if (File.Exists(flat))
+        {
+            path = flat;
+            return true;
+        }
+        path = null;
+        return false;
+    }
+
+    private static IEnumerable<string> NativeProbePaths(string runtimesDir, string name)
+    {
+        foreach (var rid in RidFallbackChain())
+        {
+            var native = Path.Combine(runtimesDir, rid, "native");
+            if (!Directory.Exists(native)) continue;
+            // Caller may pass either the bare name (e.g. "e_sqlite3") or
+            // the full filename (e.g. "libe_sqlite3.dylib"). Try both.
+            yield return Path.Combine(native, name);
+            if (OperatingSystem.IsMacOS())
+            {
+                yield return Path.Combine(native, "lib" + name + ".dylib");
+                yield return Path.Combine(native, name + ".dylib");
+            }
+            else if (OperatingSystem.IsWindows())
+            {
+                yield return Path.Combine(native, name + ".dll");
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                yield return Path.Combine(native, "lib" + name + ".so");
+                yield return Path.Combine(native, name + ".so");
+            }
+        }
+    }
+
+    private static IEnumerable<string> RidFallbackChain()
+    {
+        // RuntimeInformation.RuntimeIdentifier returns the most specific RID
+        // (osx-arm64 on Apple Silicon, osx-x64 on Intel Macs, win-x64 on
+        // x64 Windows). Walk the RID graph in specificity order so a
+        // package that only shipped a generic-RID native still resolves.
+        var current = RuntimeInformation.RuntimeIdentifier;
+        yield return current;
+
+        if (OperatingSystem.IsMacOS())
+        {
+            yield return "osx";
+            yield return "unix";
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            yield return "linux";
+            yield return "unix";
+        }
+        else if (OperatingSystem.IsWindows())
+        {
+            yield return "win";
+        }
+
+        yield return "any";
     }
 
     public void Dispose()
