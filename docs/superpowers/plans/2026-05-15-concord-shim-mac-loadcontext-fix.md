@@ -1,957 +1,654 @@
-# Concord Shim — Mac Load-Context Fix Implementation Plan
+# Concord Shim — Mac Load-Context Fix Implementation Plan (REVISED)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make Concord v5.0.3 install and run successfully on Studio Pro 11.10 on macOS (and 10.24.13 on macOS) from the same `.mxmodule` that already works on Windows, by replacing `AssemblyDependencyResolver` (which fails on Mac's .NET hosting model) with manual file-system probing inside `ConcordHostLoadContext`.
+> **Revision history:** Initial draft was written without sight of `src/Concord.Shim/` (source lived on a Windows-local branch). After PR #21 merged `feat/v5.1.0-runtime-shim` to main, the source became visible and a Task-0 audit revealed the plan's pseudocode was much further from reality than expected. This revision matches the actual code shape. Reasons for each delta from the original plan are recorded inline.
 
-**Architecture:** Three managed code changes inside `src/Concord.Shim/` (drop `AssemblyDependencyResolver`; override `Load` and `LoadUnmanagedDll` with file-system probes; verify `Assembly.Location` usage), plus one release-step change to the `ConcordPublisher` wrapper module's version metadata. The shim's `AssemblyLoadContext` isolation architecture and `Resolving`-event-based cross-context bouncing are preserved unchanged — only the dependency-probing mechanism inside the load context changes.
+**Goal:** Make Concord install and run successfully on Studio Pro 11.10 on macOS from the same merged `.mxmodule` layout that already works on Windows. The current Phase 1 shim (assembly version `5.1.0-alpha.1`) fails MEF activation on Mac with `Hostpolicy must be initialized…` because `ConcordHostLoadContext` eagerly constructs an `AssemblyDependencyResolver` whose constructor calls native `corehost_resolve_component_dependencies` — a function with a precondition Studio Pro's Mac launcher doesn't satisfy.
 
-**Tech Stack:** .NET 8, C# 12, xUnit + FluentAssertions (matches `Concord.Core.Tests`), Studio Pro 10.24.13 + 11.10 on both Windows and macOS for smoke validation.
+**Architecture:** Remove the `AssemblyDependencyResolver` field from `ConcordHostLoadContext` (and its priority-4 fallback in the resolution chain — priorities 1–3 and 5 are unchanged). Add a defensive `LoadUnmanagedDll` override that probes `runtimes/<rid>/native/` for native binaries (e.g., `libe_sqlite3.dylib`) so SQLite still works after the resolver removal. Existing 7-test suite under `tests/Concord.Shim.Tests/` remains as-is; one regression test and one `LoadUnmanagedDll` unit test added.
 
-**Pre-condition:** Source for `src/Concord.Shim/` and any associated test project live on the dev's Windows machine (PDB path inside deployed DLL: `C:\Extensions\Terminal\src\Concord.Shim\…`). This plan must be executed on Windows. The Mac-side repo is for spec/plan authoring only.
+**Tech Stack:** .NET 8, C# 12, xUnit + FluentAssertions + Microsoft.CodeAnalysis.CSharp (Roslyn-compiled fake hosts via `FakeHostBuilder`), Studio Pro 10.24.13 + 11.10 on macOS arm64 + Windows for smoke validation.
 
-**Reference spec:** [`docs/superpowers/specs/2026-05-15-concord-shim-mac-loadcontext-fix-design.md`](../specs/2026-05-15-concord-shim-mac-loadcontext-fix-design.md)
+**Reference spec:** [`docs/superpowers/specs/2026-05-15-concord-shim-mac-loadcontext-fix-design.md`](../specs/2026-05-15-concord-shim-mac-loadcontext-fix-design.md). The spec's §Approach §1–§3 are still correct in intent; §4 (wrapper version bump) is deferred since the current version baseline is `5.1.0-alpha.1`, not `5.0.3` as the spec assumed — the release-step decision is captured as an open question for Joe to resolve after the technical fix lands.
 
 ---
 
 ## File Structure
 
-Each file has one clear responsibility. Changes are minimal-diff against the current Phase 1 shim.
-
 | File | Action | Responsibility |
 |---|---|---|
-| `src/Concord.Shim/ConcordHostLoadContext.cs` | Modify | Removes `AssemblyDependencyResolver` usage. Adds `Load(AssemblyName)` override that probes `_hostFolder`. Adds `LoadUnmanagedDll(string)` override that probes `runtimes/{rid}/native/`. Adds internal helpers `TryResolveAssemblyPath`, `TryResolveNativePath`, `RidFallbackChain` for testability. |
-| `src/Concord.Shim/RuntimeHostLocator.cs` | Audit (modify only if broken) | Must compute extension-folder root via `Assembly.Location`, never `AppDomain.CurrentDomain.BaseDirectory`. |
-| `src/Concord.Shim/Concord.Shim.csproj` | Audit (modify only if broken) | Must ensure `runtimes/<rid>/native/*` is copied into build output for both `osx-arm64` and `osx-x64` (so the build's `runtimes/` tree ends up in the published bundle). |
-| `tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs` | Create or modify | Five unit tests covering managed `Load`, unmanaged `LoadUnmanagedDll`, RID fallback, and the no-`AssemblyDependencyResolver` sanity assertion. Mirrors `tests/Concord.Core.Tests/` patterns (xUnit + FluentAssertions). |
+| `src/Concord.Shim/ConcordHostLoadContext.cs` | Modify | Remove `_resolver` field + its constructor block (lines 39, 45-56) + the priority-4 fallback in `Resolve()` (lines 134-141). Add `LoadUnmanagedDll(string)` override + `TryResolveNativePath` internal helper + `RidFallbackChain` private helper. |
+| `tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs` | Modify | Add two tests: (1) reflection-based regression preventing future re-introduction of `AssemblyDependencyResolver`; (2) `TryResolveNativePath` unit test using existing `FakeHostBuilder` patterns. |
 
-The plan assumes the test project `tests/Concord.Shim.Tests/` already exists on Windows (the deployed shim DLL's `strings` output references `Concord.Shim.Tests` as a known name). If it doesn't exist yet, Task 1 creates it; otherwise Task 1 confirms and skips.
-
----
-
-## Task 0: Pre-flight source audit
-
-**Files:** None — read-only.
-
-This plan was written from the Mac side without sight of the actual `src/Concord.Shim/` source. Class names, method names, and existing structure may differ slightly from this plan's pseudocode. The first task is to read the actual source and document any drift before touching code.
-
-- [ ] **Step 1: Open `src/Concord.Shim/` on Windows and list its files**
-
-Run:
-```powershell
-Get-ChildItem -Recurse -Path src\Concord.Shim\ -File | Select-Object FullName
-```
-
-Expected: at minimum a `Concord.Shim.csproj`, a `ConcordHostLoadContext.cs` (the class name in the deployed DLL strings — confirmed). Note any structural drift from the spec's File Structure table.
-
-- [ ] **Step 2: Read `ConcordHostLoadContext.cs` in full and record the exact class shape**
-
-Capture:
-- Constructor signature (does it take a host folder, a runtimes folder, both, neither?)
-- Whether `AssemblyDependencyResolver` is used (it is, per `strings` evidence — confirm)
-- Existing `Resolving` event handler logic — capture verbatim; it stays unchanged
-- Whether `Load(AssemblyName)` is already overridden
-- Whether `LoadUnmanagedDll(string)` is already overridden
-
-- [ ] **Step 3: Read `RuntimeHostLocator.cs` and grep for `BaseDirectory`**
-
-Run:
-```powershell
-Select-String -Path src\Concord.Shim\*.cs -Pattern "BaseDirectory|Assembly.Location"
-```
-
-Record which method computes the extension folder root and whether it uses `Assembly.Location` (correct) or `AppDomain.CurrentDomain.BaseDirectory` (broken on Mac).
-
-- [ ] **Step 4: Check whether `tests/Concord.Shim.Tests/` exists**
-
-Run:
-```powershell
-Test-Path tests\Concord.Shim.Tests\Concord.Shim.Tests.csproj
-```
-
-If True: read it to confirm xUnit + FluentAssertions (matches `Concord.Core.Tests`). If False: Task 1 will create it.
-
-- [ ] **Step 5: Reconcile any drift before proceeding**
-
-If the source structure differs materially from this plan's pseudocode (e.g., class is `ConcordLoadContext` not `ConcordHostLoadContext`, or `_hostFolder` field is named `_binPath`, etc.), update the plan's later steps' code snippets in place. Do not silently proceed against a stale plan — the engineer 6 months from now reading the merged PR alongside the plan needs them to match.
-
-No commit for this task — it's read-only audit work that informs the rest.
+Nothing else changes. Specifically NOT touched:
+- `RuntimeHostLocator.cs` — already uses `Assembly.Location` correctly (verified during audit).
+- `HostKickstart.cs` — orchestrates the load context but doesn't touch the resolver directly.
+- The 7 existing tests — all pass on Mac today because they never plant a real `Concord.Host{N}x.dll` in `_tempDir`, so the `_resolver` constructor's `File.Exists` guard returns false and the failing native call is never made. Removing the resolver is a no-op for them.
+- `Concord.Shim.csproj` — no dependency changes needed; SQLite native runtimes already ship via transitive references.
 
 ---
 
-## Task 1: Test project scaffolding (create-or-confirm)
-
-**Files:**
-- Maybe-create: `tests/Concord.Shim.Tests/Concord.Shim.Tests.csproj`
-- Maybe-create: `tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs` (empty class — Task 2 adds first test)
-
-Skip this task entirely if Task 0 Step 4 found the test project already exists. Otherwise:
-
-- [ ] **Step 1: Create the test project file**
-
-Create `tests/Concord.Shim.Tests/Concord.Shim.Tests.csproj`:
-
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <IsPackable>false</IsPackable>
-    <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="FluentAssertions" Version="6.12.0" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
-    <PackageReference Include="xunit" Version="2.9.0" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\Concord.Shim\Concord.Shim.csproj" />
-  </ItemGroup>
-
-</Project>
-```
-
-> Versions above match `tests/Concord.Core.Tests/Concord.Core.Tests.csproj` — confirm the version pins haven't drifted by running `Select-String -Path tests\Concord.Core.Tests\Concord.Core.Tests.csproj -Pattern "Version"`.
-
-- [ ] **Step 2: Add the test project to the solution**
-
-Run:
-```powershell
-dotnet sln Terminal.sln add tests\Concord.Shim.Tests\Concord.Shim.Tests.csproj
-```
-
-- [ ] **Step 3: Create empty test class file**
-
-Create `tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs`:
-
-```csharp
-using System;
-using System.IO;
-using System.Reflection;
-using FluentAssertions;
-using Xunit;
-
-namespace Concord.Shim.Tests;
-
-public class ConcordHostLoadContextTests
-{
-    // Tests added in subsequent tasks.
-}
-```
-
-- [ ] **Step 4: Verify the project builds and discovers (zero) tests**
-
-Run:
-```powershell
-dotnet test tests\Concord.Shim.Tests\Concord.Shim.Tests.csproj --no-restore --verbosity quiet
-```
-
-Expected: builds cleanly, "Total tests: 0".
-
-- [ ] **Step 5: Commit**
-
-```powershell
-git add tests/Concord.Shim.Tests/
-git commit -m "test: scaffold Concord.Shim.Tests project"
-```
-
----
-
-## Task 2: First failing test — `Load` finds assembly in host folder
-
-**Files:**
-- Modify: `tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs`
-
-Add the first test. This test drives the introduction of an internal `TryResolveAssemblyPath` helper inside `ConcordHostLoadContext` — testing pure path-resolution logic without actually loading any DLL.
-
-- [ ] **Step 1: Add the test**
-
-Add this method to `ConcordHostLoadContextTests` (after the existing `// Tests added in subsequent tasks.` placeholder, which can be deleted):
-
-```csharp
-[Fact]
-public void TryResolveAssemblyPath_ReturnsPath_WhenDllExistsInHostFolder()
-{
-    var tempDir = Path.Combine(Path.GetTempPath(), "concord-shim-test-" + Guid.NewGuid().ToString("N"));
-    Directory.CreateDirectory(tempDir);
-    try
-    {
-        var stubName = "FakeHost";
-        var stubPath = Path.Combine(tempDir, stubName + ".dll");
-        File.WriteAllBytes(stubPath, Array.Empty<byte>()); // path-existence is what's tested
-
-        var ctx = new ConcordHostLoadContext(hostFolder: tempDir, runtimesFolder: tempDir);
-
-        var resolved = ctx.TryResolveAssemblyPath(stubName, out var path);
-
-        resolved.Should().BeTrue();
-        path.Should().Be(stubPath);
-    }
-    finally
-    {
-        Directory.Delete(tempDir, recursive: true);
-    }
-}
-```
-
-> The test calls `TryResolveAssemblyPath` directly — an internal helper that doesn't exist yet (compilation will fail in step 2). That's by design (TDD red).
-
-- [ ] **Step 2: Run test, expect compile failure**
-
-Run:
-```powershell
-dotnet test tests\Concord.Shim.Tests\Concord.Shim.Tests.csproj --no-restore
-```
-
-Expected: build fails with `CS0117: 'ConcordHostLoadContext' does not contain a definition for 'TryResolveAssemblyPath'` (or similar — depending on the current shape of `ConcordHostLoadContext`, the error may be CS1061 instead).
-
-No commit — failing tests aren't committed yet.
-
----
-
-## Task 3: Implement `Load` + `TryResolveAssemblyPath` (drop `AssemblyDependencyResolver`)
+## Task 1: Remove `AssemblyDependencyResolver` from `ConcordHostLoadContext`
 
 **Files:**
 - Modify: `src/Concord.Shim/ConcordHostLoadContext.cs`
 
-This task makes the Task 2 test pass and is the structural heart of the fix. The exact edit depends on what Task 0 found; the pattern is:
+The core fix. Three edits, all deletions.
 
-1. Remove the field `private readonly AssemblyDependencyResolver _resolver;` and its initialization in the constructor.
-2. Remove any helper method that calls `_resolver.ResolveAssemblyToPath(name)`.
-3. Add the internal helper `TryResolveAssemblyPath`.
-4. Add (or rewrite) the `Load(AssemblyName)` override to call the helper.
+- [ ] **Step 1: Remove the `_resolver` field**
 
-- [ ] **Step 1: Make `InternalsVisibleTo` declaration if not already present**
-
-The test calls `internal` members (`TryResolveAssemblyPath`). Add to `src/Concord.Shim/Concord.Shim.csproj` (inside an `<ItemGroup>`):
-
-```xml
-<ItemGroup>
-  <InternalsVisibleTo Include="Concord.Shim.Tests" />
-</ItemGroup>
-```
-
-Skip this step if the line is already present.
-
-- [ ] **Step 2: Edit `ConcordHostLoadContext.cs`**
-
-Locate the current `AssemblyDependencyResolver` usage (per Task 0 Step 2). Replace it. The class should look approximately like this (adapt field names + constructor signature to whatever Task 0 found):
+Edit `src/Concord.Shim/ConcordHostLoadContext.cs` — remove line 39:
 
 ```csharp
-using System;
-using System.IO;
-using System.Reflection;
-using System.Runtime.Loader;
+    private readonly AssemblyDependencyResolver? _resolver;
+```
 
-namespace Concord.Shim;
+- [ ] **Step 2: Remove the constructor block that builds `_resolver`**
 
-internal sealed class ConcordHostLoadContext : AssemblyLoadContext
-{
-    private readonly string _hostFolder;
-    private readonly string _runtimesFolder;
+Edit the constructor (lines 41-59) — replace this:
 
-    public ConcordHostLoadContext(string hostFolder, string runtimesFolder)
-        : base(name: "ConcordHost", isCollectible: false)
+```csharp
+    public ConcordHostLoadContext(string hostFolder)
+        : base(name: $"ConcordHost@{hostFolder}", isCollectible: false)
     {
         _hostFolder = hostFolder;
-        _runtimesFolder = runtimesFolder;
+        // AssemblyDependencyResolver reads the .deps.json of a primary
+        // assembly to resolve its dependency graph. We construct it ONLY
+        // when the host DLL is already on disk (the File.Exists guard
+        // below) — the resolver constructor immediately reads the adjacent
+        // .deps.json and would throw otherwise. Phase 3's HostKickstart
+        // must therefore ensure the bin folder is populated before
+        // constructing this context.
+        var likelyHostDll = Path.Combine(hostFolder, "Concord.Host10x.dll");
+        if (!File.Exists(likelyHostDll))
+            likelyHostDll = Path.Combine(hostFolder, "Concord.Host11x.dll");
+        if (File.Exists(likelyHostDll))
+            _resolver = new AssemblyDependencyResolver(likelyHostDll);
 
-        // Existing Resolving handler stays unchanged — captured verbatim from Task 0 Step 2.
-        Resolving += BounceSharedToDefaultContext;
+        Resolving += OnResolving;
+    }
+```
+
+with this:
+
+```csharp
+    public ConcordHostLoadContext(string hostFolder)
+        : base(name: $"ConcordHost@{hostFolder}", isCollectible: false)
+    {
+        _hostFolder = hostFolder;
+        Resolving += OnResolving;
+    }
+```
+
+- [ ] **Step 3: Remove the priority-4 fallback in `Resolve()`**
+
+Edit `Resolve()` (lines 134-141) — remove this entire block:
+
+```csharp
+        // 4. AssemblyDependencyResolver — handles runtimes/<rid>/ subfolders
+        //    for native interop, satellite resources, etc.
+        var resolved = _resolver?.ResolveAssemblyToPath(name);
+        if (resolved is not null && File.Exists(resolved))
+        {
+            ShimLog.Info($"Resolved {simpleName} from {resolved} via dependency resolver into {Name}");
+            return LoadFromAssemblyPath(resolved);
+        }
+```
+
+And renumber priority-5's comment to priority-4 — replace:
+
+```csharp
+        // 5. Fall through to default context. BCL types like System.Runtime
+        //    that the runtime provides without a host-folder copy resolve
+        //    here through the default ALC's own probing.
+        return null;
+```
+
+with:
+
+```csharp
+        // 4. Fall through to default context. BCL types like System.Runtime
+        //    that the runtime provides without a host-folder copy resolve
+        //    here through the default ALC's own probing.
+        return null;
+```
+
+- [ ] **Step 4: Update the class-level XML doc**
+
+The class-level doc (lines 7-35) lists "resolution order" as 3 items but the real code had 4 priorities + fallback (with #4 being the resolver). The doc's 3-item structure doesn't actually need changing — the resolver was an implementation detail that wasn't called out in the doc anyway. No edit needed.
+
+If you want to add a sentence to the class doc justifying the absence, add this paragraph at the end (before `</summary>`):
+
+```csharp
+/// Resolution uses ONLY file-system probing and default-ALC dynamic lookup —
+/// not <see cref="AssemblyDependencyResolver"/>. The resolver's constructor
+/// invokes native <c>corehost_resolve_component_dependencies</c>, which
+/// requires hostpolicy to have been initialized via <c>corehost_main</c>.
+/// Studio Pro on macOS uses an embedded .NET hosting path that doesn't
+/// satisfy that precondition (<c>InvalidArgFailure</c> -2147450750). The
+/// flat host folder layout covers all Concord deps; no resolver needed.
+```
+
+- [ ] **Step 5: Remove unused `using` if present**
+
+If the `using System.Runtime.Loader;` directive at the top of the file is now only used for `AssemblyLoadContext` (which is the base class), keep it. If it had any usage exclusively for `AssemblyDependencyResolver` that's now gone, no removal needed because `AssemblyLoadContext` lives in the same namespace.
+
+- [ ] **Step 6: Build and verify the change compiles**
+
+Run:
+```bash
+dotnet build src/Concord.Shim/Concord.Shim.csproj 2>&1 | tail -10
+```
+
+Expected: 0 errors, 0 warnings (or only the pre-existing warnings).
+
+- [ ] **Step 7: Run the existing test suite to verify no regression**
+
+Run:
+```bash
+dotnet test tests/Concord.Shim.Tests/ --no-restore 2>&1 | tail -15
+```
+
+Expected: 7+ tests pass (the existing test count; may be slightly higher if other test files in the project add to it).
+
+> Note: Existing tests don't reproduce the Mac failure because they emit fake host DLLs named "FakeHost" — not "Concord.Host10x" or "Concord.Host11x" — so the old `File.Exists` guard skipped resolver construction. After this task, the guard is gone entirely, so the same tests exercise the same code paths but via a different (simpler) flow.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src/Concord.Shim/ConcordHostLoadContext.cs
+git commit -m "fix(shim): remove AssemblyDependencyResolver from ConcordHostLoadContext
+
+The resolver's constructor invokes native corehost_resolve_component_
+dependencies, which has a precondition (fxr_path set during corehost_main)
+that Studio Pro's macOS launcher doesn't satisfy. Result on Mac:
+InvalidArgFailure -2147450750 thrown during MEF activation of
+TerminalWebServerShim (whichever shim export MEF activates first),
+cascading to a CompositionException that prevents the extension from
+loading entirely.
+
+The resolver was used as priority-4 fallback in Resolve() to handle
+runtimes/<rid>/lib/<tfm>/ RID-specific managed DLLs. None of Concord's
+actual managed dependencies use that layout (they're all flat in the
+host folder, hit by priority-3). Native binaries continue to need
+handling — addressed in the follow-up commit adding LoadUnmanagedDll.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+## Task 2: Regression test — no `AssemblyDependencyResolver` field
+
+**Files:**
+- Modify: `tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs`
+
+Sanity test preventing future re-introduction of the resolver. Reflection-based; cross-platform; fast.
+
+- [ ] **Step 1: Add the test method to the end of the class**
+
+Append to `tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs` (before the closing `}` of `ConcordHostLoadContextTests`):
+
+```csharp
+    // Regression: AssemblyDependencyResolver was removed in
+    // fix(shim) commit "remove AssemblyDependencyResolver from
+    // ConcordHostLoadContext". Its constructor invokes native
+    // corehost_resolve_component_dependencies which fails on macOS
+    // Studio Pro (hostpolicy not initialized via corehost_main).
+    // Don't re-introduce — if a future change needs deps.json-driven
+    // resolution, find a different mechanism that works on both platforms.
+    [Fact]
+    public void ConcordHostLoadContext_HasNoAssemblyDependencyResolverField()
+    {
+        var resolverType = typeof(System.Runtime.Loader.AssemblyDependencyResolver);
+        var fields = typeof(ConcordHostLoadContext)
+            .GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+
+        fields.Should().NotContain(
+            f => f.FieldType == resolverType || f.FieldType == typeof(System.Runtime.Loader.AssemblyDependencyResolver?),
+            because: "AssemblyDependencyResolver's constructor calls native " +
+                     "corehost_resolve_component_dependencies which fails on macOS " +
+                     "Studio Pro — see fix commit message for full root cause.");
+    }
+```
+
+- [ ] **Step 2: Build + run the new test**
+
+Run:
+```bash
+dotnet test tests/Concord.Shim.Tests/ --no-restore --filter "FullyQualifiedName~ConcordHostLoadContext_HasNoAssemblyDependencyResolverField" 2>&1 | tail -10
+```
+
+Expected: 1/1 passing.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs
+git commit -m "test(shim): regression-prevent re-introduction of AssemblyDependencyResolver
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+## Task 3: Add `LoadUnmanagedDll` override + `TryResolveNativePath` helper
+
+**Files:**
+- Modify: `src/Concord.Shim/ConcordHostLoadContext.cs`
+
+Defensive: SQLite's `libe_sqlite3.dylib` (and the Linux/Windows equivalents) live under `runtimes/<rid>/native/` in the deployed snapshot. Without an explicit probe, .NET's default native-search may also fall back to the same hostpolicy-initialised state that just broke on Mac. This override makes native loading deterministic regardless of platform.
+
+- [ ] **Step 1: Add the `LoadUnmanagedDll` override and helpers**
+
+Edit `src/Concord.Shim/ConcordHostLoadContext.cs`. After the `Dispose()` method (around line 172), add these members inside the class:
+
+```csharp
+    protected override IntPtr LoadUnmanagedDll(string unmanagedDllName)
+    {
+        ShimLog.Info($"LoadUnmanagedDll fired for {unmanagedDllName}");
+        if (TryResolveNativePath(unmanagedDllName, out var path))
+        {
+            ShimLog.Info($"Resolved native {unmanagedDllName} from {path} into {Name}");
+            return LoadUnmanagedDllFromPath(path!);
+        }
+        // Fall through to default native search (probes the executable's
+        // directory, OS-default search paths, etc.). Returning IntPtr.Zero
+        // signals "I didn't find it; please try the default mechanism".
+        return IntPtr.Zero;
     }
 
-    internal bool TryResolveAssemblyPath(string assemblyName, out string? path)
+    internal bool TryResolveNativePath(string unmanagedDllName, out string? path)
     {
-        var candidate = Path.Combine(_hostFolder, assemblyName + ".dll");
-        if (File.Exists(candidate))
+        var runtimesDir = Path.Combine(_hostFolder, "..", "runtimes");
+        if (!Directory.Exists(runtimesDir))
         {
-            path = candidate;
+            // Some deployments may also ship runtimes/ alongside the host
+            // folder rather than at the extension root; try the host folder
+            // as a fallback.
+            runtimesDir = Path.Combine(_hostFolder, "runtimes");
+        }
+        if (Directory.Exists(runtimesDir))
+        {
+            foreach (var probe in NativeProbePaths(runtimesDir, unmanagedDllName))
+            {
+                if (File.Exists(probe))
+                {
+                    path = probe;
+                    return true;
+                }
+            }
+        }
+        // Last-ditch: flat in host folder (some packages drop natives there).
+        var flat = Path.Combine(_hostFolder, unmanagedDllName);
+        if (File.Exists(flat))
+        {
+            path = flat;
             return true;
         }
         path = null;
         return false;
     }
 
-    protected override Assembly? Load(AssemblyName assemblyName)
+    private static IEnumerable<string> NativeProbePaths(string runtimesDir, string name)
     {
-        if (assemblyName.Name is null) return null;
-        return TryResolveAssemblyPath(assemblyName.Name, out var path)
-            ? LoadFromAssemblyPath(path!)
-            : null;
+        foreach (var rid in RidFallbackChain())
+        {
+            var native = Path.Combine(runtimesDir, rid, "native");
+            if (!Directory.Exists(native)) continue;
+            // Try the bare name first (some callers pass full filename).
+            yield return Path.Combine(native, name);
+            // Platform-conventional variants.
+            if (OperatingSystem.IsMacOS())
+            {
+                yield return Path.Combine(native, "lib" + name + ".dylib");
+                yield return Path.Combine(native, name + ".dylib");
+            }
+            else if (OperatingSystem.IsWindows())
+            {
+                yield return Path.Combine(native, name + ".dll");
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                yield return Path.Combine(native, "lib" + name + ".so");
+                yield return Path.Combine(native, name + ".so");
+            }
+        }
     }
 
-    private Assembly? BounceSharedToDefaultContext(AssemblyLoadContext _, AssemblyName name)
+    private static IEnumerable<string> RidFallbackChain()
     {
-        // PRESERVED VERBATIM from the existing implementation captured in Task 0 Step 2.
-        // Typical shape: bounce Mendix.StudioPro.ExtensionsAPI / System.* / Microsoft.Extensions.*
-        // back to AssemblyLoadContext.Default by returning Default.LoadFromAssemblyName(name).
-        // The existing logic is correct and platform-independent; do not modify it here.
-        throw new NotImplementedException("Replace with existing handler body from Task 0 Step 2");
+        // RuntimeInformation.RuntimeIdentifier returns the most specific RID
+        // (e.g., osx-arm64 on Apple Silicon, win-x64 on x64 Windows).
+        var current = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier;
+        yield return current;
+
+        if (OperatingSystem.IsMacOS())
+        {
+            yield return "osx";
+            yield return "unix";
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            yield return "linux";
+            yield return "unix";
+        }
+        else if (OperatingSystem.IsWindows())
+        {
+            yield return "win";
+        }
+
+        yield return "any";
     }
-}
 ```
 
-> Critical: the existing `Resolving` handler body must be carried over verbatim. The placeholder `throw new NotImplementedException` is a deliberate plan marker — replace it with the captured body before saving the file.
+Add the necessary `using` at the top if not already present:
 
-- [ ] **Step 3: Run the test, expect pass**
+```csharp
+using System.Collections.Generic;
+```
+
+(`System.IO` and `System.Runtime.Loader` are already there; `System.Runtime.InteropServices` is qualified inline to avoid touching the using block unnecessarily.)
+
+- [ ] **Step 2: Build and verify**
 
 Run:
-```powershell
-dotnet test tests\Concord.Shim.Tests\Concord.Shim.Tests.csproj --no-restore --filter "TryResolveAssemblyPath_ReturnsPath_WhenDllExistsInHostFolder"
+```bash
+dotnet build src/Concord.Shim/Concord.Shim.csproj 2>&1 | tail -10
 ```
 
-Expected: 1/1 passing.
+Expected: 0 errors.
 
-- [ ] **Step 4: Run the full test suite to check for regressions in Concord.Core.Tests / Terminal.Tests**
+- [ ] **Step 3: Run existing tests to check no regression**
 
 Run:
-```powershell
-dotnet test --no-restore
+```bash
+dotnet test tests/Concord.Shim.Tests/ --no-restore 2>&1 | tail -15
 ```
 
-Expected: all existing tests still pass (the changes are confined to `Concord.Shim`; no behavior change visible to other test projects).
+Expected: 8/8 passing (the original 7 + the regression test from Task 2).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
-```powershell
-git add src/Concord.Shim/Concord.Shim.csproj src/Concord.Shim/ConcordHostLoadContext.cs tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs
-git commit -m "fix(shim): replace AssemblyDependencyResolver with file-system probe
+```bash
+git add src/Concord.Shim/ConcordHostLoadContext.cs
+git commit -m "fix(shim): override LoadUnmanagedDll with runtimes/<rid>/native/ probe
 
-AssemblyDependencyResolver internally calls native
-corehost_resolve_component_dependencies which requires hostpolicy was
-initialized via corehost_main. Studio Pro on macOS uses an embedded
-hosting path that doesn't satisfy this precondition, causing the shim
-to fail MEF activation with InvalidArgFailure (-2147450750).
+Defensive against the same hostpolicy class of failure that took out
+AssemblyDependencyResolver on Mac. SQLite (libe_sqlite3.dylib on Mac,
+e_sqlite3.dll on Windows) and any other native interop bits live under
+runtimes/<rid>/native/ in the deployed snapshot — explicit probe with
+RID fallback (osx-arm64 -> osx -> unix -> any, mirror on other
+platforms) makes resolution deterministic regardless of how .NET was
+hosted.
 
-Replaces the resolver with a simple file-system probe of the host
-folder, preserving the AssemblyLoadContext isolation and Resolving
-event handler unchanged."
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
 
-## Task 4: Test + verify — `Load` returns null for unknown assembly
+## Task 4: Unit test — `TryResolveNativePath` probes RID-specific native folder
 
 **Files:**
 - Modify: `tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs`
 
-Defensive test: confirms `TryResolveAssemblyPath` returns false (and `Load` returns null) for an assembly name with no matching DLL, so the `Resolving` event still gets a chance to bounce to the default context.
+Tests the new probe logic directly via the internal `TryResolveNativePath` method. Cross-platform: derives expected file layout from `RuntimeInformation.RuntimeIdentifier` at runtime.
 
 - [ ] **Step 1: Add the test**
 
-```csharp
-[Fact]
-public void TryResolveAssemblyPath_ReturnsFalse_WhenDllAbsent()
-{
-    var tempDir = Path.Combine(Path.GetTempPath(), "concord-shim-test-" + Guid.NewGuid().ToString("N"));
-    Directory.CreateDirectory(tempDir);
-    try
-    {
-        var ctx = new ConcordHostLoadContext(hostFolder: tempDir, runtimesFolder: tempDir);
-
-        var resolved = ctx.TryResolveAssemblyPath("NotPresent", out var path);
-
-        resolved.Should().BeFalse();
-        path.Should().BeNull();
-    }
-    finally
-    {
-        Directory.Delete(tempDir, recursive: true);
-    }
-}
-```
-
-- [ ] **Step 2: Run, expect pass (already-correct behavior; this is a regression-prevention test)**
-
-Run:
-```powershell
-dotnet test tests\Concord.Shim.Tests\Concord.Shim.Tests.csproj --no-restore --filter "TryResolveAssemblyPath_ReturnsFalse_WhenDllAbsent"
-```
-
-Expected: 1/1 passing.
-
-- [ ] **Step 3: Commit**
-
-```powershell
-git add tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs
-git commit -m "test(shim): regression-prevent Load returning non-null for absent DLL"
-```
-
----
-
-## Task 5: Failing test — `LoadUnmanagedDll` probes RID folders
-
-**Files:**
-- Modify: `tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs`
-
-Adds a test for the unmanaged-DLL probe. Tests cross-platform: the test computes the expected file layout based on `RuntimeInformation.RuntimeIdentifier` so it works on both Windows and macOS without conditionals.
-
-- [ ] **Step 1: Add the test**
+Append to `ConcordHostLoadContextTests` (before the closing brace):
 
 ```csharp
-[Fact]
-public void TryResolveNativePath_FindsFileInMatchingRidNativeFolder()
-{
-    var tempDir = Path.Combine(Path.GetTempPath(), "concord-shim-test-" + Guid.NewGuid().ToString("N"));
-    var rid = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier;
-    var nativeDir = Path.Combine(tempDir, "runtimes", rid, "native");
-    Directory.CreateDirectory(nativeDir);
-    try
+    [Fact]
+    public void TryResolveNativePath_FindsNativeFileInMatchingRidFolder()
     {
-        // Use the platform-conventional native filename:
-        // Mac: libe_sqlite3.dylib, Windows: e_sqlite3.dll, Linux: libe_sqlite3.so
-        var (fileName, probeName) = PlatformNativeName("e_sqlite3");
+        // Layout: <_tempDir>/host/ (the load context's hostFolder)
+        //         <_tempDir>/runtimes/<rid>/native/<lib-or-dll>
+        // Matches the production deployed snapshot: runtimes/ is one level
+        // up from the host folder.
+        var hostFolder = Path.Combine(_tempDir, "host");
+        Directory.CreateDirectory(hostFolder);
+        var rid = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier;
+        var nativeDir = Path.Combine(_tempDir, "runtimes", rid, "native");
+        Directory.CreateDirectory(nativeDir);
+
+        // Platform-conventional native filename.
+        string fileName, probeName;
+        if (OperatingSystem.IsMacOS())   { fileName = "libe_sqlite3.dylib"; probeName = "e_sqlite3"; }
+        else if (OperatingSystem.IsWindows()) { fileName = "e_sqlite3.dll"; probeName = "e_sqlite3"; }
+        else if (OperatingSystem.IsLinux())   { fileName = "libe_sqlite3.so"; probeName = "e_sqlite3"; }
+        else throw new PlatformNotSupportedException();
+
         var stubPath = Path.Combine(nativeDir, fileName);
         File.WriteAllBytes(stubPath, Array.Empty<byte>());
 
-        var ctx = new ConcordHostLoadContext(hostFolder: tempDir, runtimesFolder: Path.Combine(tempDir, "runtimes"));
+        using var ctx = new ConcordHostLoadContext(hostFolder);
 
         var resolved = ctx.TryResolveNativePath(probeName, out var path);
 
         resolved.Should().BeTrue();
         path.Should().Be(stubPath);
     }
-    finally
-    {
-        Directory.Delete(tempDir, recursive: true);
-    }
-}
 
-private static (string fileName, string probeName) PlatformNativeName(string baseName)
-{
-    if (System.OperatingSystem.IsMacOS())   return ($"lib{baseName}.dylib", baseName);
-    if (System.OperatingSystem.IsWindows()) return ($"{baseName}.dll", baseName);
-    if (System.OperatingSystem.IsLinux())   return ($"lib{baseName}.so", baseName);
-    throw new System.PlatformNotSupportedException();
-}
+    [Fact]
+    public void TryResolveNativePath_ReturnsFalse_WhenNoNativeFolderExists()
+    {
+        var hostFolder = Path.Combine(_tempDir, "host");
+        Directory.CreateDirectory(hostFolder);
+
+        using var ctx = new ConcordHostLoadContext(hostFolder);
+
+        var resolved = ctx.TryResolveNativePath("nonexistent", out var path);
+
+        resolved.Should().BeFalse();
+        path.Should().BeNull();
+    }
 ```
 
-- [ ] **Step 2: Run, expect compile failure**
+- [ ] **Step 2: Run the new tests**
 
 Run:
-```powershell
-dotnet test tests\Concord.Shim.Tests\Concord.Shim.Tests.csproj --no-restore
+```bash
+dotnet test tests/Concord.Shim.Tests/ --no-restore --filter "FullyQualifiedName~TryResolveNativePath" 2>&1 | tail -10
 ```
 
-Expected: CS0117 / CS1061 — `TryResolveNativePath` doesn't exist on `ConcordHostLoadContext`.
+Expected: 2/2 passing on whatever platform you're running.
 
-No commit yet.
-
----
-
-## Task 6: Implement `LoadUnmanagedDll` + `TryResolveNativePath` + `RidFallbackChain`
-
-**Files:**
-- Modify: `src/Concord.Shim/ConcordHostLoadContext.cs`
-
-- [ ] **Step 1: Add the unmanaged probe + override to `ConcordHostLoadContext`**
-
-Append these members to the class (inside the existing class body):
-
-```csharp
-internal bool TryResolveNativePath(string unmanagedDllName, out string? path)
-{
-    foreach (var probe in GetNativeProbePaths(unmanagedDllName))
-    {
-        if (File.Exists(probe))
-        {
-            path = probe;
-            return true;
-        }
-    }
-    path = null;
-    return false;
-}
-
-protected override IntPtr LoadUnmanagedDll(string unmanagedDllName)
-{
-    return TryResolveNativePath(unmanagedDllName, out var path)
-        ? LoadUnmanagedDllFromPath(path!)
-        : IntPtr.Zero;
-}
-
-private IEnumerable<string> GetNativeProbePaths(string name)
-{
-    foreach (var rid in RidFallbackChain())
-    {
-        var native = Path.Combine(_runtimesFolder, rid, "native");
-        if (!Directory.Exists(native)) continue;
-        // Try the bare name (caller passed full filename) and platform-conventional variants.
-        yield return Path.Combine(native, name);
-        if (System.OperatingSystem.IsMacOS())
-        {
-            yield return Path.Combine(native, "lib" + name + ".dylib");
-            yield return Path.Combine(native, name + ".dylib");
-        }
-        else if (System.OperatingSystem.IsWindows())
-        {
-            yield return Path.Combine(native, name + ".dll");
-        }
-        else if (System.OperatingSystem.IsLinux())
-        {
-            yield return Path.Combine(native, "lib" + name + ".so");
-            yield return Path.Combine(native, name + ".so");
-        }
-    }
-    // Last-ditch: top of host folder.
-    yield return Path.Combine(_hostFolder, name);
-}
-
-private static IEnumerable<string> RidFallbackChain()
-{
-    var current = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier;
-    yield return current;  // e.g., "osx-arm64"
-
-    if (System.OperatingSystem.IsMacOS())
-    {
-        yield return "osx";       // generic mac
-        yield return "unix";
-    }
-    else if (System.OperatingSystem.IsLinux())
-    {
-        yield return "linux";
-        yield return "unix";
-    }
-    else if (System.OperatingSystem.IsWindows())
-    {
-        yield return "win";
-    }
-
-    yield return "any";
-}
-```
-
-Required `using` statements (add to top of file if not already present):
-
-```csharp
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
-```
-
-- [ ] **Step 2: Run the test, expect pass**
+- [ ] **Step 3: Run full suite to confirm no regression**
 
 Run:
-```powershell
-dotnet test tests\Concord.Shim.Tests\Concord.Shim.Tests.csproj --no-restore --filter "TryResolveNativePath_FindsFileInMatchingRidNativeFolder"
+```bash
+dotnet test tests/Concord.Shim.Tests/ --no-restore 2>&1 | tail -15
 ```
 
-Expected: 1/1 passing on the current platform.
-
-- [ ] **Step 3: Run full suite**
-
-Run:
-```powershell
-dotnet test --no-restore
-```
-
-Expected: all tests pass (no regressions; new probe code is only invoked via the new test paths and via the new `LoadUnmanagedDll` override which is only triggered during actual shim activation in Studio Pro).
+Expected: 10/10 passing (original 7 + Task 2 regression + Task 4's 2 native probe tests).
 
 - [ ] **Step 4: Commit**
 
-```powershell
-git add src/Concord.Shim/ConcordHostLoadContext.cs tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs
-git commit -m "fix(shim): override LoadUnmanagedDll to probe runtimes/{rid}/native/
-
-SQLite (libe_sqlite3.dylib) and any other native dependencies live in
-runtimes/<rid>/native/ in the deployed snapshot. Without an explicit
-probe, .NET's default unmanaged-DLL search falls back to the same
-hostpolicy machinery that fails on Mac. Direct file-system probe with
-RID fallback (osx-arm64 -> osx -> unix -> any) covers all targeted
-platforms."
-```
-
----
-
-## Task 7: RID fallback test
-
-**Files:**
-- Modify: `tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs`
-
-Confirms that if the most-specific RID folder is missing but a generic RID folder has the file, the probe still resolves. Real-world case: a NuGet package that only ships `runtimes/osx/native/` (no `osx-arm64/`) still works on Apple Silicon.
-
-- [ ] **Step 1: Add the test**
-
-```csharp
-[Fact]
-public void TryResolveNativePath_FallsBackThroughRidGraph()
-{
-    if (!System.OperatingSystem.IsMacOS())
-    {
-        // Test exercises Mac-specific RID fallback (osx-arm64/osx-x64 -> osx -> unix).
-        // On non-Mac platforms the fallback chain is different; skip to keep the
-        // test focused.
-        return;
-    }
-
-    var tempDir = Path.Combine(Path.GetTempPath(), "concord-shim-test-" + Guid.NewGuid().ToString("N"));
-    var genericNativeDir = Path.Combine(tempDir, "runtimes", "osx", "native");
-    Directory.CreateDirectory(genericNativeDir);
-    try
-    {
-        // File lives ONLY under runtimes/osx/native/, not under runtimes/osx-arm64/native/
-        var stubPath = Path.Combine(genericNativeDir, "libe_sqlite3.dylib");
-        File.WriteAllBytes(stubPath, Array.Empty<byte>());
-
-        var ctx = new ConcordHostLoadContext(hostFolder: tempDir, runtimesFolder: Path.Combine(tempDir, "runtimes"));
-
-        var resolved = ctx.TryResolveNativePath("e_sqlite3", out var path);
-
-        resolved.Should().BeTrue();
-        path.Should().Be(stubPath);
-    }
-    finally
-    {
-        Directory.Delete(tempDir, recursive: true);
-    }
-}
-```
-
-- [ ] **Step 2: Run on Mac (or skip on Windows)**
-
-Run:
-```powershell
-dotnet test tests\Concord.Shim.Tests\Concord.Shim.Tests.csproj --no-restore --filter "TryResolveNativePath_FallsBackThroughRidGraph"
-```
-
-Expected on Mac: 1/1 passing. Expected on Windows: 1/1 passing (test early-returns).
-
-- [ ] **Step 3: Commit**
-
-```powershell
+```bash
 git add tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs
-git commit -m "test(shim): RID fallback resolves osx-arm64 via osx generic native folder"
+git commit -m "test(shim): TryResolveNativePath finds RID-specific natives + no-folder fallback
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
 
-## Task 8: Sanity test — no `AssemblyDependencyResolver` field remains
+## Task 5: Full-solution build + test sweep
 
-**Files:**
-- Modify: `tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs`
+**Files:** None (verification).
 
-Regression-prevention test. Uses reflection to assert that `ConcordHostLoadContext` has no field of type `AssemblyDependencyResolver`. Future refactor that re-introduces the resolver (e.g., copy-paste from a sample) will fail this test.
+- [ ] **Step 1: Build the whole solution**
 
-- [ ] **Step 1: Add the test**
-
-```csharp
-[Fact]
-public void ConcordHostLoadContext_DoesNotUseAssemblyDependencyResolver()
-{
-    var fields = typeof(ConcordHostLoadContext)
-        .GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-
-    fields.Should().NotContain(
-        f => f.FieldType.FullName == "System.Runtime.Loader.AssemblyDependencyResolver",
-        because: "AssemblyDependencyResolver calls native corehost_resolve_component_dependencies " +
-                 "which fails on Studio Pro for macOS (hostpolicy not initialized via corehost_main).");
-}
+Run from repo root:
+```bash
+dotnet build Terminal.sln 2>&1 | tail -10
 ```
 
-- [ ] **Step 2: Run, expect pass**
+Expected: 0 errors. Warnings should match the pre-fix baseline (no new warnings introduced).
+
+- [ ] **Step 2: Run the full test suite**
 
 Run:
-```powershell
-dotnet test tests\Concord.Shim.Tests\Concord.Shim.Tests.csproj --no-restore --filter "ConcordHostLoadContext_DoesNotUseAssemblyDependencyResolver"
+```bash
+dotnet test Terminal.sln 2>&1 | tail -20
 ```
 
-Expected: 1/1 passing (the field was removed in Task 3).
+Expected: all tests pass across `Terminal.Tests`, `Concord.Core.Tests`, `Concord.Shim.Tests`. The Mac CI run will skip any Maia-live tests (already marked Skip) — that's expected.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: No commit; this is a checkpoint**
 
-```powershell
-git add tests/Concord.Shim.Tests/ConcordHostLoadContextTests.cs
-git commit -m "test(shim): regression-prevent re-introduction of AssemblyDependencyResolver"
-```
+If anything failed, stop and investigate before proceeding to deploy.
 
 ---
 
-## Task 9: Audit `RuntimeHostLocator` for `BaseDirectory` usage
-
-**Files:**
-- Read: `src/Concord.Shim/RuntimeHostLocator.cs`
-- Modify (only if broken): `src/Concord.Shim/RuntimeHostLocator.cs`
-
-Phase 0 spike Probe Bug B: `AppDomain.CurrentDomain.BaseDirectory` returns Studio Pro's install dir, not the extension's deployed-snapshot folder. If `RuntimeHostLocator` uses this, the shim is silently broken on Mac in addition to the resolver issue (and would have been broken on Windows had the spike not caught it earlier in the cycle).
-
-- [ ] **Step 1: Read the current implementation**
-
-Open `src/Concord.Shim/RuntimeHostLocator.cs` (per Task 0 Step 3 grep results).
-
-- [ ] **Step 2: Determine which path-resolution mechanism it uses**
-
-- If it uses `Path.GetDirectoryName(typeof(...).Assembly.Location)` → correct; skip to Step 4.
-- If it uses `AppDomain.CurrentDomain.BaseDirectory` → broken on Mac; proceed to Step 3.
-
-- [ ] **Step 3: Fix the broken path resolution**
-
-Replace `AppDomain.CurrentDomain.BaseDirectory` with `Path.GetDirectoryName(typeof(TYPENAME).Assembly.Location)!` where `TYPENAME` is a type known to live in `Concord.Shim.dll` (e.g., `RuntimeHostLocator` itself, or one of the shim's `[Export]` classes — pick whichever feels natural per the existing code structure).
-
-- [ ] **Step 4: Run the full test suite (regression check)**
-
-Run:
-```powershell
-dotnet test --no-restore
-```
-
-Expected: all tests pass.
-
-- [ ] **Step 5: Commit (only if Step 3 made changes)**
-
-```powershell
-git add src/Concord.Shim/RuntimeHostLocator.cs
-git commit -m "fix(shim): resolve extension folder via Assembly.Location
-
-AppDomain.CurrentDomain.BaseDirectory returns Studio Pro's install dir
-under the per-project cache-snapshot deployment model, not the
-extension's actual deployed folder. Use the shim assembly's own
-Location instead, matching Phase 0 spike findings (Probe Bug B)."
-```
-
-If Step 2 confirmed `Assembly.Location` was already in use, skip the commit. Document the audit result in the eventual PR description.
-
----
-
-## Task 10: Verify `runtimes/` tree in build output
-
-**Files:**
-- Read: `src/Concord.Shim/Concord.Shim.csproj`
-- Read: `src/Concord.Shim/bin/Debug/net8.0/` (build output)
-- Maybe-modify: `src/Concord.Shim/Concord.Shim.csproj`
-
-The deployed snapshot has `runtimes/` at the extension-folder top level (shared between `bin-10x/` and `bin-11x/` hosts). The build must produce this structure too.
-
-- [ ] **Step 1: Clean + rebuild the shim**
-
-Run:
-```powershell
-dotnet build src\Concord.Shim\Concord.Shim.csproj -c Debug
-```
-
-Expected: build succeeds.
-
-- [ ] **Step 2: Inspect the produced `runtimes/` tree**
-
-Run:
-```powershell
-Get-ChildItem -Recurse -Path src\Concord.Shim\bin\Debug\net8.0\runtimes -File | Select-Object FullName
-```
-
-Expected (minimum): files under `runtimes/osx-arm64/native/`, `runtimes/osx-x64/native/`, `runtimes/win-x64/native/` for SQLite (`libe_sqlite3.dylib`, `e_sqlite3.dll`).
-
-- [ ] **Step 3: If any RID is missing — add the dependency**
-
-The `runtimes/` content comes from `SQLitePCLRaw.lib.e_sqlite3` (transitively, via `Microsoft.Data.Sqlite`). If a RID is missing, check whether the project references `Microsoft.Data.Sqlite` directly. If it inherits the reference from `Concord.Core` via `<ProjectReference>`, the runtimes typically flow through. If they don't, add explicitly to `Concord.Shim.csproj`:
-
-```xml
-<ItemGroup>
-  <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.6" />
-</ItemGroup>
-```
-
-(Version pin matches the existing reference in `Concord.Shim.deps.json` per the deployed snapshot's evidence — `SQLitePCLRaw.lib.e_sqlite3/2.1.6`.)
-
-- [ ] **Step 4: Rebuild and re-verify if Step 3 made changes**
-
-Run:
-```powershell
-dotnet build src\Concord.Shim\Concord.Shim.csproj -c Debug
-Get-ChildItem -Recurse -Path src\Concord.Shim\bin\Debug\net8.0\runtimes -File | Select-Object FullName
-```
-
-- [ ] **Step 5: Commit (only if Step 3 made changes)**
-
-```powershell
-git add src/Concord.Shim/Concord.Shim.csproj
-git commit -m "build(shim): ensure SQLite native libs ship for all target RIDs"
-```
-
----
-
-## Task 11: Windows smoke test — 11.10
+## Task 6: Local Mac deploy + Studio Pro 11.10 smoke test
 
 **Files:** None (manual smoke).
 
-Verifies no regression on the platform that already works.
+This is the load-bearing test. The fix is correct iff Studio Pro 11.10 on Mac loads the extension without the composition exception.
 
-- [ ] **Step 1: Build the merged extension layout (per parent spec §2 "MergeHostsForShim" target, if implemented; otherwise per the existing Phase 1 build path)**
+- [ ] **Step 1: Identify the deploy mechanism**
 
-Run the project's standard deploy command — the deployed structure should be:
-
-```
-<test-project>/extensions/Concord/
-  manifest.json   ({ "mx_extensions": ["Concord.Shim.dll"] })
-  Concord.Shim.dll
-  Concord.Core.dll
-  runtimes/
-  bin-10x/...
-  bin-11x/...
-  (skills/, rules/, wwwroot/, etc.)
-```
-
-- [ ] **Step 2: Wipe the test project's `.mendix-cache`**
-
-```powershell
-Remove-Item -Recurse -Force C:\Workspace\MendixApps\TestOSApp3\.mendix-cache
-```
-
-- [ ] **Step 3: Open the project in Studio Pro 11.10**
-
-Expected: no composition exception. Extensions → Concord → Open Pane works. Terminal echoes input.
-
-- [ ] **Step 4: Trigger a `save_all` round-trip**
-
-In the terminal pane, invoke whichever CLI is wired (Claude Code / Codex / Copilot) and run a tool call that hits `save_all`. Expected: success.
-
-- [ ] **Step 5: Document the result in the PR description (no commit — manual evidence)**
-
----
-
-## Task 12: Windows smoke test — 10.24.13
-
-**Files:** None (manual smoke).
-
-- [ ] **Step 1–4: Repeat Task 11 steps against Studio Pro 10.24.13**
-
-Expected: same outcomes via `bin-10x/` host. Pane opens, terminal works, `save_all` succeeds.
-
-- [ ] **Step 5: Document result in PR description**
-
----
-
-## Task 13: Mac smoke test — 11.10 (the actual fix validation)
-
-**Files:** None (manual smoke).
-
-This is the test that proves the fix works.
-
-- [ ] **Step 1: Build the `.mxmodule` on Windows (Studio Pro UI export step from ConcordPublisher) and copy to Mac**
-
-The `.mxmodule` cannot be built outside of Studio Pro's UI per CLAUDE.md. Build on Windows, transfer via shared storage / git / scp.
-
-- [ ] **Step 2: Wipe the Mac test project's `.mendix-cache`**
+Read `src/build/DeployMergedToMendix.targets` (referenced from `Concord.Shim.csproj`) to understand how the merged shim deploys. There's probably an MSBuild property like `MendixDeployTargetShim` (per the parent spec §"Scope of changes §3") pointing at a target Mendix project directory.
 
 ```bash
-rm -rf ~/Mendix/GraphViewer/.mendix-cache
+cat src/build/DeployMergedToMendix.targets 2>/dev/null | head -50
 ```
 
-(Or whichever test project is being used.)
+- [ ] **Step 2: Configure the deploy target**
 
-- [ ] **Step 3: Install the `.mxmodule` via Studio Pro Marketplace local-file route on Mac**
+`Directory.Build.props` is gitignored (per-developer settings). If it doesn't already point at a Mac Mendix test project, set `MendixDeployTargetShim` (or the equivalent property) to e.g. `/Users/$(USER)/Mendix/GraphViewer` — wherever your Mac test project lives.
 
-Studio Pro → Marketplace → local file → select the `.mxmodule`.
+If `Directory.Build.props` doesn't exist on the Mac repo, copy from `Directory.Build.props.example` and edit:
 
-- [ ] **Step 4: Open the test project and check Extensions menu**
+```bash
+cp Directory.Build.props.example Directory.Build.props
+# edit Directory.Build.props to set MendixDeployTargetShim
+```
 
-Expected: Concord listed; no composition exception in Studio Pro's error log. Click Extensions → Concord → Open Pane.
+- [ ] **Step 3: Wipe the existing cache + extension folder on the Mac test project**
 
-- [ ] **Step 5: Verify pane opens, terminal echoes, `save_all` round-trips**
+```bash
+TEST_PROJECT="/Users/$(whoami)/Mendix/GraphViewer"  # adjust to your project
+rm -rf "$TEST_PROJECT/.mendix-cache"
+rm -rf "$TEST_PROJECT/extensions/Concord"
+```
 
-Expected: full functionality matching Windows behavior.
+(The cache wipe is critical — Studio Pro snapshots extensions on first load; without a wipe, you'd be testing against the stale snapshot from the broken build.)
 
-- [ ] **Step 6: Capture screenshot of Studio Pro's extension UI showing the version**
+- [ ] **Step 4: Build + deploy via MSBuild**
 
-This screenshot validates whether the version-display fix (Task 15) is needed — the expected display is `5.0.3`. If it shows anything else (currently expected: `4.2.2`), proceed to Task 15.
+```bash
+dotnet build src/Concord.Shim/Concord.Shim.csproj -c Debug 2>&1 | tail -15
+```
+
+Verify the deploy ran (the targets should log "Deployed merged Concord to <path>" or similar).
+
+- [ ] **Step 5: Verify deployed layout matches expectations**
+
+```bash
+ls "$TEST_PROJECT/extensions/Concord/"
+```
+
+Expected: `manifest.json`, `Concord.Shim.dll`, `Concord.Core.dll`, `bin-10x/`, `bin-11x/`, `runtimes/`, `wwwroot/`, `skills/`, etc.
+
+- [ ] **Step 6: Open the test project in Studio Pro 11.10 on Mac**
+
+Launch Studio Pro 11.10. Open the test project.
+
+Expected: no error dialog. Studio Pro starts cleanly.
+
+- [ ] **Step 7: Check the shim log for any errors during load**
+
+```bash
+tail -50 /tmp/Concord/shim.log 2>/dev/null || tail -50 "$TMPDIR/Concord/shim.log"
+```
+
+Expected: `INFO` lines showing `HostKickstart.ResolveHostFolder`, `HostKickstart.BuildLoadContext`, `HostKickstart.LoadHostAssembly`, `HostKickstart.InstantiateEntry` — all with timing. No `ERROR` lines. No `Hostpolicy must be initialized…` anywhere.
+
+- [ ] **Step 8: Open the Concord pane**
+
+In Studio Pro: Extensions menu → Concord → Open Pane (exact menu path may differ; follow whatever opens the pane).
+
+Expected: pane opens, terminal renders, prompt is interactive.
+
+- [ ] **Step 9: Smoke-test a tool call**
+
+In the terminal pane, run whichever CLI is configured (Claude Code, Codex, or Copilot). Trigger a tool call that hits the Concord MCP server — e.g., ask the CLI to invoke `save_all`.
+
+Expected: tool call round-trips successfully. The save_all action visibly runs in Studio Pro.
+
+- [ ] **Step 10: Document the smoke result**
+
+No commit. Capture in the eventual PR description:
+- Pane open: ✅ / ❌
+- Terminal works: ✅ / ❌
+- `save_all` round-trip: ✅ / ❌
+- Any unexpected log lines: list
+
+If anything failed, **stop here** and diagnose before proceeding to Task 7.
 
 ---
 
-## Task 14: Mac smoke test — 10.24.13
+## Task 7: Mac smoke test — Studio Pro 10.24.13 (if available)
 
 **Files:** None (manual smoke).
 
-Less critical (Mac + SP 10.x is a smaller intersection of user base) but worth confirming for completeness.
+Regression check on the 10.x host loaded via the shim's `bin-10x/` branch.
 
-- [ ] **Step 1–5: Repeat Task 13 steps against Studio Pro 10.24.13 on Mac**
+- [ ] **Step 1: Repeat Task 6 steps 3–9 against Studio Pro 10.24.13 on Mac**
 
-Expected: pane opens via `bin-10x/` host. If Studio Pro 10.24.13 isn't readily available on Mac for testing, document this as a known gap and ship the fix with Mac SP 11.10 validation only.
-
----
-
-## Task 15: ConcordPublisher wrapper module — bump version to `5.0.3` and re-export `.mxmodule`
-
-**Files:** Studio Pro UI step on Windows (no Git diff in this repo).
-
-Per CLAUDE.md "Things that bit us before":
-
-> Version bump alone is NOT enough — Studio Pro re-bakes the version into the .mxmodule at export time. Must redo the UI export step.
-
-The current `.mxmodule` carries `4.2.2` because the wrapper module's version field was not bumped before the most recent export. Fix the metadata, then re-export.
-
-- [ ] **Step 1: Open `C:\Workspace\MendixApps\ConcordPublisher\ConcordPublisher.mpr` in Studio Pro**
-
-- [ ] **Step 2: Locate the Module containing the bundled Concord resources**
-
-Per CLAUDE.md, this is the wrapper module in the ConcordPublisher project that holds the binary resources for `.mxmodule` export.
-
-- [ ] **Step 3: Update the module's version property to `5.0.3`**
-
-Exact field location depends on the Studio Pro version's module-properties dialog — find the "Version" or "Module version" field.
-
-- [ ] **Step 4: Save the project**
-
-- [ ] **Step 5: Re-export the `.mxmodule`**
-
-Studio Pro UI step — Right-click module → Export module package. Output path same as previous releases (per `reference_concord_mxmodule_build.md` per CLAUDE.md).
-
-- [ ] **Step 6: Verify the new `.mxmodule` reports `5.0.3`**
-
-Install on a fresh test project (Mac or Windows) and check Studio Pro's Extensions UI. Expected: `Concord 5.0.3`.
-
-No Git commit for this task — the change lives in ConcordPublisher, not this repo.
+If you don't have Studio Pro 10.24.13 installed on Mac, skip this task and document the gap in the PR description. The fix is platform-agnostic and Windows already covers 10.x; missing Mac+10.x coverage is acceptable for a Mac-fix PR but flag it.
 
 ---
 
-## Task 16: Pull request
+## Task 8: Windows regression smokes (you, on the Windows side)
 
-**Files:** Branch ready to push.
+**Files:** None (manual smoke).
 
-- [ ] **Step 1: Push the branch**
+After the Mac side passes, hand off to Windows for regression validation.
 
-```powershell
-git push -u origin fix/concord-shim-mac-loadcontext
+- [ ] **Step 1: Push the branch + open a draft PR**
+
+On Mac:
+```bash
+git push origin fix/concord-shim-mac-loadcontext
+gh pr create --draft --title "fix(shim): make Concord work on macOS" --body "WIP — see plan + spec. Awaiting Windows-side regression smokes (Tasks 8) before un-drafting."
 ```
 
-- [ ] **Step 2: Create PR via `gh`**
+- [ ] **Step 2: Pull on Windows + build + smoke SP 11.10 + smoke SP 10.24.13**
 
+On Windows:
 ```powershell
-gh pr create --title "fix(shim): make Concord v5.0.3 work on macOS" --body @"
-## Summary
-- Replaces \`AssemblyDependencyResolver\` in \`ConcordHostLoadContext\` with manual file-system probing (managed DLLs via \`Load\` override + \`TryResolveAssemblyPath\` helper).
-- Adds \`LoadUnmanagedDll\` override that probes \`runtimes/{rid}/native/\` with RID fallback (\`osx-arm64\` → \`osx\` → \`unix\` → \`any\`).
-- Verifies \`RuntimeHostLocator\` uses \`Assembly.Location\` (not \`AppDomain.BaseDirectory\`).
-- Wrapper module version bumped to \`5.0.3\` and \`.mxmodule\` re-exported.
-
-## Root cause
-\`AssemblyDependencyResolver\` internally calls native \`corehost_resolve_component_dependencies\`, which requires \`hostpolicy\` was initialized via \`corehost_main\`. Studio Pro on macOS uses an embedded hosting path that doesn't satisfy this precondition (\`fxr_path\` empty → \`InvalidArgFailure\` -2147450750). Windows works because Studio Pro's launcher is \`apphost\`-style.
-
-## Test plan
-- [x] Windows / Studio Pro 11.10 — pane opens, \`save_all\` round-trips (regression check)
-- [x] Windows / Studio Pro 10.24.13 — pane opens via \`bin-10x/\` host (regression check)
-- [x] macOS / Studio Pro 11.10 — pane opens, \`save_all\` round-trips (the actual fix)
-- [ ] macOS / Studio Pro 10.24.13 — if available; otherwise documented gap
-- [x] \`dotnet test\` — full unit-test suite passes (new Concord.Shim.Tests + existing Concord.Core.Tests + Terminal.Tests)
-
-Spec: docs/superpowers/specs/2026-05-15-concord-shim-mac-loadcontext-fix-design.md
-Plan: docs/superpowers/plans/2026-05-15-concord-shim-mac-loadcontext-fix.md
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-"@
-```
-
-- [ ] **Step 3: After PR merges, tag `v5.0.3`**
-
-Per the release-playbook reference in CLAUDE.md:
-
-```powershell
-git checkout main
+git fetch origin
+git checkout fix/concord-shim-mac-loadcontext
 git pull
-git tag -a v5.0.3 -m "v5.0.3: Mac shim fix"
-git push origin v5.0.3
-gh release create v5.0.3 --notes-file release-notes.md
+dotnet build src\Concord.Shim\Concord.Shim.csproj -c Debug
+# wipe + open SP 11.10 test project
+# wipe + open SP 10.24.13 test project
 ```
+
+For each Studio Pro version: open pane, terminal works, `save_all` round-trips. Same criteria as Task 6 step 9.
+
+- [ ] **Step 3: Document Windows results in the PR**
+
+If both versions pass on Windows, un-draft the PR and request review.
+
+---
+
+## Task 9: Version bump + tag (deferred — release decision)
+
+**Files:** None in this plan.
+
+Originally Task 15 in the pre-revision plan. **Deferred** because the spec's stated target version (`5.0.3`) doesn't match the actual current version (`5.1.0-alpha.1`). The release-version question is a Joe-call:
+
+- `5.1.0-alpha.2`: the Mac fix is the next alpha cut of the existing 5.1.0 work-in-progress.
+- `5.1.0` final: skip the alpha numbering; this fix completes the cross-version + Mac-cross-platform work to a shippable state.
+- Something else entirely.
+
+The wrapper-module version (in ConcordPublisher) and the assembly version (in `Concord.Shim.csproj` line 11) both need updating, and the `.mxmodule` re-export step needs running, per CLAUDE.md's "Things that bit us before" note about version baking. Capture as an explicit follow-up commit once the version target is settled.
 
 ---
 
@@ -961,21 +658,21 @@ gh release create v5.0.3 --notes-file release-notes.md
 
 | Spec section | Implementing task |
 |---|---|
-| §Goal — 4-cell matrix passes | Tasks 11–14 |
-| §Approach §1 — Replace AssemblyDependencyResolver | Tasks 2–6 |
-| §Approach §2 — `Assembly.Location` audit | Task 9 |
-| §Approach §3 — `runtimes/` packaging verification | Task 10 |
-| §Approach §4 — Wrapper version bump + re-export | Task 15 |
-| §Tests Unit — 5 unit tests | Tasks 2, 4, 5, 7, 8 (5 tests total) |
-| §Tests Integration — smoke matrix | Tasks 11–14 |
-| §Tests Negative — missing bin-{Nx}/, missing native | Documented but not exercised; deferred (low value vs. test cost) |
-| §Open question 1 — log location on Mac | Not addressed in plan; spec defers it and existing shim logging code (Task 0 Step 2) inherits whatever convention is already there |
-| §Open question 2 — runtimes/ folder location | Resolved as Task 10 + spec recommendation: keep at top of `extensions/Concord/` |
-| §Open question 3 — Mac CI job | Not addressed in this plan; flagged as a follow-up in the PR description |
-| §Open question 4 — Intel Mac RID | Covered by Task 10 (verifies `osx-x64/native/` ships) |
+| §Goal — 4-cell matrix passes | Tasks 6 (Mac 11.10), 7 (Mac 10.24.13), 8 (Windows 11.10 + 10.24.13) |
+| §Approach §1 — Replace AssemblyDependencyResolver | Task 1 (drop entirely) + Task 2 (regression test) |
+| §Approach §2 — `Assembly.Location` audit | Already correct; verified during pre-execution audit |
+| §Approach §3 — Native binary handling | Tasks 3 + 4 (`LoadUnmanagedDll` override + tests) |
+| §Approach §4 — Wrapper version bump | Task 9 — deferred pending version target |
+| §Tests Unit — covered behaviors | Tasks 2 + 4 add 3 new unit tests on top of existing 7 |
+| §Tests Integration — smoke matrix | Tasks 6, 7, 8 |
+| §Tests Negative — missing bin-{Nx}/, missing native | Not exercised; deferred (low value vs. test cost) |
+| §Open Q1 — log location on Mac | Resolved automatically — `ShimLog.cs` uses `Path.GetTempPath()` which is `$TMPDIR` on Mac (`/var/folders/...`), no code change needed |
+| §Open Q2 — runtimes/ folder location | Task 3's probe handles both `<extension>/runtimes/` (one level up from host folder) and `<host>/runtimes/` (alongside) |
+| §Open Q3 — Mac CI | Not addressed; flag as follow-up in PR description |
+| §Open Q4 — Intel Mac RID | RID fallback covers `osx-x64` and `osx-arm64` automatically |
 
-**Placeholder scan:** The plan deliberately marks one placeholder — the `BounceSharedToDefaultContext` body in Task 3 Step 2 — as `throw new NotImplementedException("Replace with existing handler body from Task 0 Step 2")`. This is captured as an explicit plan instruction, not an unresolved TBD: Task 0 Step 2 records the existing handler verbatim and Task 3 Step 2's note tells the engineer to carry it over. Acceptable because the placeholder is fully resolvable from data the engineer captured in Task 0.
+**Placeholder scan:** None. Every step has concrete code or commands. Task 9's deferral is explicit, not a hidden TODO.
 
-**Type consistency:** `ConcordHostLoadContext`, `TryResolveAssemblyPath`, `TryResolveNativePath`, `GetNativeProbePaths`, `RidFallbackChain` — names consistent across Tasks 2–8. Field names `_hostFolder`, `_runtimesFolder` — consistent. Tasks 3 and 6 both reference the same class member layout.
+**Type consistency:** `ConcordHostLoadContext`, `_hostFolder`, `Resolve`, `OnResolving`, `TryResolveNativePath`, `NativeProbePaths`, `RidFallbackChain` — all match between source-file references and test references. Task 3's helper visibility (`internal bool TryResolveNativePath`) matches Task 4's test usage.
 
-**Scope:** 16 tasks, ~5 atomic commits (Tasks 1, 3, 4, 6, 7, 8, plus 9 + 10 if changes needed). Tight enough for one PR. Manual smoke matrix in Tasks 11–14 doesn't commit but produces PR-description evidence.
+**Scope:** 9 tasks. Tasks 1–5 are local-on-Mac code changes (~5 commits). Tasks 6–8 are manual smokes. Task 9 deferred. Tight enough for one PR.
