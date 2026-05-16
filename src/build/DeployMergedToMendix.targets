@@ -1,0 +1,31 @@
+<Project>
+  <PropertyGroup>
+    <_MergedDeployTarget Condition="'$(MendixDeployTargetMerged)' != ''">$(MendixDeployTargetMerged)</_MergedDeployTarget>
+    <_MergedDeployTarget Condition="'$(_MergedDeployTarget)' == ''">$(MendixDeployTarget)</_MergedDeployTarget>
+  </PropertyGroup>
+
+  <Target Name="DeployMergedToMendix" AfterTargets="MergeHostsForShim" Condition="'$(_MergedDeployTarget)' != ''">
+    <ItemGroup>
+      <_DeployTargets Include="$(_MergedDeployTarget)" />
+    </ItemGroup>
+    <Message Importance="high" Text="Deploying merged shim to %(_DeployTargets.Identity)/extensions/Concord" />
+
+    <!-- Windows: xcopy. POSIX: cp -R. -->
+    <Exec Condition="'$(OS)' == 'Windows_NT'"
+          Command="if exist &quot;%(_DeployTargets.Identity)\extensions\Concord&quot; rd /s /q &quot;%(_DeployTargets.Identity)\extensions\Concord&quot;" />
+    <Exec Condition="'$(OS)' == 'Windows_NT'"
+          Command="xcopy /y /s /i /q &quot;$(_MergedRoot)\*&quot; &quot;%(_DeployTargets.Identity)\extensions\Concord&quot;" />
+    <Exec Condition="'$(OS)' != 'Windows_NT'"
+          Command="rm -rf &quot;%(_DeployTargets.Identity)/extensions/Concord&quot; &amp;&amp; mkdir -p &quot;%(_DeployTargets.Identity)/extensions/Concord&quot; &amp;&amp; cp -R &quot;$(_MergedRoot)/.&quot; &quot;%(_DeployTargets.Identity)/extensions/Concord/&quot;" />
+
+    <!-- Refresh the Studio Pro per-project cache snapshot if any exists.
+         Snapshot subdirs are named with a GUID; identify ours by the
+         presence of Concord.Shim.dll. -->
+    <Exec Condition="'$(OS)' == 'Windows_NT'"
+          IgnoreExitCode="true"
+          Command="for /d %%d in (&quot;%(_DeployTargets.Identity)\.mendix-cache\extensions-cache\*&quot;) do if exist &quot;%%d\Concord.Shim.dll&quot; xcopy /y /s /i /q &quot;$(_MergedRoot)\*&quot; &quot;%%d&quot;" />
+    <Exec Condition="'$(OS)' != 'Windows_NT'"
+          IgnoreExitCode="true"
+          Command="for d in &quot;%(_DeployTargets.Identity)/.mendix-cache/extensions-cache/&quot;*/ ; do if [ -f &quot;$d/Concord.Shim.dll&quot; ]; then cp -R &quot;$(_MergedRoot)/.&quot; &quot;$d&quot;; echo &quot;Refreshed cache: $d&quot;; fi; done" />
+  </Target>
+</Project>

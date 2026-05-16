@@ -1,0 +1,109 @@
+<Project>
+  <PropertyGroup>
+    <!-- Platform-aware bin paths. When built with -p:Platform=x64 the host
+         outputs land at bin\x64\$(Configuration)\net8.0\; the default platform
+         (AnyCPU) lands at bin\$(Configuration)\net8.0\. _PlatformSubdir picks
+         whichever exists. -->
+    <_PlatformSubdir Condition="'$(Platform)' != '' and '$(Platform)' != 'AnyCPU'">$(Platform)\</_PlatformSubdir>
+    <!-- _MergedRoot is intentionally hardcoded to bin\x64\... — production
+         builds for the .mxmodule MUST use -p:Platform=x64. _Host{N}xBin
+         paths adapt to whatever Platform the build was invoked with (via
+         _PlatformSubdir), so MergeHostsForShim CAN run on AnyCPU builds —
+         but the output is only TRUSTWORTHY when Platform=x64 (otherwise
+         the host bins read from a different path than _MergedRoot's
+         expected x64 layout). The <Warning> at the top of MergeHostsForShim
+         surfaces this risk at build time. -->
+    <_MergedRoot>$(MSBuildThisFileDirectory)..\..\bin\x64\$(Configuration)\net8.0-merged</_MergedRoot>
+    <_Host10xBin>$(MSBuildThisFileDirectory)..\Concord.Host10x\bin\$(_PlatformSubdir)$(Configuration)\net8.0</_Host10xBin>
+    <_Host11xBin>$(MSBuildThisFileDirectory)..\Concord.Host11x\bin\$(_PlatformSubdir)$(Configuration)\net8.0</_Host11xBin>
+    <_ShimBin>$(MSBuildThisFileDirectory)..\Concord.Shim\bin\$(_PlatformSubdir)$(Configuration)\net8.0</_ShimBin>
+  </PropertyGroup>
+
+  <Target Name="MergeHostsForShim" AfterTargets="Build">
+    <Message Importance="high" Text="MergeHostsForShim: producing $(_MergedRoot)" />
+    <Warning Condition="'$(Platform)' == '' or '$(Platform)' == 'AnyCPU'"
+             Text="MergeHostsForShim: Platform is '$(Platform)' (empty or AnyCPU); host bin sources may not match the merged output location. Run with -p:Platform=x64 for a trustworthy merge." />
+
+    <!-- 1. Clean output. -->
+    <RemoveDir Directories="$(_MergedRoot)" />
+    <MakeDir Directories="$(_MergedRoot)" />
+
+    <!-- 2. Copy shim output to root of merged folder. -->
+    <ItemGroup>
+      <_ShimFiles Include="$(_ShimBin)\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_ShimFiles)"
+          DestinationFiles="@(_ShimFiles->'$(_MergedRoot)\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+
+    <!-- 3a. Copy Host10x to bin-10x/. -->
+    <MakeDir Directories="$(_MergedRoot)\bin-10x" />
+    <ItemGroup>
+      <_Host10xFiles Include="$(_Host10xBin)\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_Host10xFiles)"
+          DestinationFiles="@(_Host10xFiles->'$(_MergedRoot)\bin-10x\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+
+    <!-- 3b. Copy Host11x to bin-11x/. -->
+    <MakeDir Directories="$(_MergedRoot)\bin-11x" />
+    <ItemGroup>
+      <_Host11xFiles Include="$(_Host11xBin)\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_Host11xFiles)"
+          DestinationFiles="@(_Host11xFiles->'$(_MergedRoot)\bin-11x\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+
+    <!-- 4. Hoist shared content (wwwroot, skills*, rules*) and delete dupes from bin-{Nx}/. -->
+    <!-- Each host's bin currently ships these by linking from repo root via Concord.Core's Content;
+         after copy, delete the per-host copies so we have a single canonical top-level copy. -->
+    <ItemGroup>
+      <_HoistableDirs Include="wwwroot;skills;skills-10x;skills-mac;rules;rules-10x" />
+    </ItemGroup>
+    <!-- Drop duplicate copies of shared assets from each per-host bin. The
+         top-level shim copy at $(_MergedRoot)\<dir>\ is the canonical one
+         (verified by the <Error> checks below). RemoveDir silently no-ops
+         on missing paths, so no Condition is needed — and a per-item
+         Condition does NOT work on a batched RemoveDir (the condition
+         expands to only the first batch item, suppressing the rest). -->
+    <RemoveDir Directories="@(_HoistableDirs->'$(_MergedRoot)\bin-10x\%(Identity)')" />
+    <RemoveDir Directories="@(_HoistableDirs->'$(_MergedRoot)\bin-11x\%(Identity)')" />
+
+    <!-- The shim's own bin already has wwwroot/skills/rules (they're shared
+         at repo root and linked into all 3 csprojs as Content). Verify
+         each hoisted dir is present at $(_MergedRoot)\<dir>\. -->
+    <Error Condition="!Exists('$(_MergedRoot)\wwwroot')" Text="MergeHostsForShim: wwwroot not present at $(_MergedRoot)\wwwroot — UI bundle missing." />
+    <Error Condition="!Exists('$(_MergedRoot)\skills')" Text="MergeHostsForShim: skills/ not present at top level." />
+    <Error Condition="!Exists('$(_MergedRoot)\rules')" Text="MergeHostsForShim: rules/ not present at top level." />
+
+    <!-- 5. Hash gate: Concord.Core.dll must be byte-identical across all 3 locations. -->
+    <GetFileHash Files="$(_MergedRoot)\Concord.Core.dll" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="_RootCoreHash" />
+    </GetFileHash>
+    <GetFileHash Files="$(_MergedRoot)\bin-10x\Concord.Core.dll" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="_Bin10xCoreHash" />
+    </GetFileHash>
+    <GetFileHash Files="$(_MergedRoot)\bin-11x\Concord.Core.dll" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="_Bin11xCoreHash" />
+    </GetFileHash>
+
+    <Error Condition="'$(_RootCoreHash)' != '$(_Bin10xCoreHash)'"
+           Text="BUILD FAILED — Concord.Core.dll hash mismatch: root=$(_RootCoreHash) vs bin-10x=$(_Bin10xCoreHash). This would break HostServices static state. Verify both hosts build against the same Concord.Core source." />
+    <Error Condition="'$(_RootCoreHash)' != '$(_Bin11xCoreHash)'"
+           Text="BUILD FAILED — Concord.Core.dll hash mismatch: root=$(_RootCoreHash) vs bin-11x=$(_Bin11xCoreHash). This would break HostServices static state. Verify both hosts build against the same Concord.Core source." />
+
+    <Message Importance="high" Text="MergeHostsForShim: Concord.Core.dll SHA256=$(_RootCoreHash) verified across all 3 locations." />
+
+    <!-- 6. ExtensionsAPI gate: the shim's bin MUST NOT carry its own copy of
+         Mendix.StudioPro.ExtensionsAPI.dll. If present at the merged root,
+         .NET Core's LoadFrom will load it as a SECOND CLR assembly
+         alongside Studio Pro's already-loaded copy, producing two
+         distinct type identities for ExtensionsAPI interfaces and breaking
+         MEF's [ImportingConstructor] matching at the SP↔shim boundary.
+         Concord.Shim.csproj's PackageReference for ExtensionsAPI uses
+         ExcludeAssets="runtime" specifically to prevent this — if you see
+         this error, something just regressed that. -->
+    <Error Condition="Exists('$(_MergedRoot)\Mendix.StudioPro.ExtensionsAPI.dll')"
+           Text="BUILD FAILED — Mendix.StudioPro.ExtensionsAPI.dll present at merged root $(_MergedRoot). The shim must not ship its own ExtensionsAPI copy (SP's default-ALC copy is the only valid one). Add ExcludeAssets=&quot;runtime&quot; to the shim's PackageReference." />
+  </Target>
+</Project>

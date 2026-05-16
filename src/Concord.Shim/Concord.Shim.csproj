@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyName>Concord.Shim</AssemblyName>
+    <RootNamespace>Concord.Shim</RootNamespace>
+    <LangVersion>preview</LangVersion>
+    <IsPackable>false</IsPackable>
+    <Version>5.1.0-alpha.1</Version>
+    <!-- Fallback: Directory.Build.props (gitignored, per-developer) should define
+         ExtensionsApiShimBaselineVersion. The example is in Directory.Build.props.example. -->
+    <ExtensionsApiShimBaselineVersion Condition="'$(ExtensionsApiShimBaselineVersion)' == ''">10.21.1</ExtensionsApiShimBaselineVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Concord.Shim.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Concord.Core\Concord.Core.csproj" />
+    <!-- ExcludeAssets="runtime": the package's metadata is used at compile time
+         (the shim's [Export]s reference ExtensionsAPI types), but the runtime
+         DLL is NOT copied into the shim's bin output. Reason: the shim runs
+         in Studio Pro's default ALC, which already has its own ExtensionsAPI
+         loaded (v10.24.13 on SP 10.x, v11.10 on SP 11.x). Shipping our own
+         v10.21.1 copy alongside the shim causes .NET Core's LoadFrom to load
+         a SECOND ExtensionsAPI assembly with a different CLR type identity,
+         which then breaks MEF type-matching at the [ImportingConstructor]
+         boundary (SP exports IExtensionFileService from v11.6.2; shim imports
+         it from v10.21.1; MEF refuses the match). See
+         docs/superpowers/handoffs/2026-05-15-concord-shim-smoke-results.md
+         for the empirical failure that surfaced this. -->
+    <PackageReference Include="Mendix.StudioPro.ExtensionsAPI" Version="$(ExtensionsApiShimBaselineVersion)" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <!-- Build-order dependency on the two host projects so their bin folders
+       are populated before MergeHostsForShim runs. ReferenceOutputAssembly=false
+       prevents the host DLLs from being pulled into the shim's own bin/ —
+       the merge target copies them explicitly into bin-10x/ and bin-11x/. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Concord.Host10x\Concord.Host10x.csproj">
+      <Private>false</Private>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\Concord.Host11x\Concord.Host11x.csproj">
+      <Private>false</Private>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="manifest.json"><CopyToOutputDirectory>Always</CopyToOutputDirectory></Content>
+  </ItemGroup>
+
+  <Import Project="..\build\BuildUi.targets" />
+  <Import Project="..\build\MergeHostsForShim.targets" />
+  <Import Project="..\build\DeployMergedToMendix.targets" />
+</Project>

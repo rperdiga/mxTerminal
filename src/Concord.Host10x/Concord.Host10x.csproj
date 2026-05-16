@@ -14,25 +14,30 @@
   <ItemGroup>
     <ProjectReference Include="..\Concord.Core\Concord.Core.csproj" />
     <PackageReference Include="Mendix.StudioPro.ExtensionsAPI" Version="$(ExtensionsApi10xVersion)" />
-    <PackageReference Include="Eto.Forms" Version="2.9.*" />
+    <!-- Match Concord.Core's Eto.Forms pin (see comment there). -->
+    <PackageReference Include="Eto.Forms" Version="2.8.*" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="manifest.json"><CopyToOutputDirectory>Always</CopyToOutputDirectory></Content>
   </ItemGroup>
 
-  <!--
-    Two-extension layout: Host10x deploys to extensions/Concord10x/; Host11x to
-    extensions/Concord11x/. Each is a separate Studio Pro extension with its own
-    single-DLL manifest. Required because Studio Pro 10.24.13's extension loader
-    rejects multi-DLL manifests (calls .Single() during hashing — System.Linq
-    InvalidOperationException). The two-folder layout duplicates Concord.Core.dll
-    and the shared assets but is the only structure that loads on both versions.
+  <!-- Two-extension layout: Host10x deploys to extensions/Concord10x/; Host11x to
+       extensions/Concord11x/. Each is a separate Studio Pro extension with its own
+       single-DLL manifest. Required because Studio Pro 10.24.13's extension loader
+       rejects multi-DLL manifests (calls .Single() during hashing — System.Linq
+       InvalidOperationException). The two-folder layout duplicates Concord.Core.dll
+       and the shared assets but is the only structure that loads on both versions
+       *when deployed independently*.
 
-    On Studio Pro 10.x: loads Concord10x/ cleanly; attempts Concord11x/, type
-    resolution against 11.x ExtensionsAPI fails, MEF skips. (Verified by spike
-    test 2026-05-12.) On Studio Pro 11.x: mirror.
-  -->
+       NOTE: Under the runtime-shim architecture introduced in v5.1.0 (see
+       src/Concord.Shim/), production deploys ship a single extensions/Concord/
+       folder via DeployMergedToMendix. These per-host DeployToMendix targets
+       remain for component-level dev iteration ONLY.
+
+       On Studio Pro 10.x: deploying Concord11x/ alongside Concord10x/ crashes
+       Studio Pro (type-resolution failure inside the loader during MEF discovery;
+       verified by spike 2026-05-12, commit a0ce567). -->
   <!-- Per-host deploy target: prefer $(MendixDeployTarget10x), fall back to
        $(MendixDeployTarget). The per-host property exists so devs working
        across versions can deploy each host to a different Mendix project

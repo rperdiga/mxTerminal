@@ -1,0 +1,10 @@
+<Project>
+  <Target Name="BuildUi" BeforeTargets="BeforeBuild"
+          Inputs="$(MSBuildThisFileDirectory)..\..\ui\src\**\*;$(MSBuildThisFileDirectory)..\..\ui\package.json;$(MSBuildThisFileDirectory)..\..\ui\esbuild.mjs;$(MSBuildThisFileDirectory)..\..\ui\index.html"
+          Outputs="$(MSBuildThisFileDirectory)..\..\wwwroot\terminal.bundle.js">
+    <Message Importance="high" Text="Installing UI dependencies (first build only)…" Condition="!Exists('$(MSBuildThisFileDirectory)..\..\ui\node_modules')" />
+    <Exec Command="npm install --prefix &quot;$(MSBuildThisFileDirectory)..\..\ui&quot; --silent" Condition="!Exists('$(MSBuildThisFileDirectory)..\..\ui\node_modules')" />
+    <Message Importance="high" Text="Bundling UI…" />
+    <Exec Command="node &quot;$(MSBuildThisFileDirectory)..\..\ui\esbuild.mjs&quot;" />
+  </Target>
+</Project>

@@ -13,6 +13,13 @@ using Concord.Host11x.Interop;
 
 namespace Concord.Host11x.Pane;
 
+// [shim-vestigial] Studio Pro's MEF sees only Concord.Shim.dll under the
+// runtime-shim architecture (Phase 0 spike — 2026-05-15). The attributes
+// below remain so the host can still be built and tested in isolation, but
+// at production runtime Concord.Shim's *Shim forwarders drive instantiation
+// via reflection — these attributes are dead metadata. See
+// docs/superpowers/plans/2026-05-15-concord-runtime-shim-implementation.md
+// §OQ4.
 [Export(typeof(DockablePaneExtension))]
 public sealed class TerminalPaneExtension : DockablePaneExtension
 {
@@ -67,6 +74,13 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
 
     private readonly IExtensionFileService extensionFileService;
 
+    // [shim-vestigial] Studio Pro's MEF sees only Concord.Shim.dll under the
+    // runtime-shim architecture (Phase 0 spike — 2026-05-15). The attributes
+    // below remain so the host can still be built and tested in isolation, but
+    // at production runtime Concord.Shim's *Shim forwarders drive instantiation
+    // via reflection — these attributes are dead metadata. See
+    // docs/superpowers/plans/2026-05-15-concord-runtime-shim-implementation.md
+    // §OQ4.
     [ImportingConstructor]
     public TerminalPaneExtension(
         ILocalRunConfigurationsService localRunConfigs,
@@ -89,6 +103,38 @@ public sealed class TerminalPaneExtension : DockablePaneExtension
         this.microflowExpressionService = microflowExpressionService;
         this.versionControlService = versionControlService;
         manager = new TerminalSessionManager(new PtyNetFactory());
+    }
+
+    // [shim-context] Under the runtime-shim architecture (v5.1.0+), Studio Pro
+    // MEF-constructs the shim (Concord.Shim's TerminalPaneExtensionShim), not
+    // this class. SP populates UIExtensionBase state only on instances it
+    // constructs itself, so `this.WebServerBaseUrl` and `this.CurrentApp` are
+    // unpopulated on the inner instance (the former throws, the latter returns
+    // null). The shim, which DOES have SP-populated state, passes accessors
+    // here via __ConcordShim_SetUIContext immediately after constructing the
+    // inner and before invoking Open(). The `new` keyword below shadows the
+    // base UIExtensionBase members for in-class references — every existing
+    // `CurrentApp` / `WebServerBaseUrl` access in this file resolves to these
+    // shadows at compile time, with no call-site changes.
+    private Func<IModel?>? _shimCurrentAppGetter;
+    private Func<Uri>? _shimWebServerBaseUrlGetter;
+
+    private new IModel? CurrentApp =>
+        _shimCurrentAppGetter is not null ? _shimCurrentAppGetter() : base.CurrentApp;
+
+    private new Uri WebServerBaseUrl =>
+        _shimWebServerBaseUrlGetter is not null ? _shimWebServerBaseUrlGetter() : base.WebServerBaseUrl;
+
+    /// <summary>
+    /// Shim-only seam. Called by Concord.Shim's TerminalPaneExtensionShim
+    /// before Open() to forward SP-populated UIExtensionBase state to this
+    /// instance. Do not call directly from non-shim code — the inner host's
+    /// own UIExtensionBase fields are SP-managed in the standalone build path.
+    /// </summary>
+    public void __ConcordShim_SetUIContext(Func<IModel?> getCurrentApp, Func<Uri> getWebServerBaseUrl)
+    {
+        _shimCurrentAppGetter = getCurrentApp;
+        _shimWebServerBaseUrlGetter = getWebServerBaseUrl;
     }
 
     public override DockablePaneViewModelBase Open()
