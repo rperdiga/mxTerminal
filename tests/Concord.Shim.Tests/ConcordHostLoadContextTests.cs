@@ -148,4 +148,25 @@ public class ConcordHostLoadContextTests : IDisposable
     // Concord.Core loaded), so it can't model the production path. The
     // exemption is preserved in OnResolving's source for clarity and
     // future-proofing against changes in default-load order.
+
+    // Regression: AssemblyDependencyResolver was removed in commit
+    // "fix(shim): remove AssemblyDependencyResolver from ConcordHostLoadContext".
+    // Its constructor invokes native corehost_resolve_component_dependencies
+    // which fails on macOS Studio Pro (hostpolicy not initialized via
+    // corehost_main). Don't re-introduce — if a future change needs
+    // deps.json-driven resolution, find a different mechanism that works
+    // on both platforms.
+    [Fact]
+    public void ConcordHostLoadContext_HasNoAssemblyDependencyResolverField()
+    {
+        var resolverType = typeof(System.Runtime.Loader.AssemblyDependencyResolver);
+        var fields = typeof(ConcordHostLoadContext)
+            .GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+
+        fields.Should().NotContain(
+            f => f.FieldType == resolverType,
+            because: "AssemblyDependencyResolver's constructor calls native " +
+                     "corehost_resolve_component_dependencies which fails on macOS " +
+                     "Studio Pro — see fix commit message for full root cause.");
+    }
 }
