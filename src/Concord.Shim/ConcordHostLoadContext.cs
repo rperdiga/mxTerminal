@@ -183,9 +183,12 @@ internal sealed class ConcordHostLoadContext : AssemblyLoadContext, IDisposable
     internal bool TryResolveNativePath(string unmanagedDllName, out string? path)
     {
         // Production layout: runtimes/ is one level up from the host folder.
-        var runtimesDir = Path.Combine(_hostFolder, "..", "runtimes");
+        // Normalize via GetFullPath so the returned path doesn't carry a
+        // ".." segment, which would confuse callers logging the resolution
+        // result and break string-based assertions in tests.
+        var runtimesDir = Path.GetFullPath(Path.Combine(_hostFolder, "..", "runtimes"));
         if (!Directory.Exists(runtimesDir))
-            runtimesDir = Path.Combine(_hostFolder, "runtimes");
+            runtimesDir = Path.GetFullPath(Path.Combine(_hostFolder, "runtimes"));
 
         if (Directory.Exists(runtimesDir))
         {
@@ -199,7 +202,7 @@ internal sealed class ConcordHostLoadContext : AssemblyLoadContext, IDisposable
             }
         }
         // Last-ditch: flat in host folder (some packages drop natives there).
-        var flat = Path.Combine(_hostFolder, unmanagedDllName);
+        var flat = Path.GetFullPath(Path.Combine(_hostFolder, unmanagedDllName));
         if (File.Exists(flat))
         {
             path = flat;

@@ -169,4 +169,72 @@ public class ConcordHostLoadContextTests : IDisposable
                      "corehost_resolve_component_dependencies which fails on macOS " +
                      "Studio Pro — see fix commit message for full root cause.");
     }
+
+    [Fact]
+    public void TryResolveNativePath_FindsFileInMatchingRidNativeFolder()
+    {
+        // Mirrors production layout: runtimes/ is one level up from the
+        // host folder, with native libraries under runtimes/<rid>/native/.
+        var hostFolder = Path.Combine(_tempDir, "bin-11x");
+        Directory.CreateDirectory(hostFolder);
+        var rid = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier;
+        var nativeDir = Path.Combine(_tempDir, "runtimes", rid, "native");
+        Directory.CreateDirectory(nativeDir);
+
+        // Platform-conventional native filename. The probe accepts either
+        // the bare name OR the full filename — we test the bare-name path
+        // (which is what P/Invoke typically passes).
+        string fileName, probeName;
+        if (OperatingSystem.IsMacOS())        { fileName = "libe_sqlite3.dylib"; probeName = "e_sqlite3"; }
+        else if (OperatingSystem.IsWindows()) { fileName = "e_sqlite3.dll"; probeName = "e_sqlite3"; }
+        else if (OperatingSystem.IsLinux())   { fileName = "libe_sqlite3.so"; probeName = "e_sqlite3"; }
+        else throw new PlatformNotSupportedException();
+
+        var stubPath = Path.Combine(nativeDir, fileName);
+        File.WriteAllBytes(stubPath, Array.Empty<byte>());
+
+        using var ctx = new ConcordHostLoadContext(hostFolder);
+
+        var resolved = ctx.TryResolveNativePath(probeName, out var path);
+
+        resolved.Should().BeTrue();
+        path.Should().Be(stubPath);
+    }
+
+    [Fact]
+    public void TryResolveNativePath_ReturnsFalse_WhenNoNativeFolderExists()
+    {
+        var hostFolder = Path.Combine(_tempDir, "bin-11x");
+        Directory.CreateDirectory(hostFolder);
+
+        using var ctx = new ConcordHostLoadContext(hostFolder);
+
+        var resolved = ctx.TryResolveNativePath("nonexistent_lib", out var path);
+
+        resolved.Should().BeFalse();
+        path.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryResolveNativePath_FlatHostFolderFallback_WhenNoRuntimesFolder()
+    {
+        // Some packages drop natives flat in the host folder (no runtimes/
+        // subtree). The probe's last-ditch fallback handles that case.
+        var hostFolder = Path.Combine(_tempDir, "bin-11x");
+        Directory.CreateDirectory(hostFolder);
+
+        var flatName = OperatingSystem.IsMacOS() ? "libflatnative.dylib"
+                     : OperatingSystem.IsWindows() ? "flatnative.dll"
+                     : "libflatnative.so";
+        var flatPath = Path.Combine(hostFolder, flatName);
+        File.WriteAllBytes(flatPath, Array.Empty<byte>());
+
+        using var ctx = new ConcordHostLoadContext(hostFolder);
+
+        // Pass the full filename — flat probe doesn't do name decoration.
+        var resolved = ctx.TryResolveNativePath(flatName, out var path);
+
+        resolved.Should().BeTrue();
+        path.Should().Be(flatPath);
+    }
 }
