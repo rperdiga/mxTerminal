@@ -7,9 +7,9 @@ Two paths. Pick whichever matches your situation.
 
 Both paths have the same Studio Pro one-time setup: see [§ Studio Pro setup](#studio-pro-setup) below.
 
-Concord runs on **Windows** and **macOS**, supporting **Studio Pro 10.24.13 through 11.x** (10.x is a preview — menu entry only in 5.0.0-alpha.1; full functionality is 11.x). Path examples in this doc use Windows separators by default; Mac equivalents are called out inline.
+Concord runs on **Windows** and **macOS**, supporting **Studio Pro 10.24.13 through 11.x** with full feature parity across both versions. Path examples in this doc use Windows separators by default; Mac equivalents are called out inline.
 
-> **Deploy folder changed in 5.x.** Studio Pro 11.x projects use `extensions/Concord11x/`; Studio Pro 10.x projects use `extensions/Concord10x/`. The old `extensions/Concord/` path (4.x) is retired. See [§ Migrating from 4.x](#migrating-from-4x-old-extensionsconcord-layout) if you are upgrading.
+> **Deploy folder changed in 6.0.0.** Production `.mxmodule` installs ship a single `extensions/Concord/` folder (the runtime-shim layout — one DLL is MEF-discovered and dynamically loads the version-specific host). The per-host `extensions/Concord11x/` / `extensions/Concord10x/` folders that 5.0.0-alpha.x used remain available for component-level dev iteration only. See [§ Migrating to 6.0.0](#migrating-to-600) if you are upgrading.
 
 If you're upgrading from the older "**Terminal**" extension (the original `mxTerminal`), see [§ Migrating from Terminal](#migrating-from-terminal-the-old-name) at the bottom.
 
@@ -85,7 +85,7 @@ YourProject/
 5. Start Studio Pro and open the project. Studio Pro will:
    - Scan `extensions/` and find Concord.
    - Show a one-time **"Trust this extension"** prompt (per Mendix's extension-trust flow). Approve it.
-6. **Studio Pro 11.x:** Open the pane via **Extensions → Concord → Open Pane**. The pane appears in the right-side pane strip (next to Properties / Toolbox / Maia). Click the **Concord** tab in that strip to focus it. **Studio Pro 10.x (preview):** You'll see **Extensions → Concord (10.x preview)** — a placeholder menu entry; the full pane and MCP surface will be available in a later 5.x release.
+6. Open the pane via **Extensions → Concord → Open Pane**. The pane appears in the right-side pane strip (next to Properties / Toolbox / Maia). Click the **Concord** tab in that strip to focus it. (Works the same on Studio Pro 10.24.13 and 11.x.)
 
 **On first open of a fresh project, Concord wires itself up automatically:**
 
@@ -246,17 +246,23 @@ The trade-off you should know about: the upgrade-apply re-defaults a small numbe
 
 ---
 
-## Migrating from 5.0.0-alpha.1
+## Migrating to 6.0.0
 
-Concord 5.0.0-alpha.2 is a drop-in upgrade. The deploy folder names (`extensions/Concord11x/`, `extensions/Concord10x/`) are unchanged. Studio Pro 11.x users get the same terminal pane experience plus the merged SPMCP tool catalog through `concord-mcp` on port 7783. Studio Pro 10.x users gain the real terminal pane (the alpha.1 placeholder menu retires).
+Concord 6.0.0 ships as a single merged-shim layout (`extensions/Concord/`) — same artifact installs cleanly on Windows + macOS × Studio Pro 10.24.13 + 11.10. Settings persist in `<project>/resources/terminal-settings.json` and migrate forward automatically.
 
-To upgrade, delete the alpha.1 `Concord11x/` or `Concord10x/` folder, then deploy the alpha.2 build (developer path) or unzip the alpha.2 release (consumer path). Settings persist in `<project>/resources/terminal-settings.json` and migrate forward automatically.
+**Before installing v6.0.0, delete every prior Concord install from the project** to avoid a dual-load conflict where Studio Pro activates two shims side-by-side (the new one and a stale one) and the stale one's pre-fix `ConcordHostLoadContext` throws on Mac. Specifically:
+
+- **From 5.0.0-alpha.x (per-host layout):** delete `<project>/extensions/Concord11x/` and `<project>/extensions/Concord10x/`.
+- **From 5.1.0-alpha.1 (early merged-shim):** delete `<project>/extensions/Concord/`.
+- **From a prior `.mxmodule` install** (e.g., a 4.2.2-era marketplace install imported as a Mendix module): **delete the prior Concord module from the project** (right-click → Delete Module in Studio Pro's project explorer) before re-importing the v6.0.0 `.mxmodule`. Studio Pro extracts a module's `extensions/` payload into `.mendix-cache/modules/<name>.mxmodule/extensions/` and treats it as a separate MEF extension alongside any dev-deployed `extensions/`; without deleting the old module you'll get two `Concord/` payloads activating in parallel.
+
+After deleting the old install(s), wipe `<project>/.mendix-cache/extensions-cache/` so Studio Pro rebuilds the snapshot from the new layout. Then install v6.0.0 via the Consumer path (drop in the merged folder) or Developer path (rebuild from source).
 
 ---
 
 ## Migrating from MCPExtension / SPMCP standalone
 
-If you previously installed MCPExtension's standalone SPMCP server, Concord 5.0.0-alpha.2 supersedes it:
+If you previously installed MCPExtension's standalone SPMCP server, Concord supersedes it:
 
 1. Remove the standalone MCPExtension folder from `<project>/extensions/` — its tools are now served by Concord's `concord-mcp` server on port 7783.
 2. If your MCP clients (Claude Code, Codex, Copilot CLI) referenced the standalone SPMCP server, remove those entries from their config files; Concord auto-registers `concord-mcp` instead.
