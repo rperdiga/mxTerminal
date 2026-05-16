@@ -36,25 +36,11 @@ namespace Concord.Shim;
 internal sealed class ConcordHostLoadContext : AssemblyLoadContext, IDisposable
 {
     private readonly string _hostFolder;
-    private readonly AssemblyDependencyResolver? _resolver;
 
     public ConcordHostLoadContext(string hostFolder)
         : base(name: $"ConcordHost@{hostFolder}", isCollectible: false)
     {
         _hostFolder = hostFolder;
-        // AssemblyDependencyResolver reads the .deps.json of a primary
-        // assembly to resolve its dependency graph. We construct it ONLY
-        // when the host DLL is already on disk (the File.Exists guard
-        // below) — the resolver constructor immediately reads the adjacent
-        // .deps.json and would throw otherwise. Phase 3's HostKickstart
-        // must therefore ensure the bin folder is populated before
-        // constructing this context.
-        var likelyHostDll = Path.Combine(hostFolder, "Concord.Host10x.dll");
-        if (!File.Exists(likelyHostDll))
-            likelyHostDll = Path.Combine(hostFolder, "Concord.Host11x.dll");
-        if (File.Exists(likelyHostDll))
-            _resolver = new AssemblyDependencyResolver(likelyHostDll);
-
         Resolving += OnResolving;
     }
 
@@ -131,18 +117,22 @@ internal sealed class ConcordHostLoadContext : AssemblyLoadContext, IDisposable
             return LoadFromAssemblyPath(candidate);
         }
 
-        // 4. AssemblyDependencyResolver — handles runtimes/<rid>/ subfolders
-        //    for native interop, satellite resources, etc.
-        var resolved = _resolver?.ResolveAssemblyToPath(name);
-        if (resolved is not null && File.Exists(resolved))
-        {
-            ShimLog.Info($"Resolved {simpleName} from {resolved} via dependency resolver into {Name}");
-            return LoadFromAssemblyPath(resolved);
-        }
-
-        // 5. Fall through to default context. BCL types like System.Runtime
+        // 4. Fall through to default context. BCL types like System.Runtime
         //    that the runtime provides without a host-folder copy resolve
         //    here through the default ALC's own probing.
+        //
+        //    NOTE: there used to be an AssemblyDependencyResolver-based
+        //    priority-4 here that read the host's .deps.json to handle
+        //    runtimes/<rid>/lib/<tfm>/ RID-specific managed DLLs. Its
+        //    constructor invokes native corehost_resolve_component_dependencies,
+        //    which has a precondition (fxr_path populated via corehost_main)
+        //    that Studio Pro's macOS launcher doesn't satisfy — throwing
+        //    InvalidArgFailure -2147450750 and breaking MEF activation on
+        //    Mac. Removed entirely. None of Concord's actual managed
+        //    dependencies use the runtimes/<rid>/lib/ layout — they're all
+        //    flat in the host folder, hit by priority-3 above. Native
+        //    binaries (libe_sqlite3.dylib etc.) are handled by the
+        //    LoadUnmanagedDll override below, not by this method.
         return null;
     }
 
