@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 
 namespace Concord.Shim;
@@ -148,6 +150,116 @@ internal sealed class ConcordHostLoadContext : AssemblyLoadContext, IDisposable
                 return a;
         }
         return null;
+    }
+
+    // Native unmanaged DLL resolution. Defensive against the same hostpolicy
+    // class of failure that took out AssemblyDependencyResolver on Mac:
+    // .NET's default unmanaged search uses similar hostpolicy state that
+    // Studio Pro's macOS launcher doesn't fully initialise. Explicit probe
+    // of runtimes/<rid>/native/ with RID fallback makes resolution
+    // deterministic regardless of how .NET was hosted.
+    //
+    // The deployed snapshot layout is:
+    //     extensions/Concord/
+    //       Concord.Shim.dll
+    //       bin-{10,11}x/   ← _hostFolder
+    //       runtimes/<rid>/native/<libname>.dylib (or .dll / .so)
+    //
+    // So the runtimes/ folder is one level UP from _hostFolder. Some
+    // build configurations may also drop it alongside; we probe both.
+    protected override IntPtr LoadUnmanagedDll(string unmanagedDllName)
+    {
+        ShimLog.Info($"LoadUnmanagedDll fired for {unmanagedDllName}");
+        if (TryResolveNativePath(unmanagedDllName, out var path))
+        {
+            ShimLog.Info($"Resolved native {unmanagedDllName} from {path} into {Name}");
+            return LoadUnmanagedDllFromPath(path!);
+        }
+        // IntPtr.Zero signals "I didn't find it; fall back to the default
+        // native search (OS-default paths, executable's directory, etc.)".
+        return IntPtr.Zero;
+    }
+
+    internal bool TryResolveNativePath(string unmanagedDllName, out string? path)
+    {
+        // Production layout: runtimes/ is one level up from the host folder.
+        var runtimesDir = Path.Combine(_hostFolder, "..", "runtimes");
+        if (!Directory.Exists(runtimesDir))
+            runtimesDir = Path.Combine(_hostFolder, "runtimes");
+
+        if (Directory.Exists(runtimesDir))
+        {
+            foreach (var probe in NativeProbePaths(runtimesDir, unmanagedDllName))
+            {
+                if (File.Exists(probe))
+                {
+                    path = probe;
+                    return true;
+                }
+            }
+        }
+        // Last-ditch: flat in host folder (some packages drop natives there).
+        var flat = Path.Combine(_hostFolder, unmanagedDllName);
+        if (File.Exists(flat))
+        {
+            path = flat;
+            return true;
+        }
+        path = null;
+        return false;
+    }
+
+    private static IEnumerable<string> NativeProbePaths(string runtimesDir, string name)
+    {
+        foreach (var rid in RidFallbackChain())
+        {
+            var native = Path.Combine(runtimesDir, rid, "native");
+            if (!Directory.Exists(native)) continue;
+            // Caller may pass either the bare name (e.g. "e_sqlite3") or
+            // the full filename (e.g. "libe_sqlite3.dylib"). Try both.
+            yield return Path.Combine(native, name);
+            if (OperatingSystem.IsMacOS())
+            {
+                yield return Path.Combine(native, "lib" + name + ".dylib");
+                yield return Path.Combine(native, name + ".dylib");
+            }
+            else if (OperatingSystem.IsWindows())
+            {
+                yield return Path.Combine(native, name + ".dll");
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                yield return Path.Combine(native, "lib" + name + ".so");
+                yield return Path.Combine(native, name + ".so");
+            }
+        }
+    }
+
+    private static IEnumerable<string> RidFallbackChain()
+    {
+        // RuntimeInformation.RuntimeIdentifier returns the most specific RID
+        // (osx-arm64 on Apple Silicon, osx-x64 on Intel Macs, win-x64 on
+        // x64 Windows). Walk the RID graph in specificity order so a
+        // package that only shipped a generic-RID native still resolves.
+        var current = RuntimeInformation.RuntimeIdentifier;
+        yield return current;
+
+        if (OperatingSystem.IsMacOS())
+        {
+            yield return "osx";
+            yield return "unix";
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            yield return "linux";
+            yield return "unix";
+        }
+        else if (OperatingSystem.IsWindows())
+        {
+            yield return "win";
+        }
+
+        yield return "any";
     }
 
     public void Dispose()
