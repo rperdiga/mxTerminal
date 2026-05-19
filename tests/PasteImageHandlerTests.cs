@@ -95,4 +95,51 @@ public class PasteImageHandlerTests : IDisposable
         var stem = name.Substring(0, idxOfTs);
         stem.Length.Should().BeLessOrEqualTo(64);
     }
+
+    [Fact]
+    public void WriteImage_Throws_WhenBytesExceedMaxBytes()
+    {
+        var handler = new PasteImageHandler(baseDir);
+        var oversized = new byte[PasteImageHandler.MaxBytes + 1];
+        var act = () => handler.WriteImage("image/png", oversized, nameHint: null);
+        act.Should().Throw<ArgumentException>().WithMessage("*too large*");
+    }
+
+    [Fact]
+    public void WriteImage_FilenameMatchesExpectedFormat()
+    {
+        var handler = new PasteImageHandler(baseDir);
+        var path = handler.WriteImage("image/png", new byte[] { 1 }, "screenshot");
+        var name = Path.GetFileName(path);
+        // <stem>-<yyyyMMddTHHmmssZ>-<guid8>.<ext>
+        name.Should().MatchRegex(@"^screenshot-\d{8}T\d{6}Z-[0-9a-f]{8}\.png$");
+    }
+
+    [Fact]
+    public void CleanupOlderThan_DeletesOldFiles_LeavesNewerAlone()
+    {
+        var handler = new PasteImageHandler(baseDir);
+        Directory.CreateDirectory(baseDir);
+
+        var oldFile = Path.Combine(baseDir, "old.png");
+        var newFile = Path.Combine(baseDir, "new.png");
+        File.WriteAllBytes(oldFile, new byte[] { 1 });
+        File.WriteAllBytes(newFile, new byte[] { 2 });
+        File.SetLastWriteTimeUtc(oldFile, DateTime.UtcNow.AddHours(-25));
+        File.SetLastWriteTimeUtc(newFile, DateTime.UtcNow.AddHours(-1));
+
+        var deleted = handler.CleanupOlderThan(TimeSpan.FromHours(24));
+
+        deleted.Should().Be(1);
+        File.Exists(oldFile).Should().BeFalse();
+        File.Exists(newFile).Should().BeTrue();
+    }
+
+    [Fact]
+    public void CleanupOlderThan_NoOp_WhenBaseDirMissing()
+    {
+        var handler = new PasteImageHandler(Path.Combine(baseDir, "does-not-exist"));
+        var deleted = handler.CleanupOlderThan(TimeSpan.FromHours(24));
+        deleted.Should().Be(0);
+    }
 }
