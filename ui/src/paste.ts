@@ -81,3 +81,22 @@ export function countLines(text: string): number {
   if (text.length === 0) return 0;
   return (text.match(/\n/g)?.length ?? 0) + 1;
 }
+
+/**
+ * Map a clipboard image MIME to a file extension (leading dot included).
+ * Unknown / non-image inputs fall back to ".png" — the image bytes are written
+ * verbatim regardless, and ".png" is the safest default for screenshot tools
+ * that drop MIME info.
+ */
+export function mimeToExtension(mime: string): string {
+  const m = mime.toLowerCase();
+  switch (m) {
+    case "image/png":  return ".png";
+    case "image/jpeg": return ".jpg";
+    case "image/gif":  return ".gif";
+    case "image/webp": return ".webp";
+    case "image/bmp":  return ".bmp";
+    case "image/tiff": return ".tiff";
+    default: return ".png";
+  }
+}

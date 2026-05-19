@@ -4,6 +4,7 @@ import {
   countLines,
   DEFAULT_PASTE_THRESHOLDS,
   estimatePasteDurationMs,
+  mimeToExtension,
   normalizePasteLineEndings,
   pasteChunkRanges,
 } from "./paste.js";
@@ -164,5 +165,30 @@ describe("countLines", () => {
 
   it("ignores CR-only line endings (caller should normalize first)", () => {
     expect(countLines("a\rb\rc")).toBe(1);
+  });
+});
+
+describe("mimeToExtension", () => {
+  it("maps known image MIME types", () => {
+    expect(mimeToExtension("image/png")).toBe(".png");
+    expect(mimeToExtension("image/jpeg")).toBe(".jpg");
+    expect(mimeToExtension("image/gif")).toBe(".gif");
+    expect(mimeToExtension("image/webp")).toBe(".webp");
+    expect(mimeToExtension("image/bmp")).toBe(".bmp");
+    expect(mimeToExtension("image/tiff")).toBe(".tiff");
+  });
+
+  it("falls back to .png for unknown image MIMEs", () => {
+    expect(mimeToExtension("image/avif")).toBe(".png");
+    expect(mimeToExtension("image/heic")).toBe(".png");
+  });
+
+  it("falls back to .png for empty or non-image strings", () => {
+    expect(mimeToExtension("")).toBe(".png");
+    expect(mimeToExtension("text/plain")).toBe(".png");
+  });
+
+  it("is case-insensitive on the MIME", () => {
+    expect(mimeToExtension("IMAGE/PNG")).toBe(".png");
   });
 });
