@@ -232,6 +232,13 @@ export class TabManager {
       onInput: (bytes) => this.sendInputChunked(tabId, bytes),
       onResize: (cols, rows) =>
         this.bridge.send("resize", { tabId, cols, rows }),
+      onPasteImage: (mime, bytes, nameHint) =>
+        this.bridge.send("paste-image", {
+          tabId,
+          mime,
+          bytesB64: encodeBase64(bytes),
+          nameHint,
+        }),
       diag: (msg) => this.bridge.send("diag", { msg }),
     });
 
