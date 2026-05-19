@@ -62,4 +62,37 @@ public class PasteImageHandlerTests : IDisposable
         var path = handler.WriteImage(mime, new byte[] { 1, 2, 3 }, nameHint: null);
         Path.GetExtension(path).Should().Be(".png");
     }
+
+    [Theory]
+    [InlineData(null,                "image")]
+    [InlineData("",                  "image")]
+    [InlineData("   ",               "image")]
+    [InlineData("screenshot.png",    "screenshot")]
+    [InlineData("my photo.jpeg",     "my_photo")]
+    [InlineData("a/b\\c:d*e?f.png",  "a_b_c_d_e_f")]
+    [InlineData("///",               "image")]      // wipes to empty → fallback
+    [InlineData(".png",              "image")]      // extension-only → fallback
+    public void WriteImage_SanitizesNameHint(string? hint, string expectedStem)
+    {
+        var handler = new PasteImageHandler(baseDir);
+        var path = handler.WriteImage("image/png", new byte[] { 1 }, hint);
+        var name = Path.GetFileName(path);
+        // Filename is "<stem>-<UTC-yyyyMMddTHHmmssZ>-<guid8>.png".
+        // The stem itself may contain dashes via sanitization, so split on "-<year>" to find the timestamp boundary.
+        var idxOfTs = name.IndexOf("-20");
+        var stem = idxOfTs > 0 ? name.Substring(0, idxOfTs) : name;
+        stem.Should().Be(expectedStem);
+    }
+
+    [Fact]
+    public void WriteImage_CapsLongNameHintAt64Chars()
+    {
+        var handler = new PasteImageHandler(baseDir);
+        var longHint = new string('x', 200) + ".png";
+        var path = handler.WriteImage("image/png", new byte[] { 1 }, longHint);
+        var name = Path.GetFileName(path);
+        var idxOfTs = name.IndexOf("-20");
+        var stem = name.Substring(0, idxOfTs);
+        stem.Length.Should().BeLessOrEqualTo(64);
+    }
 }
