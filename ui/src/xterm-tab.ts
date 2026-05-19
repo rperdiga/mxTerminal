@@ -155,7 +155,7 @@ export class XtermTab {
       // Image branch — prefer image when clipboard carries both image and text.
       // Reads File via DataTransferItem.getAsFile, base64-encodes through the
       // bridge, and hands off to the C# side which writes a temp file and
-      // injects the path. See docs/superpowers/specs/2026-05-18-image-paste-…
+      // injects the path. See docs/superpowers/specs/2026-05-18-image-paste-temp-path-injection-design.md
       const image = extractClipboardImage(cd);
       if (image && opts.onPasteImage) {
         const sizeBytes = image.file.size;
@@ -235,6 +235,10 @@ export class XtermTab {
         );
       }
 
+      // xterm's term.paste() collapses \r?\n into bare \r when bracketed-paste
+      // is off; line-aware CLIs (Claude Code, vim, multi-line PSReadLine) treat
+      // bare CR as Enter and submit each line separately (Teams paste regression
+      // observed 2026-05-01). Send LF via onInput instead.
       if (!bracketedActive && hasNewline) {
         const bytes = new TextEncoder().encode(normalizePasteLineEndings(text));
         this.diag(
