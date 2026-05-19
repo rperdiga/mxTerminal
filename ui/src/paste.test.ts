@@ -7,6 +7,7 @@ import {
   mimeToExtension,
   normalizePasteLineEndings,
   pasteChunkRanges,
+  sanitizeNameHint,
 } from "./paste.js";
 
 describe("normalizePasteLineEndings", () => {
@@ -190,5 +191,43 @@ describe("mimeToExtension", () => {
 
   it("is case-insensitive on the MIME", () => {
     expect(mimeToExtension("IMAGE/PNG")).toBe(".png");
+  });
+});
+
+describe("sanitizeNameHint", () => {
+  it("returns 'image' for null, empty, or whitespace-only input", () => {
+    expect(sanitizeNameHint(null)).toBe("image");
+    expect(sanitizeNameHint("")).toBe("image");
+    expect(sanitizeNameHint("   ")).toBe("image");
+  });
+
+  it("strips file extension from hint", () => {
+    expect(sanitizeNameHint("screenshot.png")).toBe("screenshot");
+    expect(sanitizeNameHint("photo.jpeg")).toBe("photo");
+    expect(sanitizeNameHint("scan.tar.gz")).toBe("scan.tar"); // only last dot stripped
+  });
+
+  it("strips forbidden filesystem chars", () => {
+    expect(sanitizeNameHint("a/b\\c:d*e?f\"g<h>i|j.png")).toBe("a_b_c_d_e_f_g_h_i_j");
+  });
+
+  it("collapses internal whitespace to single underscore", () => {
+    expect(sanitizeNameHint("my   image  copy.png")).toBe("my_image_copy");
+  });
+
+  it("strips control chars", () => {
+    expect(sanitizeNameHint("name.png")).toBe("name");
+  });
+
+  it("caps length at 64 chars before extension strip", () => {
+    const longName = "x".repeat(200) + ".png";
+    const result = sanitizeNameHint(longName);
+    expect(result.length).toBeLessThanOrEqual(64);
+    expect(result).toBe("x".repeat(64));
+  });
+
+  it("returns 'image' when sanitization wipes everything", () => {
+    expect(sanitizeNameHint("///")).toBe("image");
+    expect(sanitizeNameHint(".png")).toBe("image"); // only extension
   });
 });

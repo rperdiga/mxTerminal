@@ -100,3 +100,31 @@ export function mimeToExtension(mime: string): string {
     default: return ".png";
   }
 }
+
+/**
+ * Sanitize a clipboard-provided filename hint into a filesystem-safe stem.
+ * - Strips path separators, shell metacharacters, control chars.
+ * - Strips the trailing extension (caller appends one based on MIME).
+ * - Collapses runs of whitespace to single underscore.
+ * - Caps length at 64 chars.
+ * - Returns "image" for null/empty/wipe-to-nothing inputs.
+ */
+export function sanitizeNameHint(hint: string | null): string {
+  if (hint == null) return "image";
+  let s = hint.trim();
+  if (s.length === 0) return "image";
+  // Cap length first so the rest of the sanitization works on a bounded string.
+  if (s.length > 64) s = s.slice(0, 64);
+  // Strip last extension (".png", ".jpeg", etc.) if present. A leading dot
+  // (dot at position 0) is also stripped so ".png" → "" → falls back to "image".
+  const dot = s.lastIndexOf(".");
+  if (dot >= 0) s = s.slice(0, dot);
+  // Replace forbidden chars, whitespace, and ASCII control chars (0x00-0x1F,
+  // 0x7F) with a single underscore in one pass.
+  // Forbidden: / \ : * ? " < > | and hyphen.
+  // eslint-disable-next-line no-control-regex
+  s = s.replace(/[\/\\:*?"<>|\s\x00-\x1f\x7f-]+/g, "_");
+  // Strip leading/trailing underscores.
+  s = s.replace(/^_+|_+$/g, "");
+  return s.length === 0 ? "image" : s;
+}
