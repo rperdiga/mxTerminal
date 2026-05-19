@@ -81,3 +81,75 @@ export function countLines(text: string): number {
   if (text.length === 0) return 0;
   return (text.match(/\n/g)?.length ?? 0) + 1;
 }
+
+/**
+ * Map a clipboard image MIME to a file extension (leading dot included).
+ * Unknown / non-image inputs fall back to ".png" — the image bytes are written
+ * verbatim regardless, and ".png" is the safest default for screenshot tools
+ * that drop MIME info.
+ */
+export function mimeToExtension(mime: string): string {
+  const m = mime.toLowerCase();
+  switch (m) {
+    case "image/png":  return ".png";
+    case "image/jpeg": return ".jpg";
+    case "image/gif":  return ".gif";
+    case "image/webp": return ".webp";
+    case "image/bmp":  return ".bmp";
+    case "image/tiff": return ".tiff";
+    default: return ".png";
+  }
+}
+
+/**
+ * Sanitize a clipboard-provided filename hint into a filesystem-safe stem.
+ * - Strips path separators, shell metacharacters, control chars.
+ * - Strips the trailing extension (caller appends one based on MIME).
+ * - Collapses runs of whitespace to single underscore.
+ * - Caps length at 64 chars.
+ * - Returns "image" for null/empty/wipe-to-nothing inputs.
+ */
+export function sanitizeNameHint(hint: string | null): string {
+  if (hint == null) return "image";
+  let s = hint.trim();
+  if (s.length === 0) return "image";
+  // Cap length first so the rest of the sanitization works on a bounded string.
+  if (s.length > 64) s = s.slice(0, 64);
+  // Strip last extension (".png", ".jpeg", etc.) if present. A leading dot
+  // (dot at position 0) is also stripped so ".png" → "" → falls back to "image".
+  const dot = s.lastIndexOf(".");
+  if (dot >= 0) s = s.slice(0, dot);
+  // Replace forbidden chars, whitespace, and ASCII control chars (0x00-0x1F,
+  // 0x7F) with a single underscore in one pass.
+  // Forbidden: / \ : * ? " < > | and hyphen.
+  // eslint-disable-next-line no-control-regex
+  s = s.replace(/[\/\\:*?"<>|\s\x00-\x1f\x7f-]+/g, "_");
+  // Strip leading/trailing underscores.
+  s = s.replace(/^_+|_+$/g, "");
+  return s.length === 0 ? "image" : s;
+}
+
+/**
+ * Scan a clipboard DataTransfer for an image item. Returns the first image
+ * file found (and its MIME), or null if no image is present.
+ *
+ * Prefers image over text — when both are present (e.g. browser "Copy Image"
+ * also writes a text URL), the user's intent in pasting a screenshot is
+ * clearly the image, not the fallback text.
+ */
+export function extractClipboardImage(
+  cd: DataTransfer | null | undefined,
+): { file: File; mime: string } | null {
+  if (!cd) return null;
+  const items = cd.items;
+  if (!items) return null;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!;
+    if (item.kind !== "file") continue;
+    if (!item.type.toLowerCase().startsWith("image/")) continue;
+    const file = item.getAsFile();
+    if (!file) continue;
+    return { file, mime: item.type };
+  }
+  return null;
+}

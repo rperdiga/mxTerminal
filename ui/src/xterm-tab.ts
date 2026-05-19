@@ -8,6 +8,7 @@ import {
   classifyPasteSize,
   countLines,
   estimatePasteDurationMs,
+  extractClipboardImage,
   normalizePasteLineEndings,
 } from "./paste.js";
 
@@ -17,6 +18,11 @@ import {
 // independently importable for tests.
 const PACED_RATE_CHUNK_BYTES = 256;
 const PACED_RATE_DELAY_MS = 25;
+
+// Hard cap for image paste (raw bytes, pre-base64). 25 MB covers an 8K
+// screenshot with headroom and prevents a clipboard-bomb from filling
+// disk. Enforced JS-side AND C#-side as defense in depth.
+const IMAGE_PASTE_MAX_BYTES = 25 * 1024 * 1024;
 
 let cssInjected = false;
 function ensureCssInjected() {
@@ -46,6 +52,14 @@ export interface XtermTabOptions {
   theme: ThemeName;
   onInput: (bytes: Uint8Array) => void;
   onResize: (cols: number, rows: number) => void;
+  /**
+   * Called when the user pastes raw image bytes from the clipboard (e.g. a
+   * screenshot). The owner (TabManager) base64-encodes and sends a
+   * "paste-image" bridge message with the tabId attached. When unset, image
+   * pastes fall back to the text path (which usually means "do nothing" —
+   * the clipboard text is empty for image-only pastes).
+   */
+  onPasteImage?: (mime: string, bytes: Uint8Array, nameHint: string | null) => void;
   /** Diagnostic sink — writes to the C# log via the bridge. Avoids
    *  DevTools-filter quirks for things we want logged regardless. */
   diag?: (msg: string) => void;
@@ -137,10 +151,44 @@ export class XtermTab {
       ev.preventDefault();
       ev.stopImmediatePropagation();
       const cd = ev.clipboardData;
+
+      // Image branch — prefer image when clipboard carries both image and text.
+      // Reads File via DataTransferItem.getAsFile, base64-encodes through the
+      // bridge, and hands off to the C# side which writes a temp file and
+      // injects the path. See docs/superpowers/specs/2026-05-18-image-paste-temp-path-injection-design.md
+      const image = extractClipboardImage(cd);
+      if (image && opts.onPasteImage) {
+        const sizeBytes = image.file.size;
+        if (sizeBytes > IMAGE_PASTE_MAX_BYTES) {
+          showNotice(
+            "err",
+            `Image too large to paste (${(sizeBytes / 1024 / 1024).toFixed(1)} MB > ${IMAGE_PASTE_MAX_BYTES / 1024 / 1024} MB limit).`,
+            15000,
+          );
+          this.diag(`paste-image rejected: ${sizeBytes} bytes > cap`);
+          return;
+        }
+        this.diag(
+          `paste-image mime=${image.mime} bytes=${sizeBytes} name=${image.file.name || "(none)"}`,
+        );
+        // File.arrayBuffer() returns a Promise; we don't await inside the
+        // synchronous paste handler — fire-and-forget is safe because nothing
+        // else in the handler runs after the early return.
+        image.file
+          .arrayBuffer()
+          .then((buf) => {
+            const bytes = new Uint8Array(buf);
+            opts.onPasteImage!(image.mime, bytes, image.file.name || null);
+          })
+          .catch((err) => {
+            this.diag(`paste-image read failed: ${err}`);
+            showNotice("err", `Couldn't read pasted image: ${err}`, 8000);
+          });
+        return;
+      }
+
+      // Text branch (unchanged from prior behavior).
       const text = cd?.getData("text/plain") ?? "";
-      // Lightweight telemetry for paste-path regressions. We log shape, NEVER
-      // content — the clipboard may carry credentials, tokens, or other
-      // secrets and content-logging would write them to terminal.log.
       const bracketed =
         (this.term as unknown as { modes?: { bracketedPasteMode?: boolean } })
           .modes?.bracketedPasteMode ?? "unknown";
@@ -150,30 +198,11 @@ export class XtermTab {
       );
       if (!text) return;
 
-      // When bracketed-paste mode is OFF and the text contains newlines,
-      // bypass xterm's term.paste() because its prepareTextForTerminal
-      // collapses every \r?\n into a bare \r. Bare CRs are interpreted by
-      // line-aware CLIs (Claude Code, vim, multi-line PSReadLine) as
-      // Enter/submit, so a 30-line paste becomes 30 separate submissions
-      // and the receiving prompt's input buffer overruns — only the tail
-      // survives. Symptom logged 2026-05-01: 2399-byte Teams paste, only
-      // ~13 lines reached Claude Code's prompt.
-      //
-      // Send LF instead via the same channel as keystrokes (onInput).
-      // Modern TUI prompts treat LF as line-continuation within the input
-      // field rather than submit. The user presses Enter explicitly when
-      // ready to submit. xterm-internal state stays consistent because
-      // we go through the same byte path as live typing.
       const bracketedActive =
         (this.term as unknown as { modes?: { bracketedPasteMode?: boolean } })
           .modes?.bracketedPasteMode === true;
       const hasNewline = /\n|\r/.test(text);
 
-      // Size-tiered UX so the user isn't staring at a "frozen" prompt during
-      // multi-second paced delivery. Hard limit prevents accidentally
-      // pasting a megabyte (e.g. an entire log file) which would tie up the
-      // input loop and probably overflow the receiving CLI's prompt buffer
-      // regardless of pacing.
       const byteLen = new TextEncoder().encode(text).length;
       const lineCount = countLines(text);
       const tier = classifyPasteSize(byteLen);
@@ -206,13 +235,11 @@ export class XtermTab {
         );
       }
 
+      // xterm's term.paste() collapses \r?\n into bare \r when bracketed-paste
+      // is off; line-aware CLIs (Claude Code, vim, multi-line PSReadLine) treat
+      // bare CR as Enter and submit each line separately (Teams paste regression
+      // observed 2026-05-01). Send LF via onInput instead.
       if (!bracketedActive && hasNewline) {
-        // When bracketed-paste mode is OFF and the text contains newlines,
-        // bypass xterm's term.paste() because its prepareTextForTerminal
-        // collapses every \r?\n into a bare \r. Bare CRs are interpreted by
-        // line-aware CLIs (Claude Code, vim, multi-line PSReadLine) as
-        // Enter/submit, so a 30-line paste becomes 30 separate submissions.
-        // Send LF instead via the same channel as keystrokes.
         const bytes = new TextEncoder().encode(normalizePasteLineEndings(text));
         this.diag(
           `paste bypass-CR-coercion len=${bytes.length} (bracketed mode off + multi-line)`,

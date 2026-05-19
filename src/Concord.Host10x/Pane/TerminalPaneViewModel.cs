@@ -18,6 +18,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly TerminalSessionManager manager;
+    private readonly PasteImageHandler pasteHandler = new();
     private readonly Func<IModel?> getCurrentApp;
     private readonly Uri webIndexUri;
     private readonly Logger log;
@@ -56,6 +57,19 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         this.bundledSkillsRoot = bundledSkillsRoot;
         this.bundledRulesRoot = bundledRulesRoot;
         this.consumePendingFirstRunNotices = consumePendingFirstRunNotices;
+
+        // Best-effort sweep of stale pasted-image temp files older than 24h.
+        // Runs once per pane construction. Failures are swallowed by
+        // CleanupOlderThan; we only log a Warn if Task.Run itself throws.
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var deleted = pasteHandler.CleanupOlderThan(TimeSpan.FromHours(24));
+                if (deleted > 0) log.Info($"[paste-image] swept {deleted} stale file(s)");
+            }
+            catch (Exception ex) { log.Warn($"[paste-image] sweep failed: {ex.Message}"); }
+        });
     }
 
     public override void InitWebView(IWebView webView)
@@ -152,6 +166,31 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                         log.Info($"input tab={p.TabId.Substring(0, 8)} len={bytes.Length} preview={preview}");
                     }
                     _ = manager.Write(p.TabId, bytes);
+                    break;
+                }
+
+                case "paste-image":
+                {
+                    var p = GetData<ImagePastePayload>(e);
+                    byte[] bytes;
+                    try { bytes = Convert.FromBase64String(p.BytesB64); }
+                    catch (FormatException fex)
+                    {
+                        log.Warn($"paste-image base64 decode failed tab={p.TabId}: {fex.Message}");
+                        break;
+                    }
+                    string path;
+                    try
+                    {
+                        path = pasteHandler.WriteImage(p.Mime, bytes, p.NameHint);
+                    }
+                    catch (Exception wex)
+                    {
+                        log.Warn($"paste-image write failed tab={p.TabId} mime={p.Mime} bytes={bytes.Length}: {wex.Message}");
+                        break;
+                    }
+                    log.Info($"paste-image tab={p.TabId.Substring(0, 8)} bytes={bytes.Length} mime={p.Mime} path={path}");
+                    _ = manager.Write(p.TabId, System.Text.Encoding.UTF8.GetBytes(path));
                     break;
                 }
 
