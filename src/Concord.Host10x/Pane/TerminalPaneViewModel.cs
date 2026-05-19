@@ -18,6 +18,7 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly TerminalSessionManager manager;
+    private readonly PasteImageHandler pasteHandler = new();
     private readonly Func<IModel?> getCurrentApp;
     private readonly Uri webIndexUri;
     private readonly Logger log;
@@ -152,6 +153,31 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
                         log.Info($"input tab={p.TabId.Substring(0, 8)} len={bytes.Length} preview={preview}");
                     }
                     _ = manager.Write(p.TabId, bytes);
+                    break;
+                }
+
+                case "paste-image":
+                {
+                    var p = GetData<ImagePastePayload>(e);
+                    byte[] bytes;
+                    try { bytes = Convert.FromBase64String(p.BytesB64); }
+                    catch (FormatException fex)
+                    {
+                        log.Warn($"paste-image base64 decode failed tab={p.TabId}: {fex.Message}");
+                        break;
+                    }
+                    string path;
+                    try
+                    {
+                        path = pasteHandler.WriteImage(p.Mime, bytes, p.NameHint);
+                    }
+                    catch (Exception wex)
+                    {
+                        log.Warn($"paste-image write failed tab={p.TabId} mime={p.Mime} bytes={bytes.Length}: {wex.Message}");
+                        break;
+                    }
+                    log.Info($"paste-image tab={p.TabId.Substring(0, 8)} bytes={bytes.Length} mime={p.Mime} path={path}");
+                    _ = manager.Write(p.TabId, System.Text.Encoding.UTF8.GetBytes(path));
                     break;
                 }
 
