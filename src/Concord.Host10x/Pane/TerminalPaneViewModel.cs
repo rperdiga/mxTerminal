@@ -57,6 +57,19 @@ public sealed class TerminalPaneViewModel : WebViewDockablePaneViewModel
         this.bundledSkillsRoot = bundledSkillsRoot;
         this.bundledRulesRoot = bundledRulesRoot;
         this.consumePendingFirstRunNotices = consumePendingFirstRunNotices;
+
+        // Best-effort sweep of stale pasted-image temp files older than 24h.
+        // Runs once per pane construction. Failures are swallowed by
+        // CleanupOlderThan; we only log a Warn if Task.Run itself throws.
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var deleted = pasteHandler.CleanupOlderThan(TimeSpan.FromHours(24));
+                if (deleted > 0) log.Info($"[paste-image] swept {deleted} stale file(s)");
+            }
+            catch (Exception ex) { log.Warn($"[paste-image] sweep failed: {ex.Message}"); }
+        });
     }
 
     public override void InitWebView(IWebView webView)
