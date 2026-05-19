@@ -4,6 +4,7 @@ import {
   countLines,
   DEFAULT_PASTE_THRESHOLDS,
   estimatePasteDurationMs,
+  extractClipboardImage,
   mimeToExtension,
   normalizePasteLineEndings,
   pasteChunkRanges,
@@ -229,5 +230,97 @@ describe("sanitizeNameHint", () => {
   it("returns 'image' when sanitization wipes everything", () => {
     expect(sanitizeNameHint("///")).toBe("image");
     expect(sanitizeNameHint(".png")).toBe("image"); // only extension
+  });
+});
+
+// Minimal DataTransferItem mock — vitest runs under happy-dom which has
+// DataTransferItem but not a programmatic way to populate it for tests.
+function makeItem(kind: string, type: string, file: File | null) {
+  return {
+    kind,
+    type,
+    getAsFile: () => file,
+    getAsString: (_cb: (s: string) => void) => {},
+  } as unknown as DataTransferItem;
+}
+
+function makeClipboard(items: DataTransferItem[], types: string[]) {
+  return {
+    items: items as unknown as DataTransferItemList,
+    types,
+    files: items.filter((i) => i.kind === "file").map((i) => i.getAsFile()!) as unknown as FileList,
+    getData: (t: string) => (t === "text/plain" ? "" : ""),
+    setData: () => {},
+    clearData: () => {},
+    dropEffect: "none" as const,
+    effectAllowed: "all" as const,
+  } as unknown as DataTransfer;
+}
+
+describe("extractClipboardImage", () => {
+  it("returns null when clipboard has only text", () => {
+    const cd = makeClipboard(
+      [makeItem("string", "text/plain", null)],
+      ["text/plain"],
+    );
+    expect(extractClipboardImage(cd)).toBeNull();
+  });
+
+  it("returns null when clipboard is empty", () => {
+    const cd = makeClipboard([], []);
+    expect(extractClipboardImage(cd)).toBeNull();
+  });
+
+  it("returns the file for an image-only clipboard", () => {
+    const f = new File([new Uint8Array([1, 2, 3])], "screenshot.png", { type: "image/png" });
+    const cd = makeClipboard(
+      [makeItem("file", "image/png", f)],
+      ["image/png"],
+    );
+    const result = extractClipboardImage(cd);
+    expect(result).not.toBeNull();
+    expect(result!.mime).toBe("image/png");
+    expect(result!.file).toBe(f);
+  });
+
+  it("prefers image when clipboard has both image and text", () => {
+    const f = new File([new Uint8Array([4, 5])], "img.jpg", { type: "image/jpeg" });
+    const cd = makeClipboard(
+      [
+        makeItem("string", "text/plain", null),
+        makeItem("file", "image/jpeg", f),
+      ],
+      ["text/plain", "image/jpeg"],
+    );
+    const result = extractClipboardImage(cd);
+    expect(result).not.toBeNull();
+    expect(result!.mime).toBe("image/jpeg");
+  });
+
+  it("returns first image when multiple images are present", () => {
+    const f1 = new File([new Uint8Array([1])], "a.png", { type: "image/png" });
+    const f2 = new File([new Uint8Array([2])], "b.png", { type: "image/png" });
+    const cd = makeClipboard(
+      [
+        makeItem("file", "image/png", f1),
+        makeItem("file", "image/png", f2),
+      ],
+      ["image/png"],
+    );
+    const result = extractClipboardImage(cd);
+    expect(result!.file).toBe(f1);
+  });
+
+  it("returns null when image item has no File (getAsFile returns null)", () => {
+    const cd = makeClipboard(
+      [makeItem("file", "image/png", null)],
+      ["image/png"],
+    );
+    expect(extractClipboardImage(cd)).toBeNull();
+  });
+
+  it("accepts the input null/undefined defensively", () => {
+    expect(extractClipboardImage(null)).toBeNull();
+    expect(extractClipboardImage(undefined as unknown as DataTransfer)).toBeNull();
   });
 });

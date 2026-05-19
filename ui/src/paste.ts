@@ -128,3 +128,28 @@ export function sanitizeNameHint(hint: string | null): string {
   s = s.replace(/^_+|_+$/g, "");
   return s.length === 0 ? "image" : s;
 }
+
+/**
+ * Scan a clipboard DataTransfer for an image item. Returns the first image
+ * file found (and its MIME), or null if no image is present.
+ *
+ * Prefers image over text — when both are present (e.g. browser "Copy Image"
+ * also writes a text URL), the user's intent in pasting a screenshot is
+ * clearly the image, not the fallback text.
+ */
+export function extractClipboardImage(
+  cd: DataTransfer | null | undefined,
+): { file: File; mime: string } | null {
+  if (!cd) return null;
+  const items = cd.items;
+  if (!items) return null;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!;
+    if (item.kind !== "file") continue;
+    if (!item.type.toLowerCase().startsWith("image/")) continue;
+    const file = item.getAsFile();
+    if (!file) continue;
+    return { file, mime: item.type };
+  }
+  return null;
+}
