@@ -31,3 +31,9 @@ public sealed record SaveSettingsPayload(
     bool? RestoreTabsOnReopen = null,
     bool? SkillsEnabled = null,
     string[]? SkillClients = null);
+
+public sealed record ImagePastePayload(
+    string TabId,
+    string Mime,
+    string BytesB64,
+    string? NameHint = null);

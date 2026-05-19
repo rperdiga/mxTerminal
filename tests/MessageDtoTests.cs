@@ -83,4 +83,23 @@ public class MessageDtoTests
         p.Platform.Should().Be("windows");
         p.LiveActionServerPort.Should().BeNull();
     }
+
+    [Fact]
+    public void ImagePaste_RoundTrip()
+    {
+        var json = """{"tabId":"abc","mime":"image/png","bytesB64":"AAEC","nameHint":"screenshot.png"}""";
+        var dto = JsonSerializer.Deserialize<ImagePastePayload>(json, Json)!;
+        dto.TabId.Should().Be("abc");
+        dto.Mime.Should().Be("image/png");
+        dto.BytesB64.Should().Be("AAEC");
+        dto.NameHint.Should().Be("screenshot.png");
+    }
+
+    [Fact]
+    public void ImagePaste_NameHintOptional_LeavesNull()
+    {
+        var json = """{"tabId":"abc","mime":"image/png","bytesB64":"AAEC"}""";
+        var dto = JsonSerializer.Deserialize<ImagePastePayload>(json, Json)!;
+        dto.NameHint.Should().BeNull();
+    }
 }
